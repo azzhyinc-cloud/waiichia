@@ -1,0 +1,9 @@
+{
+  "name": "Waiichia Dev",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "secrets": {
+    "SUPABASE_SERVICE_ROLE_KEY": {}
+  },
+  "postStartCommand": "cd /workspaces/waiichia && sed -i \"s|REMPLACE_PAR_TA_SERVICE_ROLE_KEY|${SUPABASE_SERVICE_ROLE_KEY}|g\" .env 2>/dev/null; cd apps/api && sed -i \"s|REMPLACE_PAR_TA_SERVICE_ROLE_KEY|${SUPABASE_SERVICE_ROLE_KEY}|g\" .env 2>/dev/null; npm install -g pnpm",
+  "forwardPorts": [3001, 5173]
+}
