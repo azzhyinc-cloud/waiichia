@@ -1,0 +1,5 @@
+-- Migration 002: devises, commissions, taxes, factures
+-- Executee directement dans Supabase SQL Editor
+-- Tables: currency_rates, country_config, commission_config, invoices, tax_reports
+-- Fonctions: convert_currency(), calculate_transaction_fees(), generate_invoice_number()
+-- Voir Supabase Dashboard pour le schema complet
