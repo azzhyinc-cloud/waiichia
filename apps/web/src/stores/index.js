@@ -1,12 +1,26 @@
 import { create } from 'zustand'
-import api from '../services/api'
+import api from '../services/api.js'
+
+export const useThemeStore = create((set, get) => ({
+  theme: localStorage.getItem('waiichia_theme') || 'dark',
+  toggle: () => {
+    const next = get().theme === 'dark' ? 'light' : 'dark'
+    localStorage.setItem('waiichia_theme', next)
+    document.documentElement.setAttribute('data-theme', next)
+    set({ theme: next })
+  },
+  init: () => {
+    const t = localStorage.getItem('waiichia_theme') || 'dark'
+    document.documentElement.setAttribute('data-theme', t)
+    set({ theme: t })
+  }
+}))
 
 export const useAuthStore = create((set, get) => ({
   user: null,
   token: localStorage.getItem('waiichia_token'),
   loading: false,
   error: null,
-
   login: async (email, password) => {
     set({ loading: true, error: null })
     try {
@@ -19,7 +33,6 @@ export const useAuthStore = create((set, get) => ({
       throw err
     }
   },
-
   register: async (form) => {
     set({ loading: true, error: null })
     try {
@@ -31,7 +44,6 @@ export const useAuthStore = create((set, get) => ({
       throw err
     }
   },
-
   loadMe: async () => {
     const token = localStorage.getItem('waiichia_token')
     if (!token) return
@@ -43,12 +55,10 @@ export const useAuthStore = create((set, get) => ({
       set({ user: null, token: null })
     }
   },
-
   logout: () => {
     localStorage.removeItem('waiichia_token')
     set({ user: null, token: null })
   },
-
   isAuthenticated: () => !!localStorage.getItem('waiichia_token'),
 }))
 
@@ -60,7 +70,6 @@ export const usePlayerStore = create((set, get) => ({
   volume: 0.8,
   queue: [],
   audio: null,
-
   play: (track) => {
     const { audio } = get()
     if (audio) { audio.pause(); audio.src = '' }
@@ -69,54 +78,29 @@ export const usePlayerStore = create((set, get) => ({
     newAudio.ontimeupdate = () => set({ progress: newAudio.currentTime })
     newAudio.onloadedmetadata = () => set({ duration: newAudio.duration })
     newAudio.onended = () => get().playNext()
-    newAudio.play()
+    newAudio.play().catch(() => {})
     api.tracks.play(track.id).catch(() => {})
     set({ currentTrack: track, isPlaying: true, audio: newAudio, progress: 0 })
   },
-
-  playPreview: (track) => {
-    const { audio } = get()
-    if (audio) { audio.pause(); audio.src = '' }
-    const newAudio = new Audio(track.audio_url_128 || track.audio_url_320)
-    newAudio.volume = get().volume
-    newAudio.currentTime = track.preview_start_sec || 0
-    const endTime = track.preview_end_sec || 15
-    newAudio.ontimeupdate = () => {
-      set({ progress: newAudio.currentTime })
-      if (newAudio.currentTime >= endTime) {
-        newAudio.pause()
-        set({ isPlaying: false })
-      }
-    }
-    newAudio.onloadedmetadata = () => set({ duration: newAudio.duration })
-    newAudio.play()
-    set({ currentTrack: track, isPlaying: true, audio: newAudio })
-  },
-
   pause: () => {
     const { audio } = get()
     if (audio) audio.pause()
     set({ isPlaying: false })
   },
-
   resume: () => {
     const { audio } = get()
-    if (audio) { audio.play(); set({ isPlaying: true }) }
+    if (audio) { audio.play().catch(() => {}); set({ isPlaying: true }) }
   },
-
   seek: (time) => {
     const { audio } = get()
     if (audio) { audio.currentTime = time; set({ progress: time }) }
   },
-
   setVolume: (vol) => {
     const { audio } = get()
     if (audio) audio.volume = vol
     set({ volume: vol })
   },
-
   setQueue: (tracks) => set({ queue: tracks }),
-
   playNext: () => {
     const { queue, currentTrack } = get()
     if (!queue.length) return
@@ -124,7 +108,6 @@ export const usePlayerStore = create((set, get) => ({
     const next = queue[idx + 1] || queue[0]
     if (next) get().play(next)
   },
-
   playPrev: () => {
     const { queue, currentTrack } = get()
     if (!queue.length) return
@@ -132,7 +115,6 @@ export const usePlayerStore = create((set, get) => ({
     const prev = queue[idx - 1] || queue[queue.length - 1]
     if (prev) get().play(prev)
   },
-
   toggle: (track) => {
     const { currentTrack, isPlaying } = get()
     if (currentTrack?.id === track.id) {
@@ -141,4 +123,9 @@ export const usePlayerStore = create((set, get) => ({
       get().play(track)
     }
   }
+}))
+
+export const usePageStore = create((set) => ({
+  currentPage: 'home',
+  setPage: (page) => set({ currentPage: page })
 }))
