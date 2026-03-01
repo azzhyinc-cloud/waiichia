@@ -1,56 +1,75 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../stores/index.js'
+import { useAuthStore, usePageStore } from '../stores/index.js'
 
 export default function Register() {
-  const [form, setForm] = useState({ email:'', password:'', username:'', display_name:'', country:'KM' })
-  const { register, loading, error } = useAuthStore()
-  const nav = useNavigate()
+  const { register, loading } = useAuthStore()
+  const { setPage } = usePageStore()
+  const [form, setForm] = useState({ username:'', email:'', password:'', display_name:'' })
+  const [error, setError] = useState('')
 
-  const submit = async (e) => {
+  const set = (k) => (e) => setForm(f => ({...f, [k]: e.target.value}))
+
+  const handle = async (e) => {
     e.preventDefault()
-    try { await register(form); nav('/login') }
-    catch {}
+    setError('')
+    const res = await register(form.username, form.email, form.password, form.display_name)
+    if (res.error) setError(res.error)
+    else setPage('home')
   }
 
-  const inp = (key, placeholder, type='text') => (
-    <input value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}
-      placeholder={placeholder} type={type} required
-      style={{width:'100%',background:'#1a1a1a',border:'1px solid #333',borderRadius:8,padding:'12px 14px',color:'#fff',fontSize:14,marginBottom:12,boxSizing:'border-box'}}/>
-  )
-
   return (
-    <div style={{minHeight:'100vh',background:'#0a0a0a',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-      <div style={{background:'#111',padding:40,borderRadius:16,width:'100%',maxWidth:420,border:'1px solid #222'}}>
+    <div style={{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div style={{width:'100%',maxWidth:420,background:'var(--card)',border:'1px solid var(--border)',borderRadius:22,padding:36}}>
         <div style={{textAlign:'center',marginBottom:28}}>
-          <div style={{fontSize:40}}>🎵</div>
-          <h1 style={{color:'#e74c3c',margin:'8px 0 4px'}}>Créer un compte</h1>
-          <p style={{color:'#888',fontSize:14}}>Rejoins la communauté Waiichia</p>
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:32,fontWeight:800,background:'linear-gradient(135deg,#f5a623,#e63946)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginBottom:6}}>Waiichia</div>
+          <div style={{fontSize:13,color:'var(--text2)'}}>Rejoins la plateforme africaine</div>
         </div>
-        {error && <div style={{background:'#2d1a1a',border:'1px solid #e74c3c',borderRadius:8,padding:'10px 14px',marginBottom:16,color:'#ff6b6b',fontSize:13}}>{error}</div>}
-        <form onSubmit={submit}>
-          {inp('display_name', 'Nom complet')}
-          {inp('username', 'Nom d utilisateur')}
-          {inp('email', 'Email', 'email')}
-          {inp('password', 'Mot de passe (8+ car.)', 'password')}
-          <select value={form.country} onChange={e=>setForm({...form,country:e.target.value})}
-            style={{width:'100%',background:'#1a1a1a',border:'1px solid #333',borderRadius:8,padding:'12px 14px',color:'#fff',fontSize:14,marginBottom:20,boxSizing:'border-box'}}>
-            <option value="KM">🇰🇲 Comores</option>
-            <option value="MG">🇲🇬 Madagascar</option>
-            <option value="TZ">🇹🇿 Tanzanie</option>
-            <option value="CI">🇨🇮 Côte d Ivoire</option>
-            <option value="SN">🇸🇳 Sénégal</option>
-            <option value="FR">🇫🇷 France</option>
-            <option value="RE">🇷🇪 La Réunion</option>
-          </select>
-          <button type="submit" disabled={loading}
-            style={{width:'100%',background:'#e74c3c',border:'none',color:'#fff',padding:'13px',borderRadius:8,fontSize:16,fontWeight:600,cursor:'pointer'}}>
-            {loading ? 'Création...' : 'Créer mon compte'}
+
+        {error && (
+          <div style={{background:'rgba(230,57,70,.12)',border:'1px solid rgba(230,57,70,.3)',borderRadius:10,padding:'10px 14px',fontSize:13,color:'#e63946',marginBottom:16}}>
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handle}>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="label">Nom affiché</label>
+              <input className="input-field" value={form.display_name}
+                onChange={set('display_name')} placeholder="Kolo Officiel" />
+            </div>
+            <div className="form-group">
+              <label className="label">Nom utilisateur</label>
+              <input className="input-field" value={form.username}
+                onChange={set('username')} placeholder="kolo_km" required />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="label">Email</label>
+            <input className="input-field" type="email" value={form.email}
+              onChange={set('email')} placeholder="ton@email.com" required />
+          </div>
+          <div className="form-group">
+            <label className="label">Mot de passe</label>
+            <input className="input-field" type="password" value={form.password}
+              onChange={set('password')} placeholder="••••••••" required minLength={6} />
+          </div>
+          <button type="submit" className="btn btn-primary" style={{width:'100%',padding:13,fontSize:14,marginTop:4}} disabled={loading}>
+            {loading ? '⏳...' : '🌍 Créer mon compte'}
           </button>
         </form>
-        <p style={{textAlign:'center',marginTop:20,color:'#888',fontSize:13}}>
-          Déjà un compte ? <Link to="/login" style={{color:'#e74c3c'}}>Se connecter</Link>
-        </p>
+
+        <div style={{textAlign:'center',marginTop:20,fontSize:13,color:'var(--text2)'}}>
+          Déjà un compte ?{' '}
+          <span style={{color:'var(--gold)',cursor:'pointer',fontWeight:600}} onClick={() => setPage('login')}>
+            Se connecter
+          </span>
+        </div>
+        <div style={{textAlign:'center',marginTop:10}}>
+          <span style={{color:'var(--text3)',fontSize:12,cursor:'pointer'}} onClick={() => setPage('home')}>
+            ← Retour à l'accueil
+          </span>
+        </div>
       </div>
     </div>
   )

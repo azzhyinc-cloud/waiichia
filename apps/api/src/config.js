@@ -15,7 +15,7 @@ export const config = {
   port: parseInt(process.env.PORT) || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
   appUrl: process.env.APP_URL || 'http://localhost:5173',
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  corsOrigin: process.env.CORS_ORIGIN === "true" ? true : (process.env.CORS_ORIGIN || true),
   jwtSecret: process.env.JWT_SECRET || 'dev_secret',
   r2: {
     accountId: process.env.CLOUDFLARE_ACCOUNT_ID,

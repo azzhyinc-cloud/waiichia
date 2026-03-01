@@ -1,58 +1,51 @@
-import './index.css'
+import { useEffect } from 'react'
+import { useThemeStore, useAuthStore, usePageStore } from './stores/index.js'
 import Layout from './components/Layout.jsx'
-import { usePageStore, useAuthStore } from './stores/index.js'
-
-// Pages
 import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Profile from './pages/Profile.jsx'
 
-// Pages placeholder
-const Page = ({ title, icon }) => (
+const Placeholder = ({ title, icon }) => (
   <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'60vh',gap:16,color:'var(--text2)'}}>
     <div style={{fontSize:64}}>{icon}</div>
     <h2 style={{fontFamily:'Syne,sans-serif',fontSize:24,color:'var(--text)'}}>{title}</h2>
-    <p style={{fontSize:14}}>Cette section est en cours de développement</p>
+    <p style={{fontSize:14}}>Cette section est en cours de developpement</p>
   </div>
 )
 
 const PAGES = {
-  home:      <Home />,
-  login:     <Login />,
-  register:  <Register />,
-  profile:   <Profile />,
-  trending:  <Page title="Tendances" icon="🔥" />,
-  radio:     <Page title="Radio Live" icon="📻" />,
-  music:     <Page title="Musique" icon="🎵" />,
-  albums:    <Page title="Albums" icon="💿" />,
-  podcast:   <Page title="Podcasts" icon="🎙️" />,
-  feed:      <Page title="Fil Social" icon="📱" />,
-  upload:    <Page title="Publier un son" icon="⬆️" />,
-  mycontent: <Page title="Mes sons" icon="🎼" />,
-  myevents:  <Page title="Mes événements" icon="📅" />,
-  myshop:    <Page title="Ma boutique" icon="🛍️" />,
-  events:    <Page title="Événements" icon="🎪" />,
-  shop:      <Page title="Boutique" icon="🛒" />,
-  creators:  <Page title="Créateurs" icon="⭐" />,
-  wallet:    <Page title="Wallet" icon="💰" />,
-  messages:  <Page title="Messages" icon="💬" />,
-  regie:     <Page title="Régie Publicitaire" icon="📊" />,
-  settings:  <Page title="Paramètres" icon="⚙️" />,
-  admin:     <Page title="Admin" icon="🛡️" />,
+  home:     <Home />,
+  trending: <Placeholder title='Tendances' icon='X' />,
+  radio:    <Placeholder title='Radio et Live' icon='X' />,
+  feed:     <Placeholder title='Fil social' icon='X' />,
+  music:    <Placeholder title='Musique' icon='X' />,
+  podcast:  <Placeholder title='Podcasts' icon='X' />,
+  albums:   <Placeholder title='Albums' icon='X' />,
+  events:   <Placeholder title='Evenements' icon='X' />,
+  shop:     <Placeholder title='Boutique' icon='X' />,
+  creators: <Placeholder title='Createurs' icon='X' />,
+  upload:   <Placeholder title='Publier' icon='X' />,
+  messages: <Placeholder title='Messagerie' icon='X' />,
+  wallet:   <Placeholder title='Portefeuille' icon='X' />,
+  settings: <Placeholder title='Parametres' icon='X' />,
 }
 
 export default function App() {
-  const { currentPage } = usePageStore()
-  const { user } = useAuthStore()
+  const { init: initTheme } = useThemeStore()
+  const { loadMe, user } = useAuthStore()
+  const { currentPage, profileUsername } = usePageStore()
 
-  // Pages sans layout
-  if (currentPage === 'login') return <Login />
+  useEffect(() => { initTheme(); loadMe() }, [])
+
+  if (currentPage === 'login')    return <Login />
   if (currentPage === 'register') return <Register />
 
-  return (
-    <Layout>
-      {PAGES[currentPage] || <Home />}
-    </Layout>
-  )
+  if (currentPage === 'profile') {
+    const uname = profileUsername || user?.username
+    if (!uname) return <Layout><Placeholder title='Connectez-vous' icon='X' /></Layout>
+    return <Layout><Profile username={uname} /></Layout>
+  }
+
+  return <Layout>{PAGES[currentPage] || PAGES.home}</Layout>
 }

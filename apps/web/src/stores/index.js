@@ -127,5 +127,6 @@ export const usePlayerStore = create((set, get) => ({
 
 export const usePageStore = create((set) => ({
   currentPage: 'home',
-  setPage: (page) => set({ currentPage: page })
+  profileUsername: null,
+  setPage: (page, params={}) => set({ currentPage: page, ...params })
 }))

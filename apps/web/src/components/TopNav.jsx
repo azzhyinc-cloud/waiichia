@@ -1,7 +1,7 @@
 import { useThemeStore, useAuthStore, usePageStore } from '../stores/index.js'
 
 export default function TopNav() {
-  const { theme, toggle } = useThemeStore()
+  const { theme, toggle: toggleTheme } = useThemeStore()
   const { user, logout } = useAuthStore()
   const { setPage } = usePageStore()
 
@@ -9,37 +9,35 @@ export default function TopNav() {
     <div className="topnav">
       <div className="search-bar">
         <span className="search-icon">🔍</span>
-        <input placeholder="Rechercher sons, artistes, albums..." />
+        <input placeholder="Rechercher sons, artistes, podcasts, albums..." />
       </div>
 
-      <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:12}}>
-        <button onClick={toggle} className="btn btn-ghost btn-sm" style={{fontSize:18,padding:'6px 10px'}}>
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
+      <div className="topnav-right">
+        <div className="theme-toggle" onClick={toggleTheme}>
+          {theme === 'dark' ? '🌙' : '☀️'}
+        </div>
+
+        <div className="country-pill">
+          <span>🇰🇲</span>
+          <span>KM · KMF</span>
+        </div>
+
+        <div className="notif-btn">
+          🔔
+          <div className="notif-dot" />
+        </div>
 
         {user ? (
           <>
-            <button className="btn btn-ghost btn-sm" onClick={() => setPage('wallet')}>
-              💰 {user.wallet_balance?.toLocaleString() || 0} KMF
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setPage('messages')}>
-              💬
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setPage('settings')}>
-              ⚙️
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={logout}>
-              Déconnexion
-            </button>
+            <div className="avatar-btn" onClick={() => setPage('profile')}>
+              {(user.display_name||user.username||'U')[0].toUpperCase()}
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={() => setPage('upload')}>+ Publier</button>
           </>
         ) : (
           <>
-            <button className="btn btn-ghost btn-sm" onClick={() => setPage('login')}>
-              Connexion
-            </button>
-            <button className="btn btn-gold btn-sm" onClick={() => setPage('register')}>
-              S'inscrire
-            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setPage('login')}>Connexion</button>
+            <button className="btn btn-primary btn-sm" onClick={() => setPage('register')}>S'inscrire</button>
           </>
         )}
       </div>

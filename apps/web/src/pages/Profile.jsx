@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
-import Navbar from '../components/Navbar.jsx'
 import { useAuthStore } from '../stores/index.js'
 import { usePlayerStore } from '../stores/index.js'
 import api from '../services/api.js'
 
-export default function Profile() {
-  const { username } = useParams()
+export default function Profile({ username }) {
   const { user } = useAuthStore()
   const { toggle, currentTrack, isPlaying } = usePlayerStore()
   const [profile, setProfile] = useState(null)
@@ -37,7 +34,7 @@ export default function Profile() {
 
   return (
     <div style={{paddingBottom:100}}>
-      <Navbar />
+      
       <div style={{maxWidth:900,margin:'0 auto',padding:'24px 20px'}}>
         <div style={{background:'#111',borderRadius:16,overflow:'hidden',marginBottom:24,border:'1px solid #222'}}>
           <div style={{height:180,background:'linear-gradient(135deg,#1a0505,#2d1111)',backgroundImage:profile.cover_url?`url(${profile.cover_url})`:'',backgroundSize:'cover'}}/>
