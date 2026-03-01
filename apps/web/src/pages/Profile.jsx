@@ -14,9 +14,15 @@ export default function Profile({ username }) {
   useEffect(() => {
     Promise.all([
       api.profiles.get(username),
-      api.profiles.tracks(username)
-    ]).then(([p, t]) => {
-      setProfile(p.profile)
+      api.profiles.tracks(username),
+      fetch(import.meta.env.VITE_API_URL + '/api/profiles/' + username + '/stats').then(r=>r.json())
+    ]).then(([p, t, s]) => {
+      const prof = p.profile
+      if (prof && s) {
+        prof.tracks_count = s.tracks_count
+        prof.total_plays = s.total_plays
+      }
+      setProfile(prof)
       setTracks(t.tracks||[])
       setLoading(false)
     }).catch(() => setLoading(false))

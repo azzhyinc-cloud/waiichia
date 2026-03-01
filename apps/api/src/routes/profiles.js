@@ -112,6 +112,17 @@ export default async function profilesRoutes(app) {
     return reply.send({ tracks: data })
   })
 
+  // STATS REELLES D UN PROFIL
+  app.get('/:username/stats', async (request, reply) => {
+    const { username } = request.params
+    const { data: profile } = await supabase.from('profiles').select('id').eq('username', username).single()
+    if (!profile) return reply.status(404).send({ error: 'Introuvable' })
+    const { count: tracksCount } = await supabase.from('tracks').select('*', {count:'exact',head:true}).eq('creator_id', profile.id).eq('is_active', true)
+    const { data: plays } = await supabase.from('tracks').select('play_count').eq('creator_id', profile.id)
+    const totalPlays = plays?.reduce((a,t) => a + (t.play_count||0), 0) || 0
+    return reply.send({ tracks_count: tracksCount || 0, total_plays: totalPlays })
+  })
+
   // RECHERCHE DE PROFILS
   app.get('/', async (request, reply) => {
     const { search, type, page = 1, limit = 20 } = request.query

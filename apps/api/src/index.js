@@ -9,6 +9,7 @@ import tracksRoutes from './routes/tracks.js'
 import profilesRoutes from './routes/profiles.js'
 import paymentsRoutes from './routes/payments.js'
 import socialRoutes from './routes/social.js'
+import uploadRoutes from './routes/upload.js'
 
 const app = Fastify({
   logger: {
@@ -39,6 +40,7 @@ await app.register(tracksRoutes,   { prefix: '/api/tracks' })
 await app.register(profilesRoutes, { prefix: '/api/profiles' })
 await app.register(paymentsRoutes, { prefix: '/api/payments' })
 await app.register(socialRoutes,   { prefix: '/api/social' })
+  await app.register(uploadRoutes,  { prefix: '/api/upload' })
 
 app.get('/health', async () => ({
   status: 'ok',

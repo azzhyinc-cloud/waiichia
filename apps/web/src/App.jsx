@@ -5,6 +5,7 @@ import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Profile from './pages/Profile.jsx'
+import Upload from './pages/Upload.jsx'
 
 const Placeholder = ({ title, icon }) => (
   <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'60vh',gap:16,color:'var(--text2)'}}>
@@ -25,7 +26,7 @@ const PAGES = {
   events:   <Placeholder title='Evenements' icon='X' />,
   shop:     <Placeholder title='Boutique' icon='X' />,
   creators: <Placeholder title='Createurs' icon='X' />,
-  upload:   <Placeholder title='Publier' icon='X' />,
+  upload:   <Upload />,
   messages: <Placeholder title='Messagerie' icon='X' />,
   wallet:   <Placeholder title='Portefeuille' icon='X' />,
   settings: <Placeholder title='Parametres' icon='X' />,

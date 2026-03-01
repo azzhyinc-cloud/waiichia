@@ -75,6 +75,9 @@ export default async function tracksRoutes(app) {
     const { data, error } = await supabase.from('tracks').insert({
       creator_id: request.user.id,
       title, description,
+      audio_url_128: request.body.audio_url_128 || null,
+      audio_url_320: request.body.audio_url_320 || null,
+      cover_url: request.body.cover_url || null,
       content_type: content_type || 'music',
       genre, tags, country, language,
       access_type: access_type || 'free',
@@ -88,8 +91,9 @@ export default async function tracksRoutes(app) {
       preview_start_sec: preview_start_sec || 0,
       preview_end_sec: preview_end_sec || 10,
       featuring_ids: featuring_ids || [],
+      is_published: request.body.is_published === true,
+      published_at: request.body.is_published === true ? new Date().toISOString() : null,
       license: license || 'all_rights',
-      is_published: false
     }).select().single()
     if (error) return reply.status(500).send({ error: error.message })
     return reply.status(201).send({ track: data })
