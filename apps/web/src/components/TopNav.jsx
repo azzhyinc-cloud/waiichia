@@ -33,6 +33,7 @@ export default function TopNav() {
               {(user.display_name||user.username||'U')[0].toUpperCase()}
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => setPage('upload')}>+ Publier</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { logout(); setPage('home') }} style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text2)'}}>Deconnexion</button>
           </>
         ) : (
           <>

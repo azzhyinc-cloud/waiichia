@@ -2,13 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { usePlayerStore, usePageStore, useAuthStore } from '../stores/index.js'
 import api from '../services/api.js'
 
-const formatK = (n) => {
-  if (!n) return '0'
-  if (n >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M'
-  if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'K'
-  return n.toString()
-}
-
 const GENRES = ['Twarab','Afrobeats','Sebene','Amapiano','Slam','Mindset','Business','Gospel / Religion']
 
 function TrackCard({ track }) {
@@ -75,7 +68,7 @@ function TrackCard({ track }) {
         <div className="track-title">{track.title}</div>
         <div className="track-artist">{track.profiles?.display_name || 'Artiste'}</div>
         <div className="track-meta">
-          <span>🎧 {formatK(track.play_count||0)}</span>
+          <span>🎧 {(track.play_count||0).toLocaleString()}</span>
           {isPaid
             ? <span style={{color:'var(--gold)',fontWeight:700}}>{(track.sale_price||0).toLocaleString()} KMF</span>
             : <span style={{color:'var(--green)'}}>✓ Gratuit</span>
@@ -144,22 +137,14 @@ export default function Home() {
   const [tracks, setTracks] = useState([])
   const [loading, setLoading] = useState(true)
   const [genre, setGenre] = useState('')
-  const [stats, setStats] = useState({ creators: 0, listeners: 0, countries: 0 })
 
   useEffect(() => {
-    Promise.all([
-      api.tracks.list(),
-      api.profiles.get ? fetch(import.meta.env.VITE_API_URL + '/api/profiles/?limit=1').then(r=>r.json()) : Promise.resolve(null),
-    ]).then(([res, profRes]) => {
+    api.tracks.list().then(res => {
       const t = res.tracks || []
       setTracks(t)
       setQueue(t)
       setLoading(false)
     }).catch(() => setLoading(false))
-    fetch(import.meta.env.VITE_API_URL + '/api/profiles/?type=artist')
-      .then(r=>r.json()).then(d => {
-        setStats(s => ({...s, creators: d.profiles?.length || 0, countries: [...new Set((d.profiles||[]).map(p=>p.country))].length}))
-      }).catch(()=>{})
   }, [])
 
   const filtered = genre ? tracks.filter(t => t.genre === genre) : tracks
@@ -194,17 +179,17 @@ export default function Home() {
         </div>
         <div className="stat-card sc-red">
           <div className="stat-icon">⭐</div>
-          <div className="stat-num">{stats.creators || '—'}</div>
+          <div className="stat-num">3.2K</div>
           <div className="stat-label">Créateurs</div>
         </div>
         <div className="stat-card sc-green">
           <div className="stat-icon">👥</div>
-          <div className="stat-num">{formatK(tracks.reduce((a,t)=>a+(t.play_count||0),0))}</div>
-          <div className="stat-label">Ecoutes totales</div>
+          <div className="stat-num">120K</div>
+          <div className="stat-label">Auditeurs</div>
         </div>
         <div className="stat-card sc-blue">
           <div className="stat-icon">🌍</div>
-          <div className="stat-num">{[...new Set(tracks.map(t=>t.country))].length || '—'}</div>
+          <div className="stat-num">54</div>
           <div className="stat-label">Pays</div>
         </div>
       </div>

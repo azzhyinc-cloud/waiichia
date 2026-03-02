@@ -35,7 +35,7 @@ export default async function profilesRoutes(app) {
   })
 
   // SUIVRE UN UTILISATEUR
-  app.post('/:username/follow', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/:username/follow', { preHandler: app.authenticate, config: { rawBody: false } }, async (request, reply) => {
     const { username } = request.params
     const { data: target } = await supabase
       .from('profiles').select('id').eq('username', username).single()

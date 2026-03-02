@@ -31,7 +31,7 @@ export default function Profile({ username }) {
   const handleFollow = async () => {
     try {
       if (following) { await api.profiles.unfollow(username); setFollowing(false) }
-      else { await api.profiles.follow(username); setFollowing(true) }
+      else { await api.profiles.follow(username, {}); setFollowing(true) }
     } catch(e) { alert(e.message) }
   }
 

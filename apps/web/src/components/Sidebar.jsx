@@ -5,7 +5,7 @@ const NAV = [
     { id:'home',     icon:'🏠', label:'Accueil' },
     { id:'trending', icon:'🔥', label:'Tendances', badge:'HOT', badgeColor:'gold' },
     { id:'radio',    icon:'📻', label:'Radio & Live', live:true },
-    { id:'feed',     icon:'⚡', label:'Mon Activité', badge:'8', badgeColor:'red' },
+    { id:'feed',     icon:'⚡', label:'Mon Activite' },
   ]},
   { section: 'Contenu', items: [
     { id:'music',   icon:'🎵', label:'Musique' },
@@ -20,7 +20,7 @@ const NAV = [
   { section: 'Mon Espace', items: [
     { id:'profile',  icon:'👤', label:'Mon Profil' },
     { id:'upload',   icon:'⬆️', label:'Publier' },
-    { id:'messages', icon:'💬', label:'Messagerie', badge:'3', badgeColor:'blue' },
+    { id:'messages', icon:'💬', label:'Messagerie' },
     { id:'wallet',   icon:'💰', label:'Mon Portefeuille' },
     { id:'settings', icon:'⚙️', label:'Paramètres' },
   ]},

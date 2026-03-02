@@ -6,6 +6,11 @@ import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Profile from './pages/Profile.jsx'
 import Upload from './pages/Upload.jsx'
+import Trending from './pages/Trending.jsx'
+import Feed from './pages/Feed.jsx'
+import Music from './pages/Music.jsx'
+import Creators from './pages/Creators.jsx'
+import Admin from './pages/Admin.jsx'
 
 const Placeholder = ({ title, icon }) => (
   <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'60vh',gap:16,color:'var(--text2)'}}>
@@ -17,16 +22,17 @@ const Placeholder = ({ title, icon }) => (
 
 const PAGES = {
   home:     <Home />,
-  trending: <Placeholder title='Tendances' icon='X' />,
+  trending: <Trending />,
   radio:    <Placeholder title='Radio et Live' icon='X' />,
-  feed:     <Placeholder title='Fil social' icon='X' />,
-  music:    <Placeholder title='Musique' icon='X' />,
+  feed:     <Feed />,
+  music:    <Music />,
   podcast:  <Placeholder title='Podcasts' icon='X' />,
   albums:   <Placeholder title='Albums' icon='X' />,
   events:   <Placeholder title='Evenements' icon='X' />,
   shop:     <Placeholder title='Boutique' icon='X' />,
-  creators: <Placeholder title='Createurs' icon='X' />,
+  creators: <Creators />,
   upload:   <Upload />,
+  admin:    <Admin />,
   messages: <Placeholder title='Messagerie' icon='X' />,
   wallet:   <Placeholder title='Portefeuille' icon='X' />,
   settings: <Placeholder title='Parametres' icon='X' />,
