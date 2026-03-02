@@ -181,6 +181,106 @@ export default async function paymentsRoutes(app) {
     return reply.send({ status, transaction_id: tx_id, message: status === 'completed' ? 'Paiement confirme' : 'Paiement echoue' })
   })
 
+  // ACHETER UN BILLET EVENEMENT
+  app.post('/ticket', { preHandler: app.authenticate }, async (request, reply) => {
+    const { event_id, quantity = 1, phone, gateway = 'huri_money' } = request.body
+    if (!event_id || !phone) return reply.status(400).send({ error: 'event_id et phone requis' })
+
+    const { data: event } = await supabase.from('events')
+      .select('id, title, ticket_price, currency, is_free, creator_id, capacity, tickets_sold')
+      .eq('id', event_id).single()
+    if (!event) return reply.status(404).send({ error: 'Evenement introuvable' })
+    if (event.is_free) return reply.status(400).send({ error: 'Cet evenement est gratuit' })
+
+    // Verifier capacite
+    if (event.capacity && (event.tickets_sold + quantity) > event.capacity)
+      return reply.status(409).send({ error: 'Plus de places disponibles' })
+
+    // Verifier si deja achete
+    const { data: existing } = await supabase.from('event_tickets')
+      .select('id').eq('event_id', event_id).eq('user_id', request.user.id).eq('status', 'confirmed').single()
+    if (existing) return reply.status(409).send({ error: 'Vous avez deja un billet pour cet evenement' })
+
+    const amount = event.ticket_price * quantity
+    const commission = Math.round(amount * 0.10)
+    const net_amount = amount - commission
+
+    // Creer transaction
+    const { data: tx, error: txError } = await supabase.from('transactions').insert({
+      user_id: request.user.id,
+      recipient_id: event.creator_id,
+      type: 'purchase',
+      status: 'pending',
+      amount,
+      currency: event.currency || 'KMF',
+      fee: commission,
+      net_amount,
+      gateway,
+      phone_number: phone,
+      description: `Billet x${quantity}: ${event.title}`,
+      metadata: { event_id, quantity },
+      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+    }).select().single()
+    if (txError) return reply.status(500).send({ error: txError.message })
+
+    // Creer billet en attente
+    const { data: ticket } = await supabase.from('event_tickets').insert({
+      event_id,
+      user_id: request.user.id,
+      transaction_id: tx.id,
+      quantity,
+      amount,
+      currency: event.currency || 'KMF',
+      status: 'pending',
+      phone_number: phone
+    }).select().single()
+
+    return reply.status(202).send({
+      status: 'pending',
+      message: `Confirmez le paiement de ${amount.toLocaleString()} ${event.currency||'KMF'} sur votre telephone ${phone}`,
+      transaction_id: tx.id,
+      ticket_id: ticket.id,
+      ticket_code: ticket.ticket_code,
+      amount,
+      currency: event.currency || 'KMF',
+    })
+  })
+
+  // CONFIRMER BILLET (simulation)
+  app.post('/ticket/confirm/:tx_id', async (request, reply) => {
+    const { tx_id } = request.params
+    const { success = true } = request.body
+
+    const { data: tx } = await supabase.from('transactions').select('*').eq('id', tx_id).single()
+    if (!tx) return reply.status(404).send({ error: 'Transaction introuvable' })
+
+    const status = success ? 'completed' : 'failed'
+    await supabase.from('transactions').update({ status, completed_at: new Date().toISOString() }).eq('id', tx_id)
+
+    if (success) {
+      const event_id = tx.metadata?.event_id
+      const quantity = tx.metadata?.quantity || 1
+      await supabase.from('event_tickets').update({ status: 'confirmed' }).eq('transaction_id', tx_id)
+      await supabase.from('events').update({ tickets_sold: supabase.raw(`tickets_sold + ${quantity}`) }).eq('id', event_id)
+      await supabase.rpc('add_to_wallet', { user_uuid: tx.recipient_id, amount: tx.net_amount }).catch(()=>{})
+    } else {
+      await supabase.from('event_tickets').update({ status: 'cancelled' }).eq('transaction_id', tx_id)
+    }
+
+    return reply.send({ status, transaction_id: tx_id, message: success ? 'Billet confirme !' : 'Paiement echoue' })
+  })
+
+  // MES BILLETS
+  app.get('/tickets', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data, error } = await supabase.from('event_tickets')
+      .select('*, events:event_id(id, title, location, event_date, cover_url, country)')
+      .eq('user_id', request.user.id)
+      .order('created_at', { ascending: false })
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.send({ tickets: data })
+  })
+
+
   // HISTORIQUE TRANSACTIONS
   app.get('/history', { preHandler: app.authenticate }, async (request, reply) => {
     const { page = 1, limit = 20 } = request.query

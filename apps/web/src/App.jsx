@@ -13,6 +13,8 @@ import Creators from './pages/Creators.jsx'
 import Podcasts from './pages/Podcasts.jsx'
 import Albums from './pages/Albums.jsx'
 import Radio from './pages/Radio.jsx'
+import Events from './pages/Events.jsx'
+import CreateEvent from './pages/CreateEvent.jsx'
 import Admin from './pages/Admin.jsx'
 
 const Placeholder = ({ title, icon }) => (
@@ -31,7 +33,8 @@ const PAGES = {
   music:    <Music />,
   podcast:  <Podcasts />,
   albums:   <Albums />,
-  events:   <Placeholder title='Evenements' icon='X' />,
+  events:      <Events />,
+  create_event: <CreateEvent />,
   shop:     <Placeholder title='Boutique' icon='X' />,
   creators: <Creators />,
   upload:   <Upload />,
