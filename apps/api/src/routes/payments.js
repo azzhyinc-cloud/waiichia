@@ -181,6 +181,50 @@ export default async function paymentsRoutes(app) {
     return reply.send({ status, transaction_id: tx_id, message: status === 'completed' ? 'Paiement confirme' : 'Paiement echoue' })
   })
 
+  // RECHARGER LE WALLET
+  app.post('/recharge', { preHandler: app.authenticate }, async (request, reply) => {
+    const { amount, phone, gateway = 'huri_money' } = request.body
+    if (!amount || amount < 100) return reply.status(400).send({ error: 'Montant minimum 100 KMF' })
+    if (!phone) return reply.status(400).send({ error: 'Numero de telephone requis' })
+
+    // Creer transaction recharge en attente
+    const { data: tx, error } = await supabase.from('transactions').insert({
+      user_id: request.user.id,
+      type: 'recharge',
+      status: 'pending',
+      amount,
+      currency: 'KMF',
+      fee: 0,
+      net_amount: amount,
+      gateway,
+      phone_number: phone,
+      description: `Recharge wallet: ${amount.toLocaleString()} KMF`,
+      metadata: { phone, gateway },
+      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+    }).select().single()
+    if (error) return reply.status(500).send({ error: error.message })
+
+    // Simulation: crediter immediatement (en prod: attendre webhook operateur)
+    await supabase.from('profiles')
+      .update({ wallet_balance: supabase.rpc ? undefined : undefined })
+      .eq('id', request.user.id)
+
+    // Recuperer solde actuel et incrementer
+    const { data: profile } = await supabase.from('profiles')
+      .select('wallet_balance').eq('id', request.user.id).single()
+    const newBalance = (profile?.wallet_balance || 0) + amount
+    await supabase.from('profiles').update({ wallet_balance: newBalance }).eq('id', request.user.id)
+    await supabase.from('transactions').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', tx.id)
+
+    return reply.send({
+      status: 'completed',
+      message: `${amount.toLocaleString()} KMF ajoutes a votre portefeuille`,
+      new_balance: newBalance,
+      transaction_id: tx.id
+    })
+  })
+
+
   // ACHETER UN BILLET EVENEMENT
   app.post('/ticket', { preHandler: app.authenticate }, async (request, reply) => {
     const { event_id, quantity = 1, phone, gateway = 'huri_money' } = request.body

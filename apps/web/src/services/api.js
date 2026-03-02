@@ -58,6 +58,8 @@ const api = {
     history: () => api.get('/api/payments/history'),
     rentals: () => api.get('/api/payments/rentals'),
     invoices: () => api.get('/api/payments/invoices'),
+    tickets: () => api.get('/api/payments/tickets'),
+    recharge: (d) => api.post('/api/payments/recharge', d),
   }
 }
 
