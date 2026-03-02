@@ -42,7 +42,6 @@ const PAGES = {
   upload:   <Upload />,
   admin:    <Admin />,
   messages: <Placeholder title='Messagerie' icon='X' />,
-  wallet:   <Placeholder title='Portefeuille' icon='X' />,
   settings: <Placeholder title='Parametres' icon='X' />,
 }
 
