@@ -205,25 +205,49 @@ export default async function paymentsRoutes(app) {
     const commission = Math.round(amount * 0.10)
     const net_amount = amount - commission
 
+    // Verifier solde wallet
+    const { data: buyer } = await supabase.from('profiles')
+      .select('wallet_balance, currency').eq('id', request.user.id).single()
+    if (!buyer) return reply.status(404).send({ error: 'Profil introuvable' })
+    if ((buyer.wallet_balance || 0) < amount)
+      return reply.status(402).send({
+        error: 'Solde insuffisant',
+        balance: buyer.wallet_balance || 0,
+        required: amount,
+        currency: event.currency || 'KMF'
+      })
+
+    // Debiter le wallet acheteur
+    const { error: debitError } = await supabase.from('profiles')
+      .update({ wallet_balance: (buyer.wallet_balance - amount) })
+      .eq('id', request.user.id)
+    if (debitError) return reply.status(500).send({ error: 'Erreur debit wallet' })
+
+    // Crediter le createur
+    const { data: creator } = await supabase.from('profiles')
+      .select('wallet_balance').eq('id', event.creator_id).single()
+    await supabase.from('profiles')
+      .update({ wallet_balance: ((creator?.wallet_balance || 0) + net_amount) })
+      .eq('id', event.creator_id)
+
     // Creer transaction
     const { data: tx, error: txError } = await supabase.from('transactions').insert({
       user_id: request.user.id,
       recipient_id: event.creator_id,
       type: 'purchase',
-      status: 'pending',
+      status: 'completed',
       amount,
       currency: event.currency || 'KMF',
       fee: commission,
       net_amount,
-      gateway,
-      phone_number: phone,
+      gateway: 'wallet',
       description: `Billet x${quantity}: ${event.title}`,
       metadata: { event_id, quantity },
-      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      completed_at: new Date().toISOString()
     }).select().single()
     if (txError) return reply.status(500).send({ error: txError.message })
 
-    // Creer billet en attente
+    // Creer billet confirme
     const { data: ticket } = await supabase.from('event_tickets').insert({
       event_id,
       user_id: request.user.id,
@@ -231,17 +255,23 @@ export default async function paymentsRoutes(app) {
       quantity,
       amount,
       currency: event.currency || 'KMF',
-      status: 'pending',
+      status: 'confirmed',
       phone_number: phone
     }).select().single()
 
-    return reply.status(202).send({
-      status: 'pending',
-      message: `Confirmez le paiement de ${amount.toLocaleString()} ${event.currency||'KMF'} sur votre telephone ${phone}`,
+    // Mettre a jour tickets_sold
+    await supabase.from('events')
+      .update({ tickets_sold: (event.tickets_sold || 0) + quantity })
+      .eq('id', event_id)
+
+    return reply.status(201).send({
+      status: 'confirmed',
+      message: `Billet confirme ! ${amount.toLocaleString()} ${event.currency||'KMF'} debite de votre portefeuille`,
       transaction_id: tx.id,
       ticket_id: ticket.id,
       ticket_code: ticket.ticket_code,
       amount,
+      new_balance: buyer.wallet_balance - amount,
       currency: event.currency || 'KMF',
     })
   })

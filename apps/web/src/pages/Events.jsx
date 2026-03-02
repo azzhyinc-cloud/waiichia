@@ -52,6 +52,7 @@ export default function Events() {
   const [quantity, setQuantity] = useState(1)
   const [paying, setPaying] = useState(false)
   const [payStatus, setPayStatus] = useState(null)
+  const [wallet, setWallet] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -97,16 +98,20 @@ export default function Events() {
     setRegistered(prev => ({...prev, [e.id]: true}))
   }
 
-  const handleBuyTicket = (e) => {
+  const handleBuyTicket = async (e) => {
     if (!user) return setPage('login')
     setPayModal(e)
     setPayStatus(null)
     setPhone('')
     setQuantity(1)
+    try {
+      const r = await api.payments.wallet()
+      setWallet(r)
+    } catch(err) { setWallet({ balance: 0, currency: 'KMF' }) }
   }
 
   const confirmPayment = async () => {
-    if (!phone || phone.length < 8) return alert('Entrez un numero de telephone valide')
+    if (!payModal) return
     setPaying(true)
     try {
       const token = localStorage.getItem('waiichia_token')
@@ -117,16 +122,13 @@ export default function Events() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setPayStatus({ type:'pending', message: data.message, tx_id: data.transaction_id, ticket_code: data.ticket_code, amount: data.amount })
-      // Simulation confirmation automatique apres 3 secondes
-      setTimeout(async () => {
-        const r2 = await fetch(import.meta.env.VITE_API_URL + '/api/payments/ticket/confirm/' + data.transaction_id, {
-          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ success: true })
-        })
-        const d2 = await r2.json()
-        setPayStatus(prev => ({...prev, type:'confirmed', message: 'Billet confirme !'}))
+      if (data.status === 'confirmed') {
+        setPayStatus({ type:'confirmed', message: data.message, ticket_code: data.ticket_code, amount: data.amount, new_balance: data.new_balance })
         setRegistered(prev => ({...prev, [payModal.id]: true}))
-      }, 3000)
+        setWallet(w => w ? {...w, balance: data.new_balance} : w)
+      } else {
+        setPayStatus({ type:'pending', message: data.message, tx_id: data.transaction_id, ticket_code: data.ticket_code, amount: data.amount })
+      }
     } catch(e) {
       setPayStatus({ type:'error', message: e.message })
     }
@@ -186,19 +188,33 @@ export default function Events() {
                     <button onClick={()=>setQuantity(q=>q+1)} style={{width:36,height:36,borderRadius:8,border:'1px solid var(--border)',background:'var(--card2)',color:'var(--text)',cursor:'pointer',fontSize:18}}>+</button>
                   </div>
                 </div>
-                <div style={{marginBottom:14}}>
-                  <div style={{fontSize:12,color:'var(--text2)',fontWeight:600,marginBottom:6}}>NUMERO DE TELEPHONE *</div>
-                  <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="ex: 3370000 ou +2693370000"
-                    style={{width:'100%',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px',color:'var(--text)',fontSize:14,boxSizing:'border-box'}}/>
-                  <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>Huri Money, Telecom Comores, Orange Money</div>
+                {/* SOLDE WALLET */}
+                <div style={{background:'var(--card2)',borderRadius:10,padding:14,marginBottom:14,border:`1px solid ${wallet&&wallet.balance<(payModal.ticket_price*quantity)?'#e74c3c':'var(--border)'}`}}>
+                  <div style={{fontSize:11,color:'var(--text3)',fontWeight:700,letterSpacing:1,marginBottom:6}}>MON PORTEFEUILLE</div>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontSize:18,fontWeight:800,color:wallet&&wallet.balance>=(payModal.ticket_price*quantity)?'#2cc653':'#e74c3c'}}>
+                      {wallet ? (wallet.balance||0).toLocaleString() + ' KMF' : 'Chargement...'}
+                    </span>
+                    {wallet && wallet.balance < (payModal.ticket_price*quantity) && (
+                      <button onClick={()=>{setPayModal(null);setPage('wallet')}}
+                        style={{background:'var(--primary)',border:'none',color:'#fff',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:12,fontWeight:600}}>
+                        Recharger →
+                      </button>
+                    )}
+                  </div>
+                  {wallet && wallet.balance < (payModal.ticket_price*quantity) && (
+                    <div style={{fontSize:12,color:'#e74c3c',marginTop:6}}>
+                      Solde insuffisant — manque {((payModal.ticket_price*quantity)-(wallet.balance||0)).toLocaleString()} KMF
+                    </div>
+                  )}
                 </div>
                 <div style={{background:'var(--card2)',borderRadius:8,padding:12,marginBottom:20,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <span style={{fontSize:14,color:'var(--text2)'}}>Total ({quantity} billet{quantity>1?'s':''})</span>
                   <span style={{fontSize:18,fontWeight:800,color:'var(--gold)'}}>{((payModal.ticket_price||0)*quantity).toLocaleString()} {payModal.currency||'KMF'}</span>
                 </div>
                 <button onClick={confirmPayment} disabled={paying}
-                  style={{width:'100%',background:paying?'var(--border)':'linear-gradient(135deg,#4d9fff,#3a7fd5)',border:'none',color:'#fff',borderRadius:10,padding:14,cursor:paying?'not-allowed':'pointer',fontWeight:700,fontSize:15}}>
-                  {paying ? 'Traitement...' : 'Confirmer le paiement'}
+                  style={{width:'100%',background:paying||!wallet||(wallet.balance<payModal.ticket_price*quantity)?'var(--border)':'linear-gradient(135deg,#4d9fff,#3a7fd5)',border:'none',color:'#fff',borderRadius:10,padding:14,cursor:paying||!wallet||(wallet.balance<payModal.ticket_price*quantity)?'not-allowed':'pointer',fontWeight:700,fontSize:15}}>
+                  {paying ? 'Traitement...' : wallet && wallet.balance < (payModal.ticket_price*quantity) ? 'Solde insuffisant' : 'Payer avec mon portefeuille'}
                 </button>
               </>
             )}
