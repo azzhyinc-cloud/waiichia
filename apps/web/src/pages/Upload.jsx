@@ -3,7 +3,7 @@ import { useAuthStore, usePageStore } from '../stores/index.js'
 import api from '../services/api.js'
 
 const GENRES = ['Twarab','Afrobeats','Sebene','Amapiano','Slam','Mindset','Business','Gospel / Religion','Hip-Hop','RnB','Jazz','Classique','Autre']
-const TYPES = [['music','Musique'],['podcast','Podcast'],['audiobook','Livre audio'],['radio','Radio']]
+const TYPES = [['music','Musique'],['album','Album'],['podcast','Podcast / Emission'],['emission','Emission'],['radio_live','Radio Live']]
 const ACCESS = [['free','Gratuit'],['purchase','Achat'],['rental','Location']]
 
 export default function Upload() {

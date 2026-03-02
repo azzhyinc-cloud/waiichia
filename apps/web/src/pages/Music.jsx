@@ -27,7 +27,7 @@ export default function Music() {
   useEffect(() => {
     setLoading(true)
     const q = new URLSearchParams()
-    q.set('content_type', 'music')
+    q.set('type', 'music')
     q.set('limit', '30')
     if (genre) q.set('genre', genre)
     if (access !== 'all') q.set('type', access)

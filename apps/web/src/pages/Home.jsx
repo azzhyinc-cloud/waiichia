@@ -2,6 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { usePlayerStore, usePageStore, useAuthStore } from '../stores/index.js'
 import api from '../services/api.js'
 
+const formatK = (n) => {
+  if (!n) return '0'
+  if (n >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M'
+  if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'K'
+  return n.toString()
+}
+
 const GENRES = ['Twarab','Afrobeats','Sebene','Amapiano','Slam','Mindset','Business','Gospel / Religion']
 
 function TrackCard({ track }) {
@@ -137,6 +144,7 @@ export default function Home() {
   const [tracks, setTracks] = useState([])
   const [loading, setLoading] = useState(true)
   const [genre, setGenre] = useState('')
+  const [stats, setStats] = useState({ creators: 0, countries: 0 })
 
   useEffect(() => {
     api.tracks.list().then(res => {
@@ -144,7 +152,14 @@ export default function Home() {
       setTracks(t)
       setQueue(t)
       setLoading(false)
+      const countries = [...new Set(t.map(tr=>tr.country).filter(Boolean))].length
+      setStats(s => ({...s, countries}))
     }).catch(() => setLoading(false))
+    fetch(import.meta.env.VITE_API_URL + '/api/profiles/?limit=100')
+      .then(r=>r.json()).then(d => {
+        const creators = (d.profiles||[]).filter(p=>['artist','label','media','influencer','entrepreneur'].includes(p.profile_type)).length
+        setStats(s => ({...s, creators}))
+      }).catch(()=>{})
   }, [])
 
   const filtered = genre ? tracks.filter(t => t.genre === genre) : tracks
@@ -179,17 +194,17 @@ export default function Home() {
         </div>
         <div className="stat-card sc-red">
           <div className="stat-icon">⭐</div>
-          <div className="stat-num">3.2K</div>
-          <div className="stat-label">Créateurs</div>
+          <div className="stat-num">{stats.creators || 0}</div>
+          <div className="stat-label">Createurs</div>
         </div>
         <div className="stat-card sc-green">
           <div className="stat-icon">👥</div>
-          <div className="stat-num">120K</div>
-          <div className="stat-label">Auditeurs</div>
+          <div className="stat-num">{formatK(tracks.reduce((a,t)=>a+(t.play_count||0),0))}</div>
+          <div className="stat-label">Ecoutes totales</div>
         </div>
         <div className="stat-card sc-blue">
           <div className="stat-icon">🌍</div>
-          <div className="stat-num">54</div>
+          <div className="stat-num">{stats.countries || 0}</div>
           <div className="stat-label">Pays</div>
         </div>
       </div>
