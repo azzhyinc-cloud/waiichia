@@ -11,6 +11,8 @@ import Feed from './pages/Feed.jsx'
 import Music from './pages/Music.jsx'
 import Creators from './pages/Creators.jsx'
 import Podcasts from './pages/Podcasts.jsx'
+import Albums from './pages/Albums.jsx'
+import Radio from './pages/Radio.jsx'
 import Admin from './pages/Admin.jsx'
 
 const Placeholder = ({ title, icon }) => (
@@ -24,11 +26,11 @@ const Placeholder = ({ title, icon }) => (
 const PAGES = {
   home:     <Home />,
   trending: <Trending />,
-  radio:    <Placeholder title='Radio et Live' icon='X' />,
+  radio:    <Radio />,
   feed:     <Feed />,
   music:    <Music />,
   podcast:  <Podcasts />,
-  albums:   <Placeholder title='Albums' icon='X' />,
+  albums:   <Albums />,
   events:   <Placeholder title='Evenements' icon='X' />,
   shop:     <Placeholder title='Boutique' icon='X' />,
   creators: <Creators />,
