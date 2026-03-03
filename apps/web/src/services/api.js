@@ -60,6 +60,8 @@ const api = {
     invoices: () => api.get('/api/payments/invoices'),
     tickets: () => api.get('/api/payments/tickets'),
     recharge: (d) => api.post('/api/payments/recharge', d),
+    buyTrack: (d) => api.post('/api/payments/track', d),
+    walletBalance: () => api.get('/api/wallet/balance'),
   }
 }
 
