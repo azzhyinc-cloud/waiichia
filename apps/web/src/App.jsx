@@ -20,6 +20,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import MyEvents from './pages/MyEvents.jsx'
 import MyContent from './pages/MyContent.jsx'
 import Settings from './pages/Settings.jsx'
+import Regie from './pages/Regie.jsx'
 import Admin from './pages/Admin.jsx'
 
 const Placeholder = ({ title, icon }) => (
@@ -45,6 +46,8 @@ const PAGES = {
   my_events:    <MyEvents />,
   my_content:   <MyContent />,
   settings:     <Settings />,
+  regie:        <Regie />,
+  profile:      <Profile />,
   shop:     <Placeholder title='Boutique' icon='X' />,
   creators: <Creators />,
   upload:   <Upload />,
