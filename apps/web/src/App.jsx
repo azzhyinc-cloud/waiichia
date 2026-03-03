@@ -16,6 +16,9 @@ import Radio from './pages/Radio.jsx'
 import Events from './pages/Events.jsx'
 import CreateEvent from './pages/CreateEvent.jsx'
 import Wallet from './pages/Wallet.jsx'
+import Dashboard from './pages/Dashboard.jsx'
+import MyEvents from './pages/MyEvents.jsx'
+import MyContent from './pages/MyContent.jsx'
 import Admin from './pages/Admin.jsx'
 
 const Placeholder = ({ title, icon }) => (
@@ -37,6 +40,9 @@ const PAGES = {
   events:      <Events />,
   create_event: <CreateEvent />,
   wallet:       <Wallet />,
+  dashboard:    <Dashboard />,
+  my_events:    <MyEvents />,
+  my_content:   <MyContent />,
   shop:     <Placeholder title='Boutique' icon='X' />,
   creators: <Creators />,
   upload:   <Upload />,
