@@ -182,7 +182,7 @@ export default async function paymentsRoutes(app) {
   })
 
   // RECHARGER LE WALLET
-  app.post('/recharge', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/api/payments/recharge', { preHandler: app.authenticate }, async (request, reply) => {
     const { amount, phone, gateway = 'huri_money' } = request.body
     if (!amount || amount < 100) return reply.status(400).send({ error: 'Montant minimum 100 KMF' })
     if (!phone) return reply.status(400).send({ error: 'Numero de telephone requis' })
@@ -226,7 +226,7 @@ export default async function paymentsRoutes(app) {
 
 
   // ACHETER UN BILLET EVENEMENT
-  app.post('/ticket', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/api/payments/ticket', { preHandler: app.authenticate }, async (request, reply) => {
     const { event_id, quantity = 1, phone, gateway = 'huri_money' } = request.body
     if (!event_id || !phone) return reply.status(400).send({ error: 'event_id et phone requis' })
 
@@ -422,4 +422,10 @@ export default async function paymentsRoutes(app) {
     return reply.send({ invoice: data })
   })
 
+}
+
+  app.get('/api/wallet/balance', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data } = await supabase.from('profiles').select('wallet_balance,currency').eq('id', request.user.id).single()
+    return { balance: data?.wallet_balance || 0, currency: data?.currency || 'KMF' }
+  })
 }

@@ -55,7 +55,6 @@ const PAGES = {
   creators: <Creators />,
   upload:   <Upload />,
   admin:    <Admin />,
-  messages: <Placeholder title='Messagerie' icon='X' />,
 }
 
 export default function App() {
