@@ -5,6 +5,8 @@ import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Profile from './pages/Profile.jsx'
+import Shop from './pages/Shop.jsx'
+import MyShop from './pages/MyShop.jsx'
 import Upload from './pages/Upload.jsx'
 import Trending from './pages/Trending.jsx'
 import Feed from './pages/Feed.jsx'
@@ -48,7 +50,8 @@ const PAGES = {
   settings:     <Settings />,
   regie:        <Regie />,
   profile:      <Profile />,
-  shop:     <Placeholder title='Boutique' icon='X' />,
+  shop:         <Shop />,
+  shop_mine:    <MyShop />,
   creators: <Creators />,
   upload:   <Upload />,
   admin:    <Admin />,
