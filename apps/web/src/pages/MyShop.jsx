@@ -15,9 +15,28 @@ export default function MyShop() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploadingImg, setUploadingImg] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState('')
   const [deleting, setDeleting] = useState(null)
   const [form, setForm] = useState({ name:'', description:'', category:'digital', price:'', currency:'KMF', emoji:'🛍️', stock:'-1', content_id:'', content_type:'track' })
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    if (file.size > 3 * 1024 * 1024) { alert('Image trop lourde — max 3MB'); return }
+    setUploadingImg(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const token = localStorage.getItem('waiichia_token')
+      const API = import.meta.env.VITE_API_URL
+      const res = await fetch(API + '/api/upload/image', { method:'POST', headers:{'Authorization':'Bearer '+token}, body:formData })
+      const data = await res.json()
+      if (data.url) { set('cover_url', data.url); setPreviewUrl(data.url) }
+    } catch(e) { alert('Erreur upload: ' + e.message) }
+    setUploadingImg(false)
+  }
 
   useEffect(() => { if(user) { loadProducts(); loadTracks() } }, [user])
   const loadTracks = async () => {
@@ -129,6 +148,42 @@ export default function MyShop() {
                   <option key={t.id} value={t.id}>{t.title} · {(t.play_count||0).toLocaleString()} ecoutes</option>
                 ))}
               </select>
+            )}
+          </div>
+          <div style={{marginBottom:14}}>
+            <label style={lbl}>IMAGE DU PRODUIT <span style={{fontWeight:400,color:'var(--text3)',textTransform:'none',letterSpacing:0}}>(recommande : 800×800px · ratio 1:1 · JPG/PNG · max 3MB)</span></label>
+            <label style={{display:'block',cursor:'pointer'}}>
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageUpload} style={{display:'none'}}/>
+              {previewUrl ? (
+                <div style={{position:'relative',width:'100%',height:200,borderRadius:10,overflow:'hidden',border:'2px solid var(--gold)'}}>
+                  <img src={previewUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                  <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',opacity:0,transition:'opacity 0.2s'}}
+                    onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0}>
+                    <span style={{color:'#fff',fontWeight:700,fontSize:14}}>📷 Changer l image</span>
+                  </div>
+                </div>
+              ) : (
+                <div style={{border:'2px dashed var(--border)',borderRadius:10,padding:32,textAlign:'center',transition:'all 0.2s',background:'var(--card2)'}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--gold)';e.currentTarget.style.background='rgba(245,166,35,0.05)'}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='var(--card2)'}}>
+                  {uploadingImg ? (
+                    <div style={{fontSize:13,color:'var(--text2)'}}>⏳ Upload en cours...</div>
+                  ) : (
+                    <>
+                      <div style={{fontSize:40,marginBottom:8}}>🖼️</div>
+                      <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>Cliquer pour ajouter une image</div>
+                      <div style={{fontSize:12,color:'var(--text3)'}}>800×800px recommande · ratio 1:1</div>
+                      <div style={{fontSize:12,color:'var(--text3)'}}>JPG, PNG, WebP · max 3MB</div>
+                    </>
+                  )}
+                </div>
+              )}
+            </label>
+            {previewUrl && (
+              <button type="button" onClick={()=>{set('cover_url','');setPreviewUrl('')}}
+                style={{marginTop:6,background:'rgba(230,57,70,0.1)',border:'1px solid rgba(230,57,70,0.3)',color:'#e74c3c',borderRadius:7,padding:'5px 14px',cursor:'pointer',fontSize:12,fontWeight:600}}>
+                🗑️ Supprimer l image
+              </button>
             )}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:14,marginBottom:20}}>
