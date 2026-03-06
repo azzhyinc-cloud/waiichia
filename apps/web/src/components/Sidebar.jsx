@@ -12,6 +12,7 @@ const NAV = [
     { id:'albums',  icon:'💿', label:'Albums' },
     { id:'events',  icon:'🎪', label:'Événements' },
     { id:'creators',icon:'⭐', label:'Créateurs' },
+    { id:'karaoke',  icon:'🎤', label:'Studio Karaoké' },
   ]},
   { section: 'Mon Espace', items: [
     { id:'profile',    icon:'👤', label:'Mon Profil' },

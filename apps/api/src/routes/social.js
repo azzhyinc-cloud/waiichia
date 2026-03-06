@@ -130,4 +130,28 @@ export default async function socialRoutes(app) {
     return reply.send({ message: 'Notifications marquees comme lues' })
   })
 
+  // SIGNALEMENT
+  app.post('/reports', { preHandler: app.authenticate }, async (request, reply) => {
+    const { target_type, target_id, reason, details, severity } = request.body
+    if (!target_type || !target_id || !reason)
+      return reply.status(400).send({ error: 'Champs obligatoires manquants' })
+    const { data, error } = await supabase.from('reports').insert({
+      reporter_id: request.user.id,
+      target_type, target_id, reason,
+      details: details || null,
+      severity: severity || 'medium',
+      status: 'pending',
+    }).select().single()
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.status(201).send({ report: data, message: 'Signalement enregistré' })
+  })
+
+  app.get('/reports', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', request.user.id).single()
+    if (!['admin','superadmin','moderator'].includes(profile?.role))
+      return reply.status(403).send({ error: 'Accès refusé' })
+    const { data } = await supabase.from('reports').select('*').order('created_at', { ascending: false }).limit(100)
+    return reply.send({ reports: data || [] })
+  })
+
 }

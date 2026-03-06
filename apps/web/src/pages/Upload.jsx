@@ -86,13 +86,13 @@ export default function Upload() {
             headers: {'Content-Type':'application/json', Authorization:'Bearer '+token},
             body: JSON.stringify({
               title: tr.title || (type==='album'?'Piste '+(i+1):'Episode '+(i+1)),
-              content_type: type,
-              genre: payload.genre,
-              country: payload.country,
+              type: type,
+              genre: form.genre || form.category,
+              country: form.country || 'KM',
               audio_url_128: trUrl,
               cover_url: cover_url||null,
-              access_type: payload.access_type,
-              sale_price: payload.sale_price,
+              access_type: form.access_type || 'free',
+              sale_price: form.sale_price ? parseInt(form.sale_price) : 0,
               is_published: true,
             })
           })

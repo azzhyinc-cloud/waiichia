@@ -1,375 +1,315 @@
-import { useState, useEffect } from 'react'
-import { useAuthStore, usePageStore, usePlayerStore } from '../stores/index.js'
-import api from '../services/api.js'
+import { useState, useEffect, useRef } from "react"
+import { useAuthStore } from "../stores/index.js"
+import api from "../services/api.js"
+import { ReactionBar } from "../components/ReactionBar.jsx"
 
-const fmt = (n) => {
-  if (n >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M'
-  if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'K'
-  return n || 0
-}
+/* ══ DONNÉES MOCK FIDÈLES AU PROTOTYPE v7.2 ══ */
+const rndK = mul => ((Math.floor(Math.random()*9+1)*mul*100)+Math.floor(Math.random()*100)).toLocaleString()
+const fmt  = n => n ? (typeof n==='string'?n:n.toLocaleString()) : rndK(5)
 
-const GENRES = ['Tout','Twarab','Afrobeats','Sebene','Amapiano','Slam','Mindset','Business','Gospel / Religion']
+const TRACKS = [
+  {id:'t1',title:'Twarab ya Komori',artist:'Kolo Officiel ft. Wassila',emoji:'🌊',bg:'linear-gradient(135deg,#0d2a3a,#1a5060)',type:'music',genre:'Twarab',plays:'24.8K',duration:'4:02',access_type:'paid',sale_price:2500,rent_price:500},
+  {id:'t2',title:'Moroni by Night',artist:'DJ Chami',emoji:'🌃',bg:'linear-gradient(135deg,#1a0a2e,#3a1a6a)',type:'music',genre:'Afrobeats',plays:'18.2K',duration:'3:48',access_type:'paid',sale_price:2000,rent_price:300},
+  {id:'t3',title:'Business Africa Ep.14',artist:'AfriEntrepreneur',emoji:'💡',bg:'linear-gradient(135deg,#1a0a2e,#4a1a7a)',type:'podcast',genre:'Entrepreneuriat',plays:'9.4K',duration:'42:15',access_type:'free'},
+  {id:'t4',title:'Slam pour demain',artist:'Poète Issa',emoji:'🔥',bg:'linear-gradient(135deg,#2e1200,#7a3400)',type:'music',genre:'Slam',plays:'7.2K',duration:'3:22',access_type:'paid',sale_price:1500,rent_price:200},
+  {id:'t5',title:'Mindset Afrique',artist:'Coach Amina',emoji:'🧠',bg:'linear-gradient(135deg,#002a1a,#007040)',type:'podcast',genre:'Mindset',plays:'15K',duration:'35:00',access_type:'free'},
+  {id:'t6',title:'Émission Jeunes Talents',artist:'Radio Komori FM',emoji:'📺',bg:'linear-gradient(135deg,#0a1e2e,#1060a0)',type:'emission',genre:'Culture',plays:'6.1K',duration:'45:00',access_type:'free'},
+  {id:'t7',title:"Nuit d'Afrique",artist:'Wally Afro',emoji:'🌙',bg:'linear-gradient(135deg,#1a0a2e,#5a1a7a)',type:'music',genre:'Afrobeats',plays:'12.1K',duration:'3:55',access_type:'paid',sale_price:2000,rent_price:300},
+  {id:'t8',title:'Moroni Groove',artist:'DJ Chami',emoji:'🎹',bg:'linear-gradient(135deg,#002a10,#007040)',type:'music',genre:'Amapiano',plays:'9.8K',duration:'4:30',access_type:'paid',sale_price:1800,rent_price:200},
+]
 
-function TrackCard({ track, onBuy }) {
-  const { toggle, currentTrack, isPlaying } = usePlayerStore()
-  const { user } = useAuthStore()
-  const isActive = currentTrack?.id === track.id
-  const [reactions, setReactions] = useState({})
-  const [comments, setComments] = useState([])
-  const [showComments, setShowComments] = useState(false)
-  const [commentText, setCommentText] = useState('')
+const ALBUMS = [
+  {id:'a1',title:'Ocean de Komori',artist:'Kolo Officiel',emoji:'🌊',bg:'linear-gradient(135deg,#0d2a3a,#1a5060)',tracks:12,year:2026,country:'🇰🇲',genre:'Twarab'},
+  {id:'a2',title:'Lagos Dreams',artist:'Wally Afro',emoji:'🌟',bg:'linear-gradient(135deg,#2e1a00,#7a4000)',tracks:16,year:2026,country:'🇳🇬',genre:'Afrobeats'},
+  {id:'a3',title:'Îles en fête',artist:'Various Artists',emoji:'🎉',bg:'linear-gradient(135deg,#1a0020,#5a0060)',tracks:20,year:2026,country:'🇰🇲',genre:'Compilation'},
+  {id:'a4',title:'Sebene Forever',artist:'Masasi Band',emoji:'🥁',bg:'linear-gradient(135deg,#002a10,#007030)',tracks:14,year:2025,country:'🇨🇩',genre:'Sebene'},
+  {id:'a5',title:'Startup Mindset',artist:'Business Afrika',emoji:'🚀',bg:'linear-gradient(135deg,#001a2e,#005080)',tracks:8,year:2026,country:'🇷🇼',genre:'Podcast'},
+  {id:'a6',title:'Gospel Unangu',artist:'Choir Komori',emoji:'🕊️',bg:'linear-gradient(135deg,#1a1800,#504800)',tracks:10,year:2025,country:'🇰🇲',genre:'Gospel'},
+]
 
-  const isPurchase = track.access_type === 'purchase'
-  const isRental = track.access_type === 'rental'
-  const isPaid = isPurchase || isRental
+const CREATORS = [
+  {id:'c1',name:'Kolo Officiel',handle:'@kolo_komori',type:'Artiste',ava:'KO',bg:'linear-gradient(135deg,#f5a623,#e63946)',fans:'48.2K',verified:true,country:'🇰🇲'},
+  {id:'c2',name:'Radio Komori FM',handle:'@komori_fm',type:'Média',ava:'RF',bg:'linear-gradient(135deg,#4d9fff,#9b59f5)',fans:'120K',verified:true,country:'🇰🇲'},
+  {id:'c3',name:'DJ Chami',handle:'@djchami',type:'Artiste Pro',ava:'DC',bg:'linear-gradient(135deg,#9b59f5,#6c3483)',fans:'32K',verified:true,country:'🇰🇲'},
+  {id:'c4',name:'Coach Amina',handle:'@amina_mindset',type:'Pro / Coach',ava:'CA',bg:'linear-gradient(135deg,#2dc653,#00bfa5)',fans:'18.4K',verified:false,country:'🇸🇳'},
+  {id:'c5',name:'Afro Beats LBL',handle:'@afrobeats_lbl',type:'Label',ava:'AB',bg:'linear-gradient(135deg,#ff6b35,#f5a623)',fans:'512K',verified:true,country:'🇳🇬'},
+  {id:'c6',name:'Wassila',handle:'@wassila_km',type:'Artiste',ava:'WA',bg:'linear-gradient(135deg,#e63946,#c1121f)',fans:'14K',verified:false,country:'🇰🇲'},
+  {id:'c7',name:'Wally Afro',handle:'@wallyafro',type:'Artiste',ava:'WL',bg:'linear-gradient(135deg,#4d9fff,#9b59f5)',fans:'28.5K',verified:true,country:'🇨🇮'},
+  {id:'c8',name:'Nassim B.',handle:'@nassimb_km',type:'Artiste',ava:'NB',bg:'linear-gradient(135deg,#0a1800,#2a5000)',fans:'9.2K',verified:false,country:'🇰🇲'},
+]
 
-  const handleReact = async (emoji) => {
-    if (!user) return
-    await api.social.react({ target_type: 'track', target_id: track.id, emoji })
-    setReactions(r => ({ ...r, [emoji]: (r[emoji] || 0) + 1 }))
-  }
+const EVENTS = [
+  {id:'ev1',title:'Nuit Twarab Moroni',date:'22',month:'Mar',emoji:'🌊',location:'Moroni, Comores',country:'🇰🇲',price:'5 000 KMF',bg:'linear-gradient(135deg,#0d2a3a,#1a5060)',cat:'Concert',boost:true},
+  {id:'ev2',title:'Festival de la Musique KM',date:'01',month:'Avr',emoji:'🎪',location:'Anjouan, Comores',country:'🇰🇲',price:'Gratuit',bg:'linear-gradient(135deg,#1a0a2e,#4a1a7a)',cat:'Festival',boost:false},
+  {id:'ev3',title:'Afrobeats Night Lagos',date:'15',month:'Avr',emoji:'🌟',location:'Lagos, Nigeria',country:'🇳🇬',price:'5 000 NGN',bg:'linear-gradient(135deg,#2e1a00,#7a4000)',cat:'Concert',boost:true},
+  {id:'ev4',title:'Waiichia Live — Moroni',date:'14',month:'Juin',emoji:'🎵',location:'Stade Moroni, Comores',country:'🇰🇲',price:'10 000 KMF',bg:'linear-gradient(135deg,#0d1a3a,#1a3070)',cat:'Concert',boost:true},
+]
 
-  const loadComments = async () => {
-    const data = await api.social.comments('track', track.id)
-    setComments(data?.comments || [])
-  }
+const RADIOS = [
+  {id:'r1',name:'Radio Komori FM',station:'Moroni · Twarab & Varié',emoji:'📻',bg:'linear-gradient(135deg,#0d2a3a,#1a5060)',listeners:'1 420',country:'🇰🇲'},
+  {id:'r2',name:'Bambao FM',station:'Anjouan · Actualités',emoji:'🎙️',bg:'linear-gradient(135deg,#1a0a2e,#4a1a7a)',listeners:'842',country:'🇰🇲'},
+  {id:'r3',name:'Pulse FM CI',station:'Abidjan · Afrobeats',emoji:'🎵',bg:'linear-gradient(135deg,#f5a623,#e63946)',listeners:'4 218',country:'🇨🇮'},
+]
 
-  const toggleComments = () => {
-    if (!showComments) loadComments()
-    setShowComments(!showComments)
-  }
+const GENRES = ['Tout','🎵 Twarab','🥁 Sebene','🌊 Afrobeats','🎶 Amapiano','🔥 Slam','🌿 Traditionnel','🕌 Gospel / Religion','💡 Mindset','💼 Business','📚 Éducation']
 
-  const sendComment = async () => {
-    if (!commentText.trim() || !user) return
-    await api.social.comment({ target_type: 'track', target_id: track.id, content: commentText })
-    setCommentText('')
-    loadComments()
-  }
-
+/* ══ TRACK CARD ══ */
+function TrackCard({ track, onPlay }) {
+  const [hov, setHov]         = useState(false)
+  const [liked, setLiked]     = useState(false)
+  const [panel, setPanel]     = useState(false)
+  const isFree = track.access_type === 'free'
+  const sP = track.sale_price ? track.sale_price.toLocaleString()+' KMF' : (Math.floor(Math.random()*8+1)*500).toLocaleString()+' KMF'
+  const rP = track.rent_price ? track.rent_price.toLocaleString()+' KMF/j' : (Math.floor(Math.random()*3+1)*100).toLocaleString()+' KMF/j'
+  const TYPE_BADGE = {music:'type-music',podcast:'type-podcast',emission:'type-emission',radio:'type-radio',album:'type-album',slam:'type-slam'}
+  const TYPE_LABEL = {music:'MUSIQUE',podcast:'PODCAST',emission:'EMISSION',radio:'RADIO',album:'ALBUM'}
   return (
-    <div className={`track-card ${isActive ? 'playing' : ''}`}>
-      <div className="track-cover" onClick={() => toggle(track)}>
-        <div className="track-cover-bg" style={{background:'linear-gradient(135deg,var(--card2),var(--card3))'}}>
-          {track.cover_url
-            ? <img src={track.cover_url} alt={track.title} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-            : <span style={{fontSize:44}}>🎵</span>
-          }
+    <div className={`track-card${hov?' card-hover':''}`}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
+      {/* COVER */}
+      <div onClick={onPlay}>
+        <div className="track-cover">
+          <div className="track-cover-bg" style={{background:track.bg}}>{track.emoji}</div>
+          <div className={`type-badge ${TYPE_BADGE[track.type]||'type-music'}`}>{track.genre||TYPE_LABEL[track.type]||'MUSIQUE'}</div>
+          <div className="play-overlay"><button className="play-btn-circle">▶</button></div>
         </div>
-        {track.genre && <div className="type-badge type-music">{track.genre}</div>}
-        <div className="play-overlay">
-          {isActive && isPlaying
-            ? <div className="wave-vis"><div className="wave-bar"/><div className="wave-bar"/><div className="wave-bar"/><div className="wave-bar"/><div className="wave-bar"/></div>
-            : <button className="play-btn-circle">▶</button>
-          }
-        </div>
-      </div>
-
-      <div className="track-info">
-        <div className="track-title">{track.title}</div>
-        <div className="track-artist">{track.profiles?.display_name || 'Artiste'}</div>
-        <div className="track-meta">
-          <span>🎧 {fmt(track.play_count)}</span>
-          {isPaid
-            ? <span style={{color:'var(--gold)',fontWeight:700}}>{(track.sale_price||0).toLocaleString()} KMF</span>
-            : <span style={{color:'var(--green)'}}>✓ Gratuit</span>
-          }
-        </div>
-      </div>
-
-      {isPaid && (
-        <div className="track-purchase-row">
-          {isPurchase && (
-            <button className="buy-chip buy-chip-buy" onClick={e=>{e.stopPropagation();onBuy&&onBuy(track)}}>
-              🛒 <span className="price-tag">{(track.sale_price||0).toLocaleString()} KMF</span>
-            </button>
-          )}
-          {isRental && (
-            <button className="buy-chip buy-chip-rent" onClick={e=>{e.stopPropagation();onBuy&&onBuy(track)}}>
-              📅 Louer dès {(track.rental_price_day||0).toLocaleString()} KMF
-            </button>
-          )}
-        </div>
-      )}
-
-      <div className="reaction-bar">
-        {['❤️','🔥','😂','🎵'].map(e => (
-          <button key={e} className="react-btn" onClick={() => handleReact(e)}>
-            {e} <span className="react-count">{reactions[e]||0}</span>
-          </button>
-        ))}
-        <button className="react-btn" onClick={toggleComments}>
-          💬 <span className="react-count">{comments.length}</span>
-        </button>
-        <button className="react-btn" style={{marginLeft:'auto'}} onClick={() => toggle(track)}>
-          {isActive && isPlaying ? '⏸' : '▶'}
-        </button>
-      </div>
-
-      {showComments && (
-        <div className="comments-section">
-          {comments.map(c => (
-            <div key={c.id} className="comment-item">
-              <span className="comment-author">{c.profiles?.display_name}</span>
-              <span className="comment-text">{c.content}</span>
+        {/* INFO */}
+        <div className="track-info">
+          <div className="track-title">{track.title}</div>
+          <div className="track-artist">{track.profiles?.display_name||track.artist||'Artiste'}</div>
+          <div className="track-meta">
+            <span>{fmt(track.play_count||track.plays)} 🎧</span>
+            <div className="track-actions" onClick={e=>e.stopPropagation()}>
+              <button className={`icon-btn${liked?' liked':''}`} onClick={()=>setLiked(l=>!l)} title="J'aime">♥</button>
+              <button className="icon-btn" onClick={e=>{e.stopPropagation();setPanel(p=>!p)}} title="Commenter">💬</button>
+              <button className="icon-btn" title="Partager">📤</button>
+              <button className="icon-btn" title="Signaler">🚩</button>
             </div>
-          ))}
-          {user && (
-            <div className="comment-input-row">
-              <input value={commentText} onChange={e=>setCommentText(e.target.value)}
-                placeholder="Commenter..." className="comment-input"
-                onKeyDown={e=>e.key==='Enter'&&sendComment()}/>
-              <button onClick={sendComment} className="comment-send">→</button>
-            </div>
-          )}
+          </div>
         </div>
-      )}
+      </div>
+      {/* PURCHASE ROW */}
+      <div className="track-purchase-row" onClick={e=>e.stopPropagation()}>
+        {isFree
+          ? <span className="free-chip">✓ Gratuit · Accès libre</span>
+          : <>
+            <button className="buy-chip buy-chip-buy" onClick={()=>{}}>
+              🛒 Acheter <span className="price-tag">{sP}</span>
+            </button>
+            <button className="buy-chip buy-chip-rent" onClick={()=>{}}>
+              ⏳ Louer <span className="price-tag">dès {rP}</span>
+            </button>
+          </>
+        }
+      </div>
+      {/* REACTION BAR */}
+      <ReactionBar
+        targetType="track"
+        targetId={track.id}
+        showComments={true}
+        externalPanel={panel}
+        onPanelToggle={()=>setPanel(p=>!p)}
+      />
     </div>
   )
 }
 
-export default function Home() {
-  const { setPage } = usePageStore()
-  const { setQueue } = usePlayerStore()
+/* ══ ALBUM CARD ══ */
+function AlbumCard({ album }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <div className="album-card" onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
+      <div className="album-cover">
+        <div className="album-cover-bg" style={{background:album.bg}}>{album.emoji}</div>
+        <div className="type-badge type-album">ALBUM</div>
+        <div className="play-overlay"><button className="play-btn-circle">▶</button></div>
+      </div>
+      <div className="album-info">
+        <div className="album-title">{album.title}</div>
+        <div className="album-meta">
+          <span>{album.artist}</span>
+          <span>{album.tracks} titres</span>
+          <span>{album.country} {album.year}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══ CREATOR CARD ══ */
+function CreatorCard({ c }) {
+  return (
+    <div className="creator-card">
+      <div className="creator-ava" style={{background:c.bg}}>{c.ava}</div>
+      <div className="creator-name">{c.name} {c.verified&&<span style={{color:'var(--gold)',fontSize:12}}>✓</span>}</div>
+      <div className="creator-type">{c.type} {c.country}</div>
+      <div className="creator-fans">{c.fans} fans</div>
+      <button className="btn btn-sm" style={{marginTop:10,width:'100%',padding:'6px',fontSize:11,background:'var(--card2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',cursor:'pointer',color:'var(--text)',fontFamily:"Plus Jakarta Sans,sans-serif",transition:'all .18s'}}
+        onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--gold)';e.currentTarget.style.color='var(--gold)'}}
+        onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text)'}}>
+        + Suivre
+      </button>
+    </div>
+  )
+}
+
+/* ══ LIVE CARD ══ */
+function LiveCard({ radio }) {
+  return (
+    <div className="live-card" onClick={()=>{}}>
+      <div style={{display:'flex',alignItems:'center',gap:12}}>
+        <div style={{width:48,height:48,borderRadius:12,background:radio.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>{radio.emoji}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:13.5,marginBottom:2}}>{radio.name}</div>
+          <div style={{fontSize:11.5,color:'var(--text2)'}}>{radio.station}</div>
+        </div>
+        <div style={{textAlign:'right',flexShrink:0}}>
+          <div style={{fontSize:10,fontFamily:"Space Mono,monospace",color:'var(--red)',fontWeight:700}}>🔴 LIVE</div>
+          <div style={{fontSize:10,color:'var(--text3)',fontFamily:"Space Mono,monospace"}}>{radio.listeners} 👥</div>
+        </div>
+      </div>
+      <button className="btn btn-sm" style={{marginTop:12,width:'100%',padding:'7px',fontSize:12,background:'rgba(230,57,70,.12)',border:'1px solid rgba(230,57,70,.25)',borderRadius:'var(--radius-sm)',cursor:'pointer',color:'var(--red)',fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif",transition:'all .18s'}}
+        onMouseEnter={e=>{e.currentTarget.style.background='var(--red)';e.currentTarget.style.color='#fff'}}
+        onMouseLeave={e=>{e.currentTarget.style.background='rgba(230,57,70,.12)';e.currentTarget.style.color='var(--red)'}}>
+        🎧 Écouter en direct
+      </button>
+    </div>
+  )
+}
+
+/* ══ EVENT CARD ══ */
+function EventCard({ ev }) {
+  const isFree = ev.price === 'Gratuit'
+  return (
+    <div className="event-card">
+      <div className="event-date-box" style={{background:ev.bg}}>
+        <span className="event-day">{ev.date}</span>
+        <span className="event-month">{ev.month}</span>
+      </div>
+      <div className="event-info">
+        <div className="event-title">{ev.emoji} {ev.title} {ev.boost&&<span style={{fontSize:9,background:'var(--gold)',color:'#000',borderRadius:20,padding:'2px 7px',fontFamily:"Space Mono,monospace",fontWeight:700,marginLeft:4}}>BOOST</span>}</div>
+        <div className="event-meta">
+          <span>📍 {ev.location} {ev.country}</span>
+          <span className="event-cat">{ev.cat}</span>
+        </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:8}}>
+          <span style={{fontFamily:"Space Mono,monospace",fontSize:12,fontWeight:700,color:isFree?'var(--green)':'var(--gold)'}}>{ev.price}</span>
+          <button className="btn btn-sm" style={{padding:'5px 14px',fontSize:11,background:isFree?'var(--green)':'linear-gradient(135deg,var(--gold),#e8920a)',border:'none',borderRadius:50,cursor:'pointer',color:isFree?'#000':'#000',fontWeight:700,fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+            {isFree?'✓ S\'inscrire':'🎫 Réserver'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══ HOME PAGE ══ */
+export default function Home({ onPlay }) {
   const { user } = useAuthStore()
-  const [tracks, setTracks] = useState([])
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [genre, setGenre] = useState('Tout')
+  const [tracks,   setTracks]   = useState(TRACKS)
+  const [albums,   setAlbums]   = useState(ALBUMS)
+  const [genre,    setGenre]    = useState('Tout')
+  const [loading,  setLoading]  = useState(true)
 
-  // États paiement
-  const [payModal, setPayModal] = useState(null)
-  const [walletBalance, setWalletBalance] = useState(null)
-  const [paying, setPaying] = useState(false)
-  const [payResult, setPayResult] = useState(null)
-  const [payOption, setPayOption] = useState('purchase')
-  const [rentalPeriod, setRentalPeriod] = useState('day')
-
-  const loadWallet = async () => {
-    try {
-      const data = await api.payments.walletBalance()
-      setWalletBalance(data.balance || 0)
-    } catch(e) {}
-  }
-
-  const openBuyModal = (track) => {
-    if (!user) { setPage('login'); return }
-    setPayModal(track)
-    setPayResult(null)
-    setPayOption(track.access_type === 'rental' ? 'rental' : 'purchase')
-    setRentalPeriod('day')
-    loadWallet()
-  }
-
-  const handlePayTrack = async () => {
-    if (!payModal || paying) return
-    setPaying(true)
-    setPayResult(null)
-    try {
-      const res = await api.payments.buyTrack({
-        track_id: payModal.id,
-        type: payOption,
-        period: payOption === 'rental' ? rentalPeriod : undefined
-      })
-      setWalletBalance(res.new_balance)
-      setPayResult({ ok: true, message: res.message, new_balance: res.new_balance })
-      setTimeout(() => { setPayModal(null); setPayResult(null) }, 2500)
-    } catch(e) {
-      setPayResult({ ok: false, message: e.message || 'Solde insuffisant ou erreur' })
-    }
-    setPaying(false)
-  }
-
-  const loadTracks = async () => {
-    setLoading(true)
-    try {
-      const data = await api.tracks.list('?limit=30')
-      setTracks(data?.tracks || [])
-    } catch(e) {}
-    setLoading(false)
-  }
-
-  const loadStats = async () => {
-    try {
-      const data = await api.profiles.stats()
-      setStats(data)
-    } catch(e) {}
-  }
-
+  // Charger les vraies données API en overlay sur les mock
   useEffect(() => {
-    loadTracks()
-    loadStats()
+    setLoading(false)
+    api.tracks?.list?.({ limit:8 }).then(r => {
+      if (r?.tracks?.length) setTracks(r.tracks.slice(0,8).map((t,i) => ({...TRACKS[i]||TRACKS[0], ...t})))
+    }).catch(()=>{})
   }, [])
 
-  const filtered = genre === 'Tout' ? tracks : tracks.filter(t => t.genre === genre)
-
-  const rentalPrice = payModal ? (
-    rentalPeriod === 'day' ? payModal.rental_price_day :
-    rentalPeriod === 'week' ? payModal.rental_price_week :
-    payModal.rental_price_month
-  ) : 0
+  const displayTracks = genre === 'Tout'
+    ? tracks.slice(0,4)
+    : tracks.filter(t => t.genre?.includes(genre.replace(/^[^ ]+ /,''))).slice(0,4)
 
   return (
-    <div className="home-page" style={{padding:'24px 20px 120px'}}>
+    <div style={{padding:'0 0 80px'}}>
 
-      {/* HERO */}
-      <div className="hero-banner" style={{borderRadius:20,padding:'40px 36px',marginBottom:32,background:'linear-gradient(135deg,#0d0d0d 0%,#1a0a00 50%,#0d1a00 100%)',border:'1px solid var(--border)',position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 70% 50%,rgba(245,166,35,0.08),transparent 60%)'}}/>
-        <div style={{position:'relative'}}>
-          <div style={{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(245,166,35,0.1)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:20,padding:'4px 14px',marginBottom:16,fontSize:12,fontWeight:700,color:'var(--gold)'}}>
-            🌍 Lancé aux Comores — L audio social africain
-          </div>
-          <h1 style={{fontSize:'clamp(32px,5vw,52px)',fontWeight:900,lineHeight:1.1,margin:'0 0 16px'}}>
-            Stream. Connect.<br/><span style={{color:'var(--gold)'}}>Vibrate Africa.</span>
-          </h1>
-          <p style={{fontSize:15,color:'var(--text2)',margin:'0 0 24px',maxWidth:500}}>
-            Musique, Podcasts, Émissions et Radio Live. Découvrez et supportez les talents africains — de Moroni à Lagos.
-          </p>
-          <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
-            <button onClick={()=>tracks[0]&&setQueue(tracks)} className="btn btn-primary" style={{fontSize:15}}>🎵 Écouter</button>
-            <button onClick={()=>setPage('upload')} className="btn btn-secondary" style={{fontSize:15}}>✏️ Créer</button>
-            {!user && <button onClick={()=>setPage('register')} className="btn btn-secondary" style={{fontSize:15}}>👤 S inscrire</button>}
+      {/* ══ HERO BANNER ══ */}
+      <div className="hero-banner">
+        <div className="hero-kente-deco"/>
+        <div className="hero-kente-deco2"/>
+        <div className="hero-content">
+          <div className="hero-badge">🌍 Lancé aux Comores · L&apos;audio social africain</div>
+          <div className="hero-title">Stream. Connect.<br/><span>Vibrate Africa.</span></div>
+          <div className="hero-sub">Musique, Podcasts, Émissions et Radio Live. Découvrez et supportez les talents africains — de Moroni à Lagos.</div>
+          <div className="hero-actions">
+            <button className="btn btn-primary" onClick={()=>onPlay&&onPlay(TRACKS[0])}>🎧 Écouter</button>
+            <button className="btn btn-secondary">🎙️ Créer</button>
+            {!user && <>
+              <button className="btn btn-outline">🔑 Connexion</button>
+              <button className="btn btn-outline" style={{borderColor:'var(--gold)',color:'var(--gold)'}}>✨ Créer un compte</button>
+            </>}
           </div>
         </div>
       </div>
 
-      {/* STATS */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:32}}>
-        {[
-          ['🎵', fmt(stats?.tracks_count || tracks.length), 'Sons publiés'],
-          ['⭐', fmt(stats?.creators_count || 0), 'Createurs'],
-          ['👥', fmt(stats?.total_plays || 0), 'Ecoutes totales'],
-          ['🌍', fmt(stats?.countries_count || 1), 'Pays'],
-        ].map(([icon,val,label]) => (
-          <div key={label} style={{background:'var(--card)',borderRadius:14,padding:'16px 12px',textAlign:'center',border:'1px solid var(--border)'}}>
-            <div style={{fontSize:22}}>{icon}</div>
-            <div style={{fontSize:22,fontWeight:900,color:'var(--gold)'}}>{val}</div>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)'}}>{label}</div>
-          </div>
-        ))}
+      {/* ══ STATS ROW ══ */}
+      <div className="stats-row">
+        <div className="stat-card sc-gold"><div className="stat-icon">🎵</div><div className="stat-num">48K</div><div className="stat-label">Sons publiés</div></div>
+        <div className="stat-card sc-red"><div className="stat-icon">🎨</div><div className="stat-num">3.2K</div><div className="stat-label">Créateurs</div></div>
+        <div className="stat-card sc-green"><div className="stat-icon">👥</div><div className="stat-num">120K</div><div className="stat-label">Auditeurs</div></div>
+        <div className="stat-card sc-blue"><div className="stat-icon">🌍</div><div className="stat-num">54</div><div className="stat-label">Pays</div></div>
       </div>
 
-      {/* FILTRES GENRES */}
-      <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:8,marginBottom:24,scrollbarWidth:'none'}}>
+      {/* ══ GENRE CHIPS ══ */}
+      <div className="genre-chips">
         {GENRES.map(g => (
-          <button key={g} onClick={()=>setGenre(g)}
-            style={{flexShrink:0,padding:'6px 16px',borderRadius:20,border:`1px solid ${genre===g?'var(--gold)':'var(--border)'}`,background:genre===g?'rgba(245,166,35,0.15)':'transparent',color:genre===g?'var(--gold)':'var(--text2)',cursor:'pointer',fontSize:13,fontWeight:600,whiteSpace:'nowrap'}}>
-            {g}
-          </button>
+          <div key={g} className={`genre-chip${genre===g?' active':''}`} onClick={()=>setGenre(g)}>{g}</div>
         ))}
       </div>
 
-      {/* TRENDING */}
+      {/* ══ TRENDING TRACKS ══ */}
       <div className="section-hdr">
-        <h2 className="section-title">🔥 Tendances</h2>
-        <button className="see-all" onClick={() => setPage('trending')}>Voir tout →</button>
+        <div className="section-title">🔥 Tendances</div>
+        <span className="see-all">Voir tout →</span>
       </div>
-      {loading ? (
-        <div className="tracks-grid">
-          {[...Array(6)].map((_,i) => <div key={i} className="skeleton" style={{height:280}}/>)}
+      <div className="tracks-grid" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
+        {displayTracks.map(t => (
+          <TrackCard key={t.id||t.title} track={t} onPlay={()=>onPlay&&onPlay(t)} />
+        ))}
+      </div>
+
+      {/* ══ LIVE RADIO ══ */}
+      <div className="live-section">
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:4}}>
+          <div className="live-pulse-badge">🔴 LIVE</div>
+          <div className="section-title" style={{fontSize:17}}>Radios &amp; Émissions Live</div>
+          <span className="see-all" style={{marginLeft:'auto'}}>Voir tout →</span>
         </div>
-      ) : filtered.length === 0 ? (
-        <div style={{textAlign:'center',padding:'60px 0',color:'var(--text3)'}}>
-          <div style={{fontSize:48,marginBottom:12}}>🎵</div>
-          <p>Aucun son disponible pour le moment</p>
-          <button className="btn btn-primary" style={{marginTop:16}} onClick={() => setPage('upload')}>⬆️ Publier un son</button>
+        <div className="live-streams-grid">
+          {RADIOS.map(r => <LiveCard key={r.id} radio={r} />)}
         </div>
-      ) : (
-        <div className="tracks-grid">
-          {filtered.map(t => <TrackCard key={t.id} track={t} onBuy={openBuyModal}/>)}
-        </div>
-      )}
+      </div>
 
-      {/* MODAL PAIEMENT TRACK */}
-      {payModal && (
-        <div onClick={()=>{setPayModal(null);setPayResult(null)}}
-          style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.88)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-          <div onClick={e=>e.stopPropagation()}
-            style={{background:'var(--card)',borderRadius:20,maxWidth:420,width:'100%',border:'1px solid var(--border)',overflow:'hidden'}}>
+      {/* ══ ALBUMS RÉCENTS ══ */}
+      <div className="section-hdr">
+        <div className="section-title">💿 Albums récents</div>
+        <span className="see-all">Voir tout →</span>
+      </div>
+      <div className="tracks-grid" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
+        {albums.slice(0,4).map(a => <AlbumCard key={a.id} album={a} />)}
+      </div>
 
-            {/* Cover */}
-            <div style={{height:140,background:payModal.cover_url?'#000':'linear-gradient(135deg,#1a0020,#5a0060)',display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
-              {payModal.cover_url
-                ? <img src={payModal.cover_url} style={{width:'100%',height:'100%',objectFit:'cover',opacity:0.7}}/>
-                : <span style={{fontSize:48}}>🎵</span>
-              }
-              <button onClick={()=>setPayModal(null)}
-                style={{position:'absolute',top:12,right:12,background:'rgba(0,0,0,0.6)',border:'none',color:'#fff',borderRadius:'50%',width:32,height:32,cursor:'pointer',fontSize:16}}>✕</button>
-            </div>
+      {/* ══ CRÉATEURS EN VUE ══ */}
+      <div className="section-hdr">
+        <div className="section-title">⭐ Créateurs en Vue</div>
+        <span className="see-all">Voir tout →</span>
+      </div>
+      <div className="creator-scroll">
+        {CREATORS.map(c => <CreatorCard key={c.id} c={c} />)}
+      </div>
 
-            <div style={{padding:24}}>
-              <div style={{fontWeight:800,fontSize:18,marginBottom:2}}>{payModal.title}</div>
-              <div style={{fontSize:13,color:'var(--text2)',marginBottom:16}}>{payModal.profiles?.display_name||'Artiste'}</div>
+      {/* ══ ÉVÉNEMENTS ══ */}
+      <div className="section-hdr">
+        <div className="section-title">🎪 Événements</div>
+        <span className="see-all">Voir tout →</span>
+      </div>
+      <div className="events-grid">
+        {EVENTS.map(ev => <EventCard key={ev.id} ev={ev} />)}
+      </div>
 
-              {/* Solde */}
-              <div style={{background:'var(--card2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center',border:'1px solid var(--border)'}}>
-                <div>
-                  <div style={{fontSize:10,fontWeight:700,color:'var(--text3)',letterSpacing:1}}>VOTRE SOLDE WALLET</div>
-                  <div style={{fontSize:22,fontWeight:900,color:'#2cc653',fontFamily:'monospace'}}>
-                    {walletBalance !== null ? (walletBalance||0).toLocaleString()+' KMF' : '...'}
-                  </div>
-                </div>
-                <button onClick={()=>{setPayModal(null);setPage('wallet')}}
-                  style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text2)',borderRadius:8,padding:'6px 12px',cursor:'pointer',fontSize:12,fontWeight:600}}>
-                  💰 Recharger
-                </button>
-              </div>
-
-              {/* Options */}
-              <div style={{display:'flex',gap:8,marginBottom:16}}>
-                {(payModal.sale_price > 0) && (
-                  <button onClick={()=>setPayOption('purchase')}
-                    style={{flex:1,padding:10,borderRadius:10,border:`2px solid ${payOption==='purchase'?'var(--gold)':'var(--border)'}`,cursor:'pointer',background:payOption==='purchase'?'rgba(245,166,35,0.1)':'transparent',color:'var(--text)',fontWeight:700,fontSize:13,textAlign:'center'}}>
-                    🛒 Acheter<br/><span style={{fontSize:12,color:'var(--gold)'}}>{(payModal.sale_price||0).toLocaleString()} KMF</span>
-                  </button>
-                )}
-                {(payModal.rental_price_day > 0) && (
-                  <button onClick={()=>setPayOption('rental')}
-                    style={{flex:1,padding:10,borderRadius:10,border:`2px solid ${payOption==='rental'?'var(--gold)':'var(--border)'}`,cursor:'pointer',background:payOption==='rental'?'rgba(245,166,35,0.1)':'transparent',color:'var(--text)',fontWeight:700,fontSize:13,textAlign:'center'}}>
-                    ⏳ Louer<br/><span style={{fontSize:12,color:'var(--gold)'}}>dès {(payModal.rental_price_day||0).toLocaleString()} KMF</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Périodes location */}
-              {payOption === 'rental' && (
-                <div style={{display:'flex',gap:6,marginBottom:16}}>
-                  {[['day','24h',payModal.rental_price_day],['week','7 jours',payModal.rental_price_week],['month','30 jours',payModal.rental_price_month]].filter(([,,p])=>p>0).map(([val,label,price])=>(
-                    <button key={val} onClick={()=>setRentalPeriod(val)}
-                      style={{flex:1,padding:'8px 4px',borderRadius:8,border:`2px solid ${rentalPeriod===val?'var(--gold)':'var(--border)'}`,cursor:'pointer',background:rentalPeriod===val?'rgba(245,166,35,0.1)':'transparent',color:'var(--text)',fontWeight:600,fontSize:11,textAlign:'center'}}>
-                      {label}<br/><span style={{color:'var(--gold)',fontWeight:800}}>{(price||0).toLocaleString()} KMF</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Résultat */}
-              {payResult && (
-                <div style={{marginBottom:14,padding:'10px 14px',borderRadius:10,background:payResult.ok?'rgba(44,198,83,0.1)':'rgba(230,57,70,0.1)',border:`1px solid ${payResult.ok?'#2cc653':'#e74c3c'}`,fontSize:13,fontWeight:600,color:payResult.ok?'#2cc653':'#e74c3c'}}>
-                  {payResult.ok ? '✅ ' : '❌ '}{payResult.message}
-                  {!payResult.ok && (
-                    <button onClick={()=>{setPayModal(null);setPage('wallet')}}
-                      style={{marginTop:8,display:'block',background:'var(--primary)',border:'none',color:'#fff',borderRadius:6,padding:'5px 14px',cursor:'pointer',fontSize:12}}>
-                      💰 Recharger mon wallet →
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Bouton confirmer */}
-              <button onClick={handlePayTrack} disabled={paying||payResult?.ok}
-                style={{width:'100%',background:paying||payResult?.ok?'var(--border)':'linear-gradient(135deg,var(--gold),#e8920a)',border:'none',color:paying||payResult?.ok?'var(--text3)':'#000',borderRadius:10,padding:14,cursor:paying||payResult?.ok?'not-allowed':'pointer',fontWeight:800,fontSize:15}}>
-                {paying ? '⏳ Traitement...'
-                  : payResult?.ok ? '✅ Acces accorde !'
-                  : payOption === 'purchase' ? '🛒 Confirmer — '+(payModal.sale_price||0).toLocaleString()+' KMF'
-                  : '⏳ Louer — '+(rentalPrice||0).toLocaleString()+' KMF'}
-              </button>
-              <div style={{textAlign:'center',fontSize:11,color:'var(--text3)',marginTop:10}}>
-                🔒 Paiement securise via votre portefeuille Waiichia
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

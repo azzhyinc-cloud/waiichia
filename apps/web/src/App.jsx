@@ -24,24 +24,26 @@ import MyContent from './pages/MyContent.jsx'
 import Settings from './pages/Settings.jsx'
 import Regie from './pages/Regie.jsx'
 import Admin from './pages/Admin.jsx'
+import Messagerie from './pages/Messagerie.jsx'
 
 const Placeholder = ({ title, icon }) => (
-  <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'60vh',gap:16,color:'var(--text2)'}}>
+  <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+    height:'60vh',gap:16,color:'var(--text2)'}}>
     <div style={{fontSize:64}}>{icon}</div>
     <h2 style={{fontFamily:'Syne,sans-serif',fontSize:24,color:'var(--text)'}}>{title}</h2>
-    <p style={{fontSize:14}}>Cette section est en cours de developpement</p>
+    <p style={{fontSize:14}}>Cette section arrive bientot</p>
   </div>
 )
 
 const PAGES = {
-  home:     <Home />,
-  trending: <Trending />,
-  radio:    <Radio />,
-  feed:     <Feed />,
-  music:    <Music />,
-  podcast:  <Podcasts />,
-  albums:   <Albums />,
-  events:      <Events />,
+  home:         <Home />,
+  trending:     <Trending />,
+  radio:        <Radio />,
+  feed:         <Feed />,
+  music:        <Music />,
+  podcast:      <Podcasts />,
+  albums:       <Albums />,
+  events:       <Events />,
   create_event: <CreateEvent />,
   wallet:       <Wallet />,
   dashboard:    <Dashboard />,
@@ -49,12 +51,13 @@ const PAGES = {
   my_content:   <MyContent />,
   settings:     <Settings />,
   regie:        <Regie />,
-  profile:      <Profile />,
   shop:         <Shop />,
   shop_mine:    <MyShop />,
-  creators: <Creators />,
-  upload:   <Upload />,
-  admin:    <Admin />,
+  creators:     <Creators />,
+  upload:       <Upload />,
+  admin:        <Admin />,
+  messages:     <Messagerie />,
+  karaoke:      <Placeholder title='Studio Karaoke' icon='🎤' />,
 }
 
 export default function App() {
@@ -69,7 +72,6 @@ export default function App() {
 
   if (currentPage === 'profile') {
     const uname = profileUsername || user?.username
-    if (!uname) return <Layout><Placeholder title='Connectez-vous' icon='X' /></Layout>
     return <Layout><Profile username={uname} /></Layout>
   }
 

@@ -2,156 +2,115 @@ import { supabase } from '../config.js'
 
 export default async function tracksRoutes(app) {
 
-  // LISTE DES SONS (avec filtres)
   app.get('/', async (request, reply) => {
     const { genre, country, type, search, page = 1, limit = 20, creator_id } = request.query
     let query = supabase.from('tracks')
-      .select(`*, profiles:creator_id(id, username, display_name, avatar_url, is_verified)`)
-      .eq('is_published', true)
-      .eq('is_active', true)
+      .select('*, profiles:creator_id(id, username, display_name, avatar_url, is_verified)')
+      .eq('is_published', true).eq('is_active', true)
       .order('published_at', { ascending: false })
       .range((page - 1) * limit, page * limit - 1)
-    if (genre) query = query.eq('genre', genre)
-    if (country) query = query.eq('country', country)
-    if (type) query = query.eq('content_type', type)
+    if (genre)      query = query.eq('genre', genre)
+    if (country)    query = query.eq('country', country)
+    if (type)       query = query.eq('type', type)
     if (creator_id) query = query.eq('creator_id', creator_id)
-    if (search) query = query.ilike('title', `%${search}%`)
+    if (search)     query = query.ilike('title', '%' + search + '%')
     const { data, error } = await query
     if (error) return reply.status(500).send({ error: error.message })
     return reply.send({ tracks: data, page: parseInt(page), limit: parseInt(limit) })
   })
 
-  // TENDANCES (plus ecoutés)
   app.get('/trending', async (request, reply) => {
     const { limit = 20, country } = request.query
     let query = supabase.from('tracks')
-      .select(`*, profiles:creator_id(id, username, display_name, avatar_url, is_verified)`)
-      .eq('is_published', true)
-      .eq('is_active', true)
-      .order('play_count', { ascending: false })
-      .limit(parseInt(limit))
+      .select('*, profiles:creator_id(id, username, display_name, avatar_url, is_verified)')
+      .eq('is_published', true).eq('is_active', true)
+      .order('play_count', { ascending: false }).limit(parseInt(limit))
     if (country) query = query.eq('country', country)
     const { data, error } = await query
     if (error) return reply.status(500).send({ error: error.message })
     return reply.send({ tracks: data })
   })
 
-  // DETAIL D UN SON
-  app.get('/:id', async (request, reply) => {
-    const { id } = request.params
-    const { data, error } = await supabase.from('tracks')
-      .select(`*, profiles:creator_id(id, username, display_name, avatar_url, is_verified, country)`)
-      .eq('id', id)
-      .eq('is_active', true)
-      .single()
-    if (error || !data) return reply.status(404).send({ error: 'Son introuvable' })
-    if (!data.is_published) {
-      const token = request.headers.authorization?.split(' ')[1]
-      if (!token) return reply.status(403).send({ error: 'Non autorise' })
-      try {
-        const user = app.jwt.verify(token)
-        if (user.id !== data.creator_id) return reply.status(403).send({ error: 'Non autorise' })
-      } catch { return reply.status(403).send({ error: 'Non autorise' }) }
-    }
-    return reply.send({ track: data })
-  })
-
-  // INCREMENTER PLAY COUNT
-  app.post('/:id/play', async (request, reply) => {
-    const { id } = request.params
-    await supabase.rpc('increment_play_count', { track_uuid: id })
-    return reply.send({ ok: true })
-  })
-
-  // CREER UN SON (authentifie)
-  app.post('/', { preHandler: app.authenticate }, async (request, reply) => {
-    const {
-      title, description, content_type, genre, tags, country, language,
-      access_type, sale_price, sale_currency, rent_price_day, rent_price_week,
-      rent_price_month, rent_price_year, rent_currency,
-      preview_start_sec, preview_end_sec, featuring_ids, license
-    } = request.body
-    if (!title) return reply.status(400).send({ error: 'Titre obligatoire' })
-    const { data, error } = await supabase.from('tracks').insert({
-      creator_id: request.user.id,
-      title, description,
-      audio_url_128: request.body.audio_url_128 || null,
-      audio_url_320: request.body.audio_url_320 || null,
-      cover_url: request.body.cover_url || null,
-      content_type: content_type || 'music',
-      genre, tags, country, language,
-      access_type: access_type || 'free',
-      sale_price: sale_price || 0,
-      sale_currency: sale_currency || 'KMF',
-      rent_price_day: rent_price_day || 0,
-      rent_price_week: rent_price_week || 0,
-      rent_price_month: rent_price_month || 0,
-      rent_price_year: rent_price_year || 0,
-      rent_currency: rent_currency || 'KMF',
-      preview_start_sec: preview_start_sec || 0,
-      preview_end_sec: preview_end_sec || 10,
-      featuring_ids: featuring_ids || [],
-      is_published: request.body.is_published === true,
-      published_at: request.body.is_published === true ? new Date().toISOString() : null,
-      license: license || 'all_rights',
-    }).select().single()
-    if (error) return reply.status(500).send({ error: error.message })
-    return reply.status(201).send({ track: data })
-  })
-
-  // MODIFIER UN SON
-  app.patch('/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const { id } = request.params
-    const { data: existing } = await supabase.from('tracks')
-      .select('creator_id').eq('id', id).single()
-    if (!existing) return reply.status(404).send({ error: 'Son introuvable' })
-    if (existing.creator_id !== request.user.id) return reply.status(403).send({ error: 'Non autorise' })
-    const allowed = ['title','description','genre','tags','access_type','sale_price',
-      'rent_price_day','rent_price_week','rent_price_month','rent_price_year',
-      'preview_start_sec','preview_end_sec','is_published','cover_url']
-    const updates = {}
-    allowed.forEach(k => { if (request.body[k] !== undefined) updates[k] = request.body[k] })
-    if (updates.is_published && !existing.published_at) updates.published_at = new Date().toISOString()
-    const { data, error } = await supabase.from('tracks')
-      .update(updates).eq('id', id).select().single()
-    if (error) return reply.status(500).send({ error: error.message })
-    return reply.send({ track: data })
-  })
-
-  // SUPPRIMER UN SON
-  app.delete('/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const { id } = request.params
-    const { data: existing } = await supabase.from('tracks')
-      .select('creator_id').eq('id', id).single()
-    if (!existing) return reply.status(404).send({ error: 'Son introuvable' })
-    if (existing.creator_id !== request.user.id) return reply.status(403).send({ error: 'Non autorise' })
-    await supabase.from('tracks').update({ is_active: false }).eq('id', id)
-    return reply.send({ message: 'Son supprime' })
-  })
-
-  // SONS DU CREATEUR CONNECTE
   app.get('/my/tracks', { preHandler: app.authenticate }, async (request, reply) => {
     const { data, error } = await supabase.from('tracks')
-      .select('*')
-      .eq('creator_id', request.user.id)
-      .eq('is_active', true)
+      .select('*').eq('creator_id', request.user.id).eq('is_active', true)
       .order('created_at', { ascending: false })
     if (error) return reply.status(500).send({ error: error.message })
     return reply.send({ tracks: data })
   })
 
-  // VERIFIER ACCES (achat ou location)
+  app.get('/:id', async (request, reply) => {
+    const { data, error } = await supabase.from('tracks')
+      .select('*, profiles:creator_id(id, username, display_name, avatar_url, is_verified, country)')
+      .eq('id', request.params.id).eq('is_active', true).single()
+    return reply.send({ track: data })
+  })
+
+  app.post('/:id/play', async (request, reply) => {
+    const { id } = request.params
+    if (id && id !== 'undefined') {
+      await supabase.rpc('increment_play_count', { track_uuid: id }).catch(() => {})
+    }
+    return reply.send({ ok: true })
+  })
+
+  app.post('/', { preHandler: app.authenticate }, async (request, reply) => {
+    const body = request.body
+    const { data, error } = await supabase.from('tracks').insert({
+      creator_id:       request.user.id,
+      title:            body.title,
+      description:      body.description || null,
+      audio_url_128:    body.audio_url_128 || null,
+      audio_url_320:    body.audio_url_320 || null,
+      cover_url:        body.cover_url || null,
+      type:             body.type || body.content_type || 'music',
+      genre:            body.genre || null,
+      country:          body.country || 'KM',
+      language:         body.language || 'fr',
+      access_type:      body.access_type || 'free',
+      sale_price:       body.sale_price || 0,
+      sale_currency:    body.sale_currency || 'KMF',
+      rent_price_day:   body.rent_price_day || 0,
+      rent_price_week:  body.rent_price_week || 0,
+      rent_price_month: body.rent_price_month || 0,
+      free_preview_sec: body.preview_end_sec || 30,
+      license:          body.license || 'all_rights',
+      is_published:     body.is_published === true,
+      published_at:     body.is_published === true ? new Date().toISOString() : null,
+    }).select().single()
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.status(201).send({ track: data })
+  })
+
+  app.patch('/:id', { preHandler: app.authenticate }, async (request, reply) => {
+    const { id } = request.params
+    const { data: existing } = await supabase.from('tracks').select('creator_id').eq('id', id).single()
+    if (existing.creator_id !== request.user.id) return reply.status(403).send({ error: 'Non autorise' })
+    const allowed = ['title','description','genre','access_type','sale_price','type',
+      'rent_price_day','rent_price_week','rent_price_month','free_preview_sec','is_published','cover_url']
+    const updates = {}
+    allowed.forEach(k => { if (request.body[k] !== undefined) updates[k] = request.body[k] })
+    if (updates.is_published) updates.published_at = new Date().toISOString()
+    const { data, error } = await supabase.from('tracks').update(updates).eq('id', id).select().single()
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.send({ track: data })
+  })
+
+  app.delete('/:id', { preHandler: app.authenticate }, async (request, reply) => {
+    const { id } = request.params
+    const { data: existing } = await supabase.from('tracks').select('creator_id').eq('id', id).single()
+    if (existing.creator_id !== request.user.id) return reply.status(403).send({ error: 'Non autorise' })
+    await supabase.from('tracks').update({ is_active: false }).eq('id', id)
+    return reply.send({ message: 'Son supprime' })
+  })
+
   app.get('/:id/access', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params
     const uid = request.user.id
-    const { data: track } = await supabase.from('tracks')
-      .select('access_type, creator_id').eq('id', id).single()
-    if (!track) return reply.status(404).send({ error: 'Son introuvable' })
-    if (track.access_type === 'free' || track.creator_id === uid) {
+    const { data: track } = await supabase.from('tracks').select('access_type, creator_id').eq('id', id).single()
+    if (track.access_type === 'free' || track.creator_id === uid)
       return reply.send({ has_access: true, type: 'free' })
-    }
-    const { data: purchase } = await supabase.from('track_access')
-      .select('id').eq('user_id', uid).eq('track_id', id).single()
+    const { data: purchase } = await supabase.from('track_access').select('id').eq('user_id', uid).eq('track_id', id).single()
     if (purchase) return reply.send({ has_access: true, type: 'purchase' })
     const { data: rental } = await supabase.from('rentals')
       .select('id, expires_at').eq('user_id', uid).eq('track_id', id)
@@ -159,5 +118,4 @@ export default async function tracksRoutes(app) {
     if (rental) return reply.send({ has_access: true, type: 'rental', expires_at: rental.expires_at })
     return reply.send({ has_access: false })
   })
-
 }

@@ -2,141 +2,68 @@ import { supabase } from '../config.js'
 
 export default async function profilesRoutes(app) {
 
-  // VOIR UN PROFIL PUBLIC
-  app.get('/:username', async (request, reply) => {
-    const { username } = request.params
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select(`*, tracks:tracks(count), followers:follows!following_id(count)`)
-      .eq('username', username.toLowerCase())
-      .eq('is_active', true)
-      .single()
-    if (error || !profile) return reply.status(404).send({ error: 'Profil introuvable' })
-    return reply.send({ profile })
+  app.get('/stats', async (request, reply) => {
+    const [tracks, profiles, plays, countries] = await Promise.all([
+      supabase.from('tracks').select('id', { count: 'exact', head: true }).eq('is_published', true).eq('is_active', true),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }),
+      supabase.from('tracks').select('play_count').eq('is_published', true),
+      supabase.from('profiles').select('country').neq('country', null),
+    ])
+    const totalPlays = plays.data?.reduce((a, t) => a + (t.play_count || 0), 0) || 0
+    const uniqueCountries = new Set(countries.data?.map(p => p.country)).size
+    return reply.send({
+      tracks_count: tracks.count || 0,
+      creators_count: profiles.count || 0,
+      total_plays: totalPlays,
+      countries_count: uniqueCountries,
+    })
   })
 
-  // MODIFIER MON PROFIL
+  app.get('/me/profile', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', request.user.id).single()
+    return reply.send({ profile: data })
+  })
+
   app.patch('/me', { preHandler: app.authenticate }, async (request, reply) => {
-    const allowed = ['display_name','bio','avatar_url','cover_url',
-      'profile_type','country','currency','phone','website']
+    const allowed = ['display_name','bio','avatar_url','cover_url','website','phone','country','currency','language','profile_type','role']
     const updates = {}
     allowed.forEach(k => { if (request.body[k] !== undefined) updates[k] = request.body[k] })
-    if (Object.keys(updates).length === 0) {
-      return reply.status(400).send({ error: 'Aucune donnee a mettre a jour' })
-    }
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', request.user.id)
-      .select()
-      .single()
+    updates.updated_at = new Date().toISOString()
+    const { data, error } = await supabase.from('profiles').update(updates).eq('id', request.user.id).select().single()
     if (error) return reply.status(500).send({ error: error.message })
     return reply.send({ profile: data })
   })
 
-  // SUIVRE UN UTILISATEUR
-  app.post('/:username/follow', { preHandler: app.authenticate, config: { rawBody: false } }, async (request, reply) => {
-    const { username } = request.params
-    const { data: target } = await supabase
-      .from('profiles').select('id').eq('username', username).single()
-    if (!target) return reply.status(404).send({ error: 'Utilisateur introuvable' })
-    if (target.id === request.user.id) {
-      return reply.status(400).send({ error: 'Vous ne pouvez pas vous suivre vous-meme' })
-    }
-    const { error } = await supabase.from('follows').insert({
-      follower_id: request.user.id,
-      following_id: target.id
-    })
-    if (error) {
-      if (error.code === '23505') return reply.status(409).send({ error: 'Deja suivi' })
-      return reply.status(500).send({ error: error.message })
-    }
-    return reply.send({ message: 'Abonnement effectue' })
-  })
-
-  // SE DESABONNER
-  app.delete('/:username/follow', { preHandler: app.authenticate }, async (request, reply) => {
-    const { username } = request.params
-    const { data: target } = await supabase
-      .from('profiles').select('id').eq('username', username).single()
-    if (!target) return reply.status(404).send({ error: 'Utilisateur introuvable' })
-    await supabase.from('follows')
-      .delete()
-      .eq('follower_id', request.user.id)
-      .eq('following_id', target.id)
-    return reply.send({ message: 'Desabonnement effectue' })
-  })
-
-  // LISTE DES ABONNES
-  app.get('/:username/followers', async (request, reply) => {
-    const { username } = request.params
-    const { data: profile } = await supabase
-      .from('profiles').select('id').eq('username', username).single()
-    if (!profile) return reply.status(404).send({ error: 'Utilisateur introuvable' })
-    const { data } = await supabase
-      .from('follows')
-      .select('profiles:follower_id(id, username, display_name, avatar_url, is_verified)')
-      .eq('following_id', profile.id)
-    return reply.send({ followers: data?.map(f => f.profiles) || [] })
-  })
-
-  // LISTE DES ABONNEMENTS
-  app.get('/:username/following', async (request, reply) => {
-    const { username } = request.params
-    const { data: profile } = await supabase
-      .from('profiles').select('id').eq('username', username).single()
-    if (!profile) return reply.status(404).send({ error: 'Utilisateur introuvable' })
-    const { data } = await supabase
-      .from('follows')
-      .select('profiles:following_id(id, username, display_name, avatar_url, is_verified)')
-      .eq('follower_id', profile.id)
-    return reply.send({ following: data?.map(f => f.profiles) || [] })
-  })
-
-  // SONS D UN PROFIL
   app.get('/:username/tracks', async (request, reply) => {
-    const { username } = request.params
-    const { page = 1, limit = 20 } = request.query
-    const { data: profile } = await supabase
-      .from('profiles').select('id').eq('username', username).single()
-    if (!profile) return reply.status(404).send({ error: 'Utilisateur introuvable' })
-    const { data, error } = await supabase
-      .from('tracks')
-      .select('*')
-      .eq('creator_id', profile.id)
-      .eq('is_published', true)
-      .eq('is_active', true)
-      .order('published_at', { ascending: false })
-      .range((page-1)*limit, page*limit-1)
-    if (error) return reply.status(500).send({ error: error.message })
-    return reply.send({ tracks: data })
+    const { data: profile } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
+    const { data } = await supabase.from('tracks')
+      .select('*').eq('creator_id', profile.id).eq('is_published', true).eq('is_active', true)
+      .order('created_at', { ascending: false })
+    return reply.send({ tracks: data || [] })
   })
 
-  // STATS REELLES D UN PROFIL
-  app.get('/:username/stats', async (request, reply) => {
-    const { username } = request.params
-    const { data: profile } = await supabase.from('profiles').select('id').eq('username', username).single()
-    if (!profile) return reply.status(404).send({ error: 'Introuvable' })
-    const { count: tracksCount } = await supabase.from('tracks').select('*', {count:'exact',head:true}).eq('creator_id', profile.id).eq('is_active', true)
-    const { data: plays } = await supabase.from('tracks').select('play_count').eq('creator_id', profile.id)
-    const totalPlays = plays?.reduce((a,t) => a + (t.play_count||0), 0) || 0
-    return reply.send({ tracks_count: tracksCount || 0, total_plays: totalPlays })
+  app.post('/:username/follow', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data: target } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
+    await supabase.from('follows').upsert({ follower_id: request.user.id, following_id: target.id })
+    return reply.send({ following: true })
   })
 
-  // RECHERCHE DE PROFILS
+  app.delete('/:username/follow', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data: target } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
+    await supabase.from('follows').delete().eq('follower_id', request.user.id).eq('following_id', target.id)
+    return reply.send({ following: false })
+  })
+
   app.get('/', async (request, reply) => {
-    const { search, type, page = 1, limit = 20 } = request.query
-    let query = supabase
-      .from('profiles')
-      .select('id, username, display_name, avatar_url, profile_type, country, is_verified, followers_count, tracks_count')
-      .eq('is_active', true)
-      .order('followers_count', { ascending: false })
-      .range((page-1)*limit, page*limit-1)
-    if (search) query = query.ilike('display_name', `%${search}%`)
+    const { limit = 50, type } = request.query
+    let query = supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(parseInt(limit))
     if (type) query = query.eq('profile_type', type)
-    const { data, error } = await query
-    if (error) return reply.status(500).send({ error: error.message })
-    return reply.send({ profiles: data })
+    const { data } = await query
+    return reply.send({ profiles: data || [] })
   })
 
+  app.get('/:username', async (request, reply) => {
+    const { data, error } = await supabase.from('profiles').select('*').eq('username', request.params.username.toLowerCase()).single()
+    return reply.send({ profile: data })
+  })
 }
