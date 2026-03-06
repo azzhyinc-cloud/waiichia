@@ -130,7 +130,7 @@ export function ReactionBar({ targetType, targetId, showComments = true, externa
           )
         })}
 
-        {/* Bouton commentaires — ir-comment-btn exact prototype */
+        {/* Bouton commentaires — ir-comment-btn exact prototype */}
         {showComments && (
           <button onClick={e=>{e.stopPropagation();togglePanel()}}
             style={{
