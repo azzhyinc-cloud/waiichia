@@ -70,6 +70,7 @@ const api = {
     invoices:      () => api.get('/api/payments/invoices'),
     tickets:       () => api.get('/api/payments/tickets'),
     recharge:      (d) => api.post('/api/payments/recharge', d),
+    rentTrack:     (d) => api.post("/api/payments/rent", d),
     buyTrack:      (d) => api.post('/api/payments/track', d),
     withdraw:      (d) => api.post('/api/payments/withdraw', d),
     transfer:      (d) => api.post('/api/payments/transfer', d),

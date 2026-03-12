@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { usePlayerStore } from "../stores/index.js"
+import { usePlayerStore, useDeviseStore } from "../stores/index.js"
+import BuyModal from "../components/BuyModal.jsx"
 import api from "../services/api.js"
 
 const TABS=["Sons","Albums","Playlists"]
@@ -9,10 +10,12 @@ const MOCK=Array.from({length:21},(_,i)=>({id:`m${i}`,title:["Twarab ya Komori",
 
 export default function Music() {
   const { toggle, currentTrack, isPlaying } = usePlayerStore()
+  const { devise } = useDeviseStore()
   const [tab,setTab]=useState("Sons")
   const [genre,setGenre]=useState("Tout")
   const [tracks,setTracks]=useState([])
   const [loading,setLoading]=useState(true)
+  const [buyModal,setBuyModal]=useState(null) // {track, mode}
 
   useEffect(()=>{
     api.tracks.list("?limit=50")
@@ -45,38 +48,48 @@ export default function Music() {
       </div>
       {tab==="Sons"&&(loading?<Skel/>:
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:14}}>
-          {filtered.map((t,i)=><TrackCard key={t.id} track={t} bg={BGS[i%BGS.length]} isPlaying={isPlaying&&currentTrack?.id===t.id} onPlay={()=>toggle(t)}/>)}
+          {filtered.map((t,i)=><TrackCard key={t.id} track={t} bg={BGS[i%BGS.length]} devise={devise} isPlaying={isPlaying&&currentTrack?.id===t.id} onPlay={()=>toggle(t)} onBuy={()=>setBuyModal({track:t,mode:"buy"})} onRent={()=>setBuyModal({track:t,mode:"rent"})}/>)}
           {!filtered.length&&<div style={{color:"var(--text3)",fontSize:13,padding:"40px 0",gridColumn:"1/-1",textAlign:"center"}}>Aucun son dans ce genre</div>}
         </div>
       )}
       {tab==="Albums"&&<div style={{color:"var(--text3)",textAlign:"center",padding:60,fontSize:14}}>💿 Voir la section Albums</div>}
       {tab==="Playlists"&&<div style={{color:"var(--text3)",textAlign:"center",padding:60,fontSize:14}}>📋 Playlists bientôt disponibles</div>}
+
+      {buyModal&&<BuyModal track={buyModal.track} mode={buyModal.mode} onClose={()=>setBuyModal(null)} onSuccess={()=>setBuyModal(null)}/>}
     </div>
   )
 }
 
-function TrackCard({track:t,bg,isPlaying,onPlay}){
+function TrackCard({track:t,bg,devise,isPlaying,onPlay,onBuy,onRent}){
   const[hov,setHov]=useState(false)
-  const isPremium=t.access_type==="premium"||t.access_type==="paid"
+  const isPremium=t.access_type==="premium"||t.access_type==="paid"||t.access_type==="purchase"
+  const rentPrice=Math.round((t.sale_price||2500)*0.08)
   return(
     <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{background:"var(--card)",border:`1px solid ${hov?"rgba(245,166,35,.4)":"var(--border)"}`,borderRadius:"var(--radius)",overflow:"hidden",transition:"all .25s",transform:hov?"translateY(-4px)":"none",boxShadow:hov?"0 12px 32px var(--shadow)":"none"}}>
-      <div style={{position:"relative",height:160,background:bg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,overflow:"hidden"}} onClick={onPlay}>
+      <div style={{position:"relative",height:160,background:bg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,overflow:"hidden"}} onClick={isPremium?null:onPlay}>
         {t.cover_url?<img src={t.cover_url} alt={t.title} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎵"}
-        {hov&&<div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {hov&&!isPremium&&<div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div style={{width:48,height:48,borderRadius:"50%",background:"var(--gold)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:"#000"}}>{isPlaying?"⏸":"▶"}</div>
         </div>}
         {isPlaying&&!hov&&<div style={{position:"absolute",bottom:8,right:8,background:"var(--gold)",borderRadius:20,padding:"3px 8px",fontSize:10,color:"#000",fontWeight:700,fontFamily:"Space Mono,monospace"}}>▶ EN COURS</div>}
         {isPremium&&<div style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,.7)",borderRadius:20,padding:"3px 8px",fontSize:10,color:"var(--gold)",fontFamily:"Space Mono,monospace"}}>🔒 PREMIUM</div>}
+        {isPremium&&<div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.15)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{fontSize:32,opacity:.4}}>🔒</div>
+        </div>}
       </div>
       <div style={{padding:"12px 14px"}}>
-        <div style={{fontWeight:600,fontSize:13,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+        <div style={{fontWeight:600,fontSize:13,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
         <div style={{fontSize:11.5,color:"var(--text2)",marginBottom:8}}>{t.profiles?.display_name||"Artiste"}</div>
         {isPremium
           ?<div style={{display:"flex",gap:6}}>
-            <button style={{flex:1,padding:"6px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}}>🛒 {t.sale_price?`${t.sale_price} KMF`:"Acheter"}</button>
-            <button style={{padding:"6px 10px",borderRadius:50,border:"1px solid var(--border)",background:"transparent",color:"var(--text2)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}}>⏳ Louer</button>
+            <button onClick={onBuy} style={{flex:1,padding:"7px 6px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif",boxShadow:"0 3px 10px rgba(245,166,35,.3)"}}>
+              🛒 {t.sale_price?`${t.sale_price} ${devise.code}`:"Acheter"}
+            </button>
+            <button onClick={onRent} style={{padding:"7px 10px",borderRadius:50,border:"1px solid rgba(245,166,35,.4)",background:"rgba(245,166,35,.06)",color:"var(--gold)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif",transition:"all .18s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(245,166,35,.12)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(245,166,35,.06)"}}>
+              ⏳ {rentPrice} {devise.code}
+            </button>
           </div>
-          :<button onClick={onPlay} style={{width:"100%",padding:"6px",borderRadius:50,border:"1px solid var(--border)",background:"transparent",color:"var(--text2)",fontSize:11,fontWeight:600,cursor:"pointer",transition:"all .18s",fontFamily:"Plus Jakarta Sans,sans-serif"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.color="var(--gold)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text2)"}}>
+          :<button onClick={onPlay} style={{width:"100%",padding:"7px",borderRadius:50,border:"1px solid var(--border)",background:"transparent",color:"var(--text2)",fontSize:11,fontWeight:600,cursor:"pointer",transition:"all .18s",fontFamily:"Plus Jakarta Sans,sans-serif"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.color="var(--gold)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text2)"}}>
             {isPlaying?"⏸ En cours":"▶ Écouter gratuitement"}
           </button>
         }

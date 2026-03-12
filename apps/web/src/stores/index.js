@@ -131,3 +131,11 @@ export const usePageStore = create((set) => ({
   profileUsername: null,
   setPage: (page, params={}) => set({ currentPage: page, ...params })
 }))
+
+export const useDeviseStore = create((set) => ({
+  devise: JSON.parse(localStorage.getItem('waiichia_devise') || 'null') || {code:"KMF",flag:"🇰🇲",country:"Comores",tel:"+269"},
+  setDevise: (d) => {
+    localStorage.setItem('waiichia_devise', JSON.stringify(d))
+    set({ devise: d })
+  }
+}))

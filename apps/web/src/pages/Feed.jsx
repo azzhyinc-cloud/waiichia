@@ -1,6 +1,7 @@
+import BuyModal from "../components/BuyModal.jsx"
 import { useState, useEffect } from "react"
 import { usePlayerStore } from "../stores/index.js"
-import { usePageStore } from "../stores/index.js"
+import { usePageStore, useDeviseStore } from "../stores/index.js"
 import api from "../services/api.js"
 
 const TABS=["Tous","Musique","Podcast","Émission","Événements"]
@@ -14,6 +15,8 @@ const FLAGS={"KM":"🇰🇲","MG":"🇲🇬","NG":"🇳🇬","CI":"🇨🇮","SN
 export default function Feed() {
   const { toggle, currentTrack, isPlaying } = usePlayerStore()
   const { setPage } = usePageStore()
+  const { devise } = useDeviseStore()
+  const [buyModal,setBuyModal]=useState(null)
   const [tab,setTab]=useState("Tous")
   const [posts,setPosts]=useState([])
   const [loading,setLoading]=useState(true)
