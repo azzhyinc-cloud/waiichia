@@ -18,7 +18,8 @@ const MOCK_TX=[
 
 export default function Wallet() {
   const { user } = useAuthStore()
-  const { devise, setDevise } = useDeviseStore()
+  const { devise: deviseObj, setDevise } = useDeviseStore()
+  const dc = deviseObj?.code || 'KMF'
   const [period, setPeriod] = useState("Mois")
   const [txType, setTxType] = useState("Tous types")
   const [balance,setBalance] = useState(null)
@@ -55,10 +56,10 @@ export default function Wallet() {
         <div style={{position:"absolute",right:-40,top:-40,width:200,height:200,background:"radial-gradient(circle,rgba(44,198,83,.15),transparent 70%)",pointerEvents:"none"}}/>
         <div style={{position:"relative",zIndex:1}}>
           <div style={{fontSize:13,color:"rgba(255,255,255,.6)",fontFamily:"Space Mono,monospace",marginBottom:8}}>
-            Solde disponible · {devise} ({DEVISES.find(d=>d.code===devise)?.label})
+            Solde disponible · {dc} ({DEVISES.find(d=>d.code===dc)?.label})
           </div>
           <div style={{fontFamily:"Syne,sans-serif",fontSize:38,fontWeight:800,color:"#2dc653",margin:"8px 0"}}>
-            {loading?"...":balance?.toLocaleString()} {devise}
+            {loading?"...":balance?.toLocaleString()} {dc}
           </div>
           <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginBottom:16}}>
             ≈ {Math.floor((balance||74850)/490)} USD · ≈ {Math.floor((balance||74850)/540)} EUR
@@ -76,8 +77,8 @@ export default function Wallet() {
         <div style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace",textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>Ma devise principale</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {DEVISES.map(d=>(
-            <button key={d.code} onClick={()=>setDevise(d.code)}
-              style={{padding:"6px 14px",borderRadius:50,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .18s",fontFamily:"Plus Jakarta Sans,sans-serif",borderColor:devise===d.code?"var(--gold)":"var(--border)",background:devise===d.code?"var(--gold)":"var(--card)",color:devise===d.code?"#000":"var(--text2)"}}>
+            <button key={d.code} onClick={()=>setDevise(d)}
+              style={{padding:"6px 14px",borderRadius:50,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .18s",fontFamily:"Plus Jakarta Sans,sans-serif",borderColor:dc===d.code?"var(--gold)":"var(--border)",background:dc===d.code?"var(--gold)":"var(--card)",color:dc===d.code?"#000":"var(--text2)"}}>
               {d.flag} {d.code}
             </button>
           ))}
@@ -124,7 +125,7 @@ export default function Wallet() {
               <div style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace",marginTop:2}}>{tx.date}</div>
             </div>
             <div style={{fontFamily:"Syne,sans-serif",fontSize:15,fontWeight:700,flexShrink:0,color:tx.type==="credit"?"var(--green)":"var(--red)"}}>
-              {tx.type==="credit"?"+":""}{tx.amount.toLocaleString()} {devise}
+              {tx.type==="credit"?"+":""}{tx.amount.toLocaleString()} {dc}
             </div>
           </div>
         ))}
