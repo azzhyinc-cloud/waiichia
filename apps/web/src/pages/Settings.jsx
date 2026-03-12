@@ -47,7 +47,7 @@ export default function Settings() {
     ['langue','🌍 Langue & Région'],
     ['facturation','💳 Facturation'],
     ['notifs','🔔 Notifications'],
-    ['droits','⚖️ Droits d'auteur'],
+    ['droits',"⚖️ Droits d'auteur"],
     ['confidentialite','🛡️ Confidentialité'],
   ]
 
