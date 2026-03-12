@@ -55,6 +55,7 @@ export const useAuthStore = create((set, get) => ({
       set({ user: null, token: null })
     }
   },
+  setUser: (user) => set({ user }),
   logout: () => {
     localStorage.removeItem('waiichia_token')
     set({ user: null, token: null })

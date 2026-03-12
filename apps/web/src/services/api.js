@@ -12,6 +12,14 @@ const api = {
       body: data !== null && data !== undefined ? JSON.stringify(data) : undefined
     })
     const json = await res.json()
+    // BUG FIX : throw si le serveur renvoie une erreur HTTP
+    if (!res.ok) {
+      const msg = json?.error || json?.message || `Erreur ${res.status}`
+      const err = new Error(msg)
+      err.code = json?.code || null
+      err.status = res.status
+      throw err
+    }
     return json
   },
   get:    (path, auth) => api.request('GET',    path, null, auth),
