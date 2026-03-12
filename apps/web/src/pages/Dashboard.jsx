@@ -1,418 +1,157 @@
-import { useState, useEffect } from 'react'
-import { useAuthStore, usePageStore } from '../stores/index.js'
-import api from '../services/api.js'
+import { useState, useEffect } from "react"
+import { useAuthStore, useDeviseStore, usePageStore } from "../stores/index.js"
 
-const API = import.meta.env.VITE_API_URL
-const formatK = (n) => {
-  if (!n) return '0'
-  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M'
-  if (n >= 1000) return (n/1000).toFixed(1) + 'K'
-  return String(n)
+const PERIODS=[{id:"7d",label:"7j"},{id:"30d",label:"30j"},{id:"90d",label:"90j"},{id:"1y",label:"1an"}]
+const fmtK=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
+const MOCK_KPI=[{icon:"🎧",label:"Écoutes",value:42870,delta:"+12%",color:"#f5a623"},{icon:"💰",label:"Revenus",value:186400,delta:"+8%",color:"#2dc653",suffix:true},{icon:"👥",label:"Nouveaux fans",value:1240,delta:"+23%",color:"#9b59f5"},{icon:"📤",label:"Sons actifs",value:34,delta:"+2",color:"#4d9fff"}]
+const MOCK_GEO=[{pays:"🇰🇲 Comores",pct:54,v:23148},{pays:"🇲🇬 Madagascar",pct:18,v:7717},{pays:"🇫🇷 France",pct:12,v:5144},{pays:"🇹🇿 Tanzanie",pct:8,v:3430},{pays:"🇷🇪 Réunion",pct:5,v:2144},{pays:"🌍 Autres",pct:3,v:1287}]
+const MOCK_TOP=[{rank:1,title:"Twarab ya Komori",plays:8420,rev:21050,trend:"↑"},{rank:2,title:"Moroni Flow",plays:6180,rev:15450,trend:"↑"},{rank:3,title:"Island Vibe",plays:4930,rev:7395,trend:"→"},{rank:4,title:"Masiwa Matatu",plays:3760,rev:5640,trend:"↑"},{rank:5,title:"Komori Nights",plays:2890,rev:4335,trend:"↓"}]
+const MOCK_REV=[{label:"Ventes directes",pct:42,color:"#f5a623"},{label:"Streaming",pct:28,color:"#2dc653"},{label:"Événements",pct:18,color:"#9b59f5"},{label:"Publicité",pct:8,color:"#4d9fff"},{label:"Boutique",pct:4,color:"#e63946"}]
+const MOCK_TX=[{icon:"💰",label:"Vente — Twarab ya Komori",amount:"+2500",type:"credit",date:"Auj. 09:14"},{icon:"⏳",label:"Location × 3 — Moroni Flow",amount:"+600",type:"credit",date:"Auj. 08:30"},{icon:"🎟️",label:"Billet — Concert Moroni Live",amount:"+12000",type:"credit",date:"Hier 20:10"},{icon:"🛒",label:"Boost Feed campagne",amount:"-3000",type:"debit",date:"Hier 16:45"},{icon:"💰",label:"Vente — Island Vibe",amount:"+1500",type:"credit",date:"Lun. 14:20"},{icon:"🎁",label:"Tips concert live",amount:"+3200",type:"credit",date:"Lun. 11:30"},{icon:"📢",label:"Campagne pub 2j",amount:"-5000",type:"debit",date:"Dim. 10:00"}]
+
+function genChart(n){return Array.from({length:n},()=>({e:800+Math.floor(Math.random()*1200),r:3000+Math.floor(Math.random()*5000)}))}
+function genHeat(){return["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d=>({day:d,hours:Array.from({length:24},(_,h)=>{const pk=(h>=6&&h<=9)||(h>=12&&h<=14)||(h>=19&&h<=23);return pk?Math.floor(Math.random()*80+20):Math.floor(Math.random()*20)})}))}
+
+function Spark({data,color}){
+  const max=Math.max(...data),min=Math.min(...data),r=max-min||1,W=80,H=28
+  const pts=data.map((v,i)=>`${(i/(data.length-1))*W},${H-((v-min)/r)*(H-4)-2}`).join(" ")
+  return <svg width={W} height={H}><polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round"/></svg>
 }
-const formatDate = (d) => new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
-
-export default function Dashboard() {
-  const { user } = useAuthStore()
-  const { setPage } = usePageStore()
-  const [tab, setTab] = useState('overview')
-  const [period, setPeriod] = useState('month')
-  const [stats, setStats] = useState(null)
-  const [tracks, setTracks] = useState([])
-  const [transactions, setTransactions] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [topTracks, setTopTracks] = useState([])
-  const [txByDay, setTxByDay] = useState([])
-
-  useEffect(() => {
-    if (!user) return
-    loadAll()
-  }, [user])
-
-  const loadAll = async () => {
-    setLoading(true)
-    try {
-      const [profileStats, myTracks, tx, wallet] = await Promise.all([
-        fetch(API + '/api/profiles/' + user.username + '/stats').then(r=>r.json()),
-        api.tracks.myTracks(),
-        api.payments.history(),
-        api.payments.wallet(),
-      ])
-      const txList = tx.transactions || []
-      const recettes = txList.filter(t=>t.status==='completed'&&t.recipient_id===user.id).reduce((a,t)=>a+(t.net_amount||0),0)
-      const depenses = txList.filter(t=>t.status==='completed'&&t.user_id===user.id&&t.type!=='recharge').reduce((a,t)=>a+(t.amount||0),0)
-      setStats({
-        plays: profileStats.total_plays || 0,
-        followers: profileStats.followers_count || 0,
-        following: profileStats.following_count || 0,
-        tracks_count: (myTracks.tracks||[]).length,
-        recettes,
-        depenses,
-        benefice: recettes - depenses,
-        transactions: txList.length,
-        balance: wallet.balance || 0,
-      })
-      setTracks(myTracks.tracks || [])
-      setTransactions(txList)
-
-      // Top 5 sons par ecoutes
-      const sorted = [...(myTracks.tracks||[])].sort((a,b)=>(b.play_count||0)-(a.play_count||0)).slice(0,5)
-      setTopTracks(sorted)
-
-      // Transactions par jour (7 derniers jours)
-      const days = [...Array(7)].map((_,i) => {
-        const d = new Date(); d.setDate(d.getDate() - (6-i))
-        const key = d.toLocaleDateString('fr-FR',{weekday:'short'})
-        const dayTx = txList.filter(t => {
-          const td = new Date(t.created_at)
-          return td.getDate()===d.getDate() && td.getMonth()===d.getMonth()
-        })
-        const revenus = dayTx.filter(t=>t.recipient_id===user.id&&t.status==='completed').reduce((a,t)=>a+(t.net_amount||0),0)
-        const depenses = dayTx.filter(t=>t.user_id===user.id&&t.type!=='recharge'&&t.status==='completed').reduce((a,t)=>a+(t.amount||0),0)
-        return { key, revenus, depenses, count: dayTx.length }
-      })
-      setTxByDay(days)
-    } catch(e) {}
-    setLoading(false)
-  }
-
-  const deleteTrack = async (id) => {
-    if (!confirm('Supprimer ce son ?')) return
-    const token = localStorage.getItem('waiichia_token')
-    await fetch(API + '/api/tracks/' + id, { method:'DELETE', headers:{'Authorization':'Bearer '+token} })
-    setTracks(t => t.filter(x => x.id !== id))
-  }
-
-  if (!user) return (
-    <div style={{textAlign:'center',padding:80}}>
-      <div style={{fontSize:56,marginBottom:16}}>📊</div>
-      <h2>Dashboard Créateur</h2>
-      <button onClick={()=>setPage('login')} style={{marginTop:16,background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer'}}>Se connecter</button>
+function MainChart({data}){
+  const W=800,H=160,maxE=Math.max(...data.map(d=>d.e)),maxR=Math.max(...data.map(d=>d.r))
+  const ptE=data.map((d,i)=>`${(i/(data.length-1))*(W-40)+20},${H-((d.e/maxE)*(H-20))-10}`).join(" ")
+  const ptR=data.map((d,i)=>`${(i/(data.length-1))*(W-40)+20},${H-((d.r/maxR)*(H-20))-10}`).join(" ")
+  return(<svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:H,display:"block"}} preserveAspectRatio="none">
+    {[0,.25,.5,.75,1].map(p=><line key={p} x1={20} y1={H-p*(H-20)-10} x2={W-20} y2={H-p*(H-20)-10} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="4,4"/>)}
+    <polyline points={ptE} fill="none" stroke="#f5a623" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"/>
+    <polyline points={ptR} fill="none" stroke="#2dc653" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="6,3"/>
+  </svg>)
+}
+function Heatmap({data}){
+  const maxV=Math.max(...data.flatMap(r=>r.hours))
+  return(<div style={{overflowX:"auto"}}>
+    <div style={{display:"flex",gap:2,minWidth:600}}>
+      <div style={{display:"flex",flexDirection:"column",gap:2,paddingTop:18}}>
+        {data.map(r=><div key={r.day} style={{height:16,width:26,fontSize:9,color:"var(--text3)",display:"flex",alignItems:"center"}}>{r.day}</div>)}
+      </div>
+      <div>
+        <div style={{display:"flex",gap:2,marginBottom:2}}>{Array.from({length:24},(_,h)=><div key={h} style={{width:16,fontSize:8,color:h%6===0?"var(--text3)":"transparent"}}>{h}h</div>)}</div>
+        {data.map(r=><div key={r.day} style={{display:"flex",gap:2,marginBottom:2}}>{r.hours.map((v,h)=><div key={h} title={`${r.day} ${h}h — ${v}`} style={{width:16,height:16,borderRadius:2,background:`rgba(245,166,35,${0.08+(v/maxV)*0.92})`}}/>)}</div>)}
+      </div>
     </div>
-  )
+  </div>)
+}
 
-  const TABS = [['overview','📊 Vue globale'],['content','🎵 Mon Contenu'],['finances','💰 Finances'],['analytics','📈 Analytiques']]
+export default function Dashboard(){
+  const {user}=useAuthStore()
+  const {devise}=useDeviseStore()
+  const {setPage}=usePageStore()
+  const dc=devise?.code||"KMF"
+  const [period,setPeriod]=useState("30d")
+  const [txFilter,setTxFilter]=useState("Tout")
+  const [chart,setChart]=useState(()=>genChart(30))
+  const [heat]=useState(()=>genHeat())
 
-  const statCards = stats ? [
-    { icon:'💰', num: stats.recettes.toLocaleString(), label:'Recettes KMF', color:'#2cc653', bg:'rgba(44,198,83,0.1)' },
-    { icon:'💸', num: stats.depenses.toLocaleString(), label:'Depenses KMF', color:'#e74c3c', bg:'rgba(230,57,70,0.1)' },
-    { icon:'📈', num: (stats.recettes-stats.depenses).toLocaleString(), label:'Benefice Net', color:'#f5a623', bg:'rgba(245,166,35,0.1)' },
-    { icon:'🎧', num: formatK(stats.plays), label:'Total Ecoutes', color:'#4d9fff', bg:'rgba(77,159,255,0.1)' },
-    { icon:'👥', num: formatK(stats.followers), label:'Abonnes', color:'#a855f7', bg:'rgba(168,85,247,0.1)' },
-  ] : []
+  useEffect(()=>{
+    const d=period==="7d"?7:period==="30d"?30:period==="90d"?90:365
+    setChart(genChart(d))
+  },[period])
 
-  const revenueSources = [
-    { label:'Ventes de sons', pct: 45, color:'#2cc653' },
-    { label:'Locations', pct: 25, color:'#4d9fff' },
-    { label:'Billets evenements', pct: 20, color:'#f5a623' },
-    { label:'Publicite', pct: 10, color:'#a855f7' },
-  ]
+  if(!user)return(<div style={{textAlign:"center",padding:80}}><div style={{fontSize:48,marginBottom:12}}>🔒</div><div style={{fontFamily:"Syne,sans-serif",fontSize:20,fontWeight:800,marginBottom:8}}>Connectez-vous pour accéder aux analytics</div><button onClick={()=>setPage("login")} style={{padding:"10px 24px",borderRadius:50,border:"none",background:"var(--gold)",color:"#000",fontSize:13,fontWeight:700,cursor:"pointer"}}>Se connecter</button></div>)
 
-  return (
-    <div style={{padding:'24px 20px 100px'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24,flexWrap:'wrap',gap:12}}>
-        <div>
-          <h1 style={{fontSize:24,fontWeight:900,margin:'0 0 4px'}}>📊 Compte Commercial</h1>
-          <p style={{color:'var(--text2)',fontSize:13,margin:0}}>Bienvenue, {user.display_name || user.username}</p>
+  const txFiltered=MOCK_TX.filter(t=>txFilter==="Tout"||t.label.toLowerCase().includes(txFilter.toLowerCase()))
+
+  return(<div style={{paddingBottom:40}}>
+    {/* HEADER */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
+      <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:800}}>📊 Analytics</div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",background:"var(--card)",border:"1px solid var(--border)",borderRadius:50,fontSize:12,color:"var(--text2)"}}>
+          <span style={{width:8,height:8,borderRadius:"50%",background:"#2dc653",display:"inline-block",animation:"pulse 2s infinite"}}/>En direct
         </div>
-        <div style={{display:'flex',gap:8}}>
-          <button onClick={()=>setPage('upload')} style={{background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontWeight:600,fontSize:13}}>+ Publier</button>
-          <button onClick={()=>setPage('wallet')} style={{background:'var(--card)',border:'1px solid var(--border)',color:'var(--text)',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13}}>💰 {stats ? stats.balance.toLocaleString() + ' KMF' : '...'}</button>
+        <div style={{display:"flex",background:"var(--card)",border:"1px solid var(--border)",borderRadius:50,overflow:"hidden"}}>
+          {PERIODS.map(p=><button key={p.id} onClick={()=>setPeriod(p.id)} style={{padding:"6px 14px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:period===p.id?"var(--gold)":"transparent",color:period===p.id?"#000":"var(--text2)"}}>{p.label}</button>)}
         </div>
       </div>
-
-      {/* ONGLETS */}
-      <div style={{display:'flex',gap:4,marginBottom:24,background:'var(--card)',borderRadius:12,padding:4,border:'1px solid var(--border)',flexWrap:'wrap'}}>
-        {TABS.map(([v,l]) => (
-          <button key={v} onClick={()=>setTab(v)}
-            style={{flex:1,padding:'8px 12px',borderRadius:8,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,minWidth:100,
-              background:tab===v?'var(--primary)':'transparent',color:tab===v?'#fff':'var(--text2)'}}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:12}}>
-          {[...Array(5)].map((_,i)=><div key={i} className="skeleton" style={{height:100,borderRadius:12}}/>)}
-        </div>
-      ) : (
-        <>
-          {/* ── VUE GLOBALE ── */}
-          {tab === 'overview' && (
-            <div>
-              {/* STAT CARDS */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12,marginBottom:24}}>
-                {statCards.map((s,i) => (
-                  <div key={i} style={{background:s.bg,border:`1px solid ${s.color}30`,borderRadius:12,padding:16}}>
-                    <div style={{fontSize:28,marginBottom:8}}>{s.icon}</div>
-                    <div style={{fontSize:22,fontWeight:900,color:s.color,fontFamily:'monospace'}}>{s.num}</div>
-                    <div style={{fontSize:12,color:'var(--text2)',marginTop:4}}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:24}}>
-                {/* RECETTES PAR SOURCE */}
-                <div style={{background:'var(--card)',borderRadius:12,padding:20,border:'1px solid var(--border)'}}>
-                  <div style={{fontWeight:700,fontSize:15,marginBottom:16}}>💚 Recettes par source</div>
-                  {revenueSources.map((r,i) => (
-                    <div key={i} style={{marginBottom:12}}>
-                      <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:4}}>
-                        <span style={{color:'var(--text2)'}}>{r.label}</span>
-                        <span style={{color:r.color,fontWeight:700,fontFamily:'monospace'}}>{r.pct}%</span>
-                      </div>
-                      <div style={{background:'var(--border)',borderRadius:99,height:6}}>
-                        <div style={{width:r.pct+'%',height:'100%',background:r.color,borderRadius:99}}/>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {/* TOPS SONS */}
-                <div style={{background:'var(--card)',borderRadius:12,padding:20,border:'1px solid var(--border)'}}>
-                  <div style={{fontWeight:700,fontSize:15,marginBottom:16}}>🔥 Mes sons les plus ecoutés</div>
-                  {tracks.slice(0,5).map((t,i) => (
-                    <div key={t.id} style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
-                      <div style={{width:24,textAlign:'center',fontSize:14,fontWeight:800,color:i<3?'var(--gold)':'var(--text3)'}}>{i+1}</div>
-                      <div style={{width:36,height:36,borderRadius:6,background:'var(--card2)',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>
-                        {t.cover_url ? <img src={t.cover_url} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : '🎵'}
-                      </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</div>
-                        <div style={{fontSize:11,color:'var(--text3)'}}>{t.genre}</div>
-                      </div>
-                      <div style={{fontSize:12,color:'#4d9fff',fontWeight:700,fontFamily:'monospace'}}>{formatK(t.play_count)} 🎧</div>
-                    </div>
-                  ))}
-                  {tracks.length === 0 && <div style={{color:'var(--text3)',fontSize:13,textAlign:'center',padding:20}}>Aucun son publié</div>}
-                </div>
-              </div>
-
-              {/* DERNIERES TRANSACTIONS */}
-              <div style={{background:'var(--card)',borderRadius:12,padding:20,border:'1px solid var(--border)'}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-                  <div style={{fontWeight:700,fontSize:15}}>📋 Dernières transactions</div>
-                  <button onClick={()=>setTab('finances')} style={{background:'none',border:'none',color:'var(--primary)',cursor:'pointer',fontSize:13,fontWeight:600}}>Voir tout →</button>
-                </div>
-                {transactions.slice(0,5).map(tx => (
-                  <div key={tx.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
-                    <div style={{fontSize:20}}>{tx.type==='recharge'?'💰':tx.type==='purchase'?'🎵':'📀'}</div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:13,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.description}</div>
-                      <div style={{fontSize:11,color:'var(--text2)'}}>{formatDate(tx.created_at)}</div>
-                    </div>
-                    <div style={{textAlign:'right'}}>
-                      <div style={{fontWeight:700,fontSize:14,color:tx.recipient_id===user.id?'#2cc653':'#e74c3c'}}>
-                        {tx.recipient_id===user.id?'+':'-'}{(tx.amount||0).toLocaleString()} KMF
-                      </div>
-                      <div style={{fontSize:11,color:tx.status==='completed'?'#2cc653':tx.status==='pending'?'#f5a623':'#e74c3c'}}>{tx.status}</div>
-                    </div>
-                  </div>
-                ))}
-                {transactions.length === 0 && <div style={{color:'var(--text3)',textAlign:'center',padding:20}}>Aucune transaction</div>}
-              </div>
-            </div>
-          )}
-
-          {/* ── MON CONTENU ── */}
-          {tab === 'content' && (
-            <div>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-                <div style={{fontWeight:700,fontSize:15}}>{tracks.length} sons publiés</div>
-                <button onClick={()=>setPage('upload')} style={{background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontWeight:600,fontSize:13}}>+ Ajouter</button>
-              </div>
-              {tracks.length === 0 ? (
-                <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-                  <div style={{fontSize:48,marginBottom:12}}>🎵</div>
-                  <p>Aucun son publié</p>
-                  <button onClick={()=>setPage('upload')} style={{marginTop:12,background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer'}}>Publier mon premier son</button>
-                </div>
-              ) : tracks.map(t => (
-                <div key={t.id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:'var(--card)',borderRadius:10,border:'1px solid var(--border)',marginBottom:8}}>
-                  <div style={{width:48,height:48,borderRadius:8,background:'var(--card2)',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>
-                    {t.cover_url ? <img src={t.cover_url} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : '🎵'}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</div>
-                    <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>
-                      {t.genre} · {t.content_type} ·
-                      <span style={{color: t.access_type==='free'?'#2cc653':'var(--gold)',marginLeft:4,fontWeight:600}}>
-                        {t.access_type==='free'?'Gratuit':(t.sale_price||0).toLocaleString()+' KMF'}
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{textAlign:'right',flexShrink:0}}>
-                    <div style={{fontSize:13,color:'#4d9fff',fontWeight:700,fontFamily:'monospace'}}>{formatK(t.play_count)} 🎧</div>
-                    <div style={{display:'flex',gap:6,marginTop:6}}>
-                      <button style={{background:'var(--card2)',border:'1px solid var(--border)',borderRadius:6,padding:'4px 8px',cursor:'pointer',fontSize:11,color:'var(--text2)'}}>✏️</button>
-                      <button onClick={()=>deleteTrack(t.id)} style={{background:'rgba(230,57,70,0.1)',border:'1px solid rgba(230,57,70,0.3)',borderRadius:6,padding:'4px 8px',cursor:'pointer',fontSize:11,color:'#e74c3c'}}>🗑️</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── FINANCES ── */}
-          {tab === 'finances' && (
-            <div>
-              {/* FILTRES PERIODE */}
-              <div style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap',alignItems:'center'}}>
-                {[['today',"Aujourd'hui"],['week','Semaine'],['month','Mois'],['year','Annee']].map(([v,l]) => (
-                  <button key={v} onClick={()=>setPeriod(v)}
-                    style={{padding:'7px 18px',borderRadius:99,border:'1px solid var(--border)',cursor:'pointer',fontSize:13,fontWeight:600,
-                      background:period===v?'var(--gold)':'transparent',color:period===v?'#000':'var(--text2)'}}>
-                    {l}
-                  </button>
-                ))}
-                <button style={{marginLeft:'auto',background:'var(--card)',border:'1px solid var(--border)',color:'var(--text2)',borderRadius:8,padding:'7px 14px',cursor:'pointer',fontSize:13}}>
-                  📥 Exporter CSV
-                </button>
-              </div>
-
-              {/* TOTAUX */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:20}}>
-                <div style={{background:'rgba(44,198,83,0.1)',border:'1px solid rgba(44,198,83,0.3)',borderRadius:12,padding:16,textAlign:'center'}}>
-                  <div style={{fontSize:11,color:'var(--text3)',fontWeight:700,letterSpacing:1,marginBottom:8}}>RECETTES</div>
-                  <div style={{fontSize:22,fontWeight:900,color:'#2cc653'}}>{(stats?.recettes||0).toLocaleString()}</div>
-                  <div style={{fontSize:12,color:'var(--text3)'}}>KMF</div>
-                </div>
-                <div style={{background:'rgba(230,57,70,0.1)',border:'1px solid rgba(230,57,70,0.3)',borderRadius:12,padding:16,textAlign:'center'}}>
-                  <div style={{fontSize:11,color:'var(--text3)',fontWeight:700,letterSpacing:1,marginBottom:8}}>DEPENSES</div>
-                  <div style={{fontSize:22,fontWeight:900,color:'#e74c3c'}}>{(stats?.depenses||0).toLocaleString()}</div>
-                  <div style={{fontSize:12,color:'var(--text3)'}}>KMF</div>
-                </div>
-                <div style={{background:'rgba(245,166,35,0.1)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:12,padding:16,textAlign:'center'}}>
-                  <div style={{fontSize:11,color:'var(--text3)',fontWeight:700,letterSpacing:1,marginBottom:8}}>BENEFICE NET</div>
-                  <div style={{fontSize:22,fontWeight:900,color:'var(--gold)'}}>{((stats?.recettes||0)-(stats?.depenses||0)).toLocaleString()}</div>
-                  <div style={{fontSize:12,color:'var(--text3)'}}>KMF</div>
-                </div>
-              </div>
-
-              {/* LISTE TRANSACTIONS */}
-              {transactions.length === 0 ? (
-                <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-                  <div style={{fontSize:48,marginBottom:12}}>📋</div>
-                  <p>Aucune transaction</p>
-                </div>
-              ) : transactions.map(tx => (
-                <div key={tx.id} style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'var(--card)',borderRadius:10,border:'1px solid var(--border)',marginBottom:8}}>
-                  <div style={{width:44,height:44,borderRadius:10,background:'var(--card2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>
-                    {tx.type==='recharge'?'💰':tx.type==='purchase'?'🎵':tx.type==='rental'?'📀':'🎫'}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.description}</div>
-                    <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{formatDate(tx.created_at)} · {tx.gateway}</div>
-                  </div>
-                  <div style={{textAlign:'right',flexShrink:0}}>
-                    <div style={{fontWeight:800,fontSize:15,color:tx.recipient_id===user.id?'#2cc653':'#e74c3c'}}>
-                      {tx.recipient_id===user.id?'+':'-'}{(tx.amount||0).toLocaleString()} KMF
-                    </div>
-                    <div style={{fontSize:11,fontWeight:700,marginTop:2,color:tx.status==='completed'?'#2cc653':tx.status==='pending'?'#f5a623':'#e74c3c'}}>{tx.status}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── ANALYTIQUES ── */}
-          {tab === 'analytics' && (
-            <div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12,marginBottom:24}}>
-                {[
-                  { icon:'🎧', label:'Total Ecoutes', val: formatK(stats?.plays||0), color:'#4d9fff' },
-                  { icon:'👥', label:'Abonnes', val: formatK(stats?.followers||0), color:'#a855f7' },
-                  { icon:'🎵', label:'Sons publies', val: stats?.tracks_count||0, color:'#2cc653' },
-                  { icon:'🔄', label:'Transactions', val: stats?.transactions||0, color:'#f5a623' },
-                ].map((s,i) => (
-                  <div key={i} style={{background:'var(--card)',borderRadius:12,padding:20,border:'1px solid var(--border)'}}>
-                    <div style={{fontSize:32,marginBottom:8}}>{s.icon}</div>
-                    <div style={{fontSize:28,fontWeight:900,color:s.color,fontFamily:'monospace'}}>{s.val}</div>
-                    <div style={{fontSize:13,color:'var(--text2)',marginTop:4}}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* GRAPHIQUE REVENUS 7 JOURS */}
-              <div style={{background:'var(--card)',borderRadius:12,padding:20,border:'1px solid var(--border)',marginBottom:16}}>
-                <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>📈 Revenus — 7 derniers jours</div>
-                <div style={{fontSize:12,color:'var(--text3)',marginBottom:16}}>Recettes nettes en KMF</div>
-                {txByDay.length > 0 ? (() => {
-                  const maxVal = Math.max(...txByDay.map(d=>d.revenus), 1)
-                  return (
-                    <div style={{display:'flex',alignItems:'flex-end',gap:8,height:120}}>
-                      {txByDay.map((d,i) => (
-                        <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4,height:'100%',justifyContent:'flex-end'}}>
-                          <div style={{fontSize:10,color:'#2cc653',fontWeight:700,fontFamily:'monospace'}}>{d.revenus>0?d.revenus.toLocaleString():''}</div>
-                          <div style={{
-                            width:'100%',
-                            height: Math.max((d.revenus/maxVal)*90, d.revenus>0?8:3)+'px',
-                            background: d.revenus>0?'linear-gradient(180deg,#2cc653,#16a34a)':'var(--border)',
-                            borderRadius:'4px 4px 0 0',
-                            transition:'height 0.3s'
-                          }}/>
-                          <div style={{fontSize:10,color:'var(--text3)',whiteSpace:'nowrap'}}>{d.key}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                })() : <div style={{textAlign:'center',color:'var(--text3)',padding:30}}>Aucune donnee disponible</div>}
-              </div>
-
-              {/* GRAPHIQUE TOP SONS */}
-              <div style={{background:'var(--card)',borderRadius:12,padding:20,border:'1px solid var(--border)',marginBottom:16}}>
-                <div style={{fontWeight:700,fontSize:15,marginBottom:16}}>🎧 Top sons par ecoutes</div>
-                {topTracks.length > 0 ? (() => {
-                  const maxPlays = Math.max(...topTracks.map(t=>t.play_count||0), 1)
-                  return topTracks.map((t,i) => (
-                    <div key={t.id} style={{marginBottom:12}}>
-                      <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:4,alignItems:'center'}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0}}>
-                          <span style={{fontSize:14,fontWeight:900,color:i<3?'var(--gold)':'var(--text3)',width:16}}>{i+1}</span>
-                          <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</span>
-                        </div>
-                        <span style={{color:'#4d9fff',fontWeight:700,fontFamily:'monospace',flexShrink:0,marginLeft:8}}>{formatK(t.play_count||0)} 🎧</span>
-                      </div>
-                      <div style={{background:'var(--border)',borderRadius:99,height:8,overflow:'hidden'}}>
-                        <div style={{
-                          width:((t.play_count||0)/maxPlays*100)+'%',
-                          height:'100%',
-                          background:`linear-gradient(90deg,${i===0?'#f5a623':i===1?'#4d9fff':i===2?'#2cc653':'#a855f7'},transparent)`,
-                          borderRadius:99,
-                          transition:'width 0.5s'
-                        }}/>
-                      </div>
-                    </div>
-                  ))
-                })() : (
-                  <div style={{textAlign:'center',color:'var(--text3)',padding:30}}>
-                    <div style={{fontSize:36,marginBottom:8}}>🎵</div>
-                    Publie des sons pour voir tes stats
-                  </div>
-                )}
-              </div>
-
-              {/* ACTIVITE TRANSACTIONS */}
-              <div style={{background:'var(--card)',borderRadius:12,padding:20,border:'1px solid var(--border)'}}>
-                <div style={{fontWeight:700,fontSize:15,marginBottom:16}}>🔄 Activite transactions — 7 jours</div>
-                <div style={{display:'flex',alignItems:'flex-end',gap:8,height:80}}>
-                  {txByDay.map((d,i) => (
-                    <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4,height:'100%',justifyContent:'flex-end'}}>
-                      <div style={{fontSize:10,color:'var(--text3)',fontWeight:700}}>{d.count>0?d.count:''}</div>
-                      <div style={{
-                        width:'100%',
-                        height:Math.max((d.count/Math.max(...txByDay.map(x=>x.count),1))*60, d.count>0?8:3)+'px',
-                        background:d.count>0?'linear-gradient(180deg,#4d9fff,#2563eb)':'var(--border)',
-                        borderRadius:'4px 4px 0 0'
-                      }}/>
-                      <div style={{fontSize:10,color:'var(--text3)'}}>{d.key}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
     </div>
-  )
+
+    {/* KPI CARDS */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14,marginBottom:20}}>
+      {MOCK_KPI.map((k,i)=>{
+        const spark=Array.from({length:12},()=>Math.random()*100)
+        return(<div key={i} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:18,position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:k.color}}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <span style={{fontSize:22}}>{k.icon}</span>
+            <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:50,background:`${k.color}22`,color:k.color}}>{k.delta}</span>
+          </div>
+          <div style={{fontFamily:"Space Mono,monospace",fontSize:24,fontWeight:700,color:k.color,marginBottom:4}}>{fmtK(k.value)}{k.suffix?` ${dc}`:""}</div>
+          <div style={{fontSize:12,color:"var(--text3)",marginBottom:10}}>{k.label}</div>
+          <Spark data={spark} color={k.color}/>
+        </div>)
+      })}
+    </div>
+
+    {/* CHART */}
+    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20,marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14}}>📈 Écoutes & Revenus</div>
+        <div style={{display:"flex",gap:14,fontSize:11,color:"var(--text2)"}}>
+          <span><span style={{display:"inline-block",width:10,height:3,background:"#f5a623",borderRadius:2,marginRight:5,verticalAlign:"middle"}}/>Écoutes</span>
+          <span><span style={{display:"inline-block",width:10,height:3,background:"#2dc653",borderRadius:2,marginRight:5,verticalAlign:"middle"}}/>Revenus</span>
+        </div>
+      </div>
+      <MainChart data={chart}/>
+    </div>
+
+    {/* GEO + TOP */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,marginBottom:14}}>🌍 Audience par pays</div>
+        {MOCK_GEO.map((g,i)=><div key={i} style={{marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span>{g.pays}</span><strong style={{color:"#f5a623"}}>{g.pct}%</strong></div>
+          <div style={{height:6,background:"var(--card2)",borderRadius:3,overflow:"hidden"}}><div style={{width:`${g.pct}%`,height:"100%",background:"linear-gradient(90deg,#f5a623,#e8920a)",borderRadius:3}}/></div>
+        </div>)}
+      </div>
+      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,marginBottom:14}}>🔥 Top 5 sons</div>
+        {MOCK_TOP.map((t,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<4?"1px solid var(--border)":"none"}}>
+          <div style={{width:24,height:24,borderRadius:6,background:i===0?"var(--gold)":i===1?"rgba(245,166,35,.4)":"var(--card2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:i<2?"#000":"var(--text3)",flexShrink:0}}>{t.rank}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div><div style={{fontSize:11,color:"var(--text3)"}}>{t.plays.toLocaleString()} écoutes</div></div>
+          <div style={{textAlign:"right",flexShrink:0}}><div style={{fontFamily:"Space Mono,monospace",fontSize:11,fontWeight:700,color:"#2dc653"}}>+{t.rev.toLocaleString()}</div><div style={{fontSize:12,color:t.trend==="↑"?"#2dc653":t.trend==="↓"?"#e63946":"var(--text3)"}}>{t.trend}</div></div>
+        </div>)}
+      </div>
+    </div>
+
+    {/* HEATMAP */}
+    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20,marginBottom:16}}>
+      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,marginBottom:14}}>🕐 Heatmap écoutes par heure</div>
+      <Heatmap data={heat}/>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,fontSize:10,color:"var(--text3)"}}>
+        <span>Moins</span>{[0.08,0.3,0.55,0.8,1].map((a,i)=><div key={i} style={{width:12,height:12,borderRadius:2,background:`rgba(245,166,35,${a})`}}/>)}<span>Plus</span>
+      </div>
+    </div>
+
+    {/* SOURCES REVENUS */}
+    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20,marginBottom:16}}>
+      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,marginBottom:14}}>💚 Sources de revenus</div>
+      {MOCK_REV.map((s,i)=><div key={i} style={{marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span>{s.label}</span><strong style={{color:s.color}}>{s.pct}%</strong></div>
+        <div style={{height:6,background:"var(--card2)",borderRadius:3,overflow:"hidden"}}><div style={{width:`${s.pct}%`,height:"100%",background:s.color,borderRadius:3}}/></div>
+      </div>)}
+    </div>
+
+    {/* TRANSACTIONS */}
+    <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,marginBottom:12}}>📋 Transactions récentes</div>
+    <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+      {["Tout","Streaming","Billets","Boutique","Pub"].map(f=><button key={f} onClick={()=>setTxFilter(f)} style={{padding:"6px 16px",borderRadius:50,border:txFilter===f?"none":"1px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,background:txFilter===f?"var(--gold)":"var(--card)",color:txFilter===f?"#000":"var(--text2)"}}>{f}</button>)}
+    </div>
+    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",overflow:"hidden"}}>
+      {txFiltered.map((t,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",borderBottom:i<txFiltered.length-1?"1px solid var(--border)":"none",transition:"background .15s"}} onMouseEnter={e=>e.currentTarget.style.background="var(--card2)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+        <div style={{width:36,height:36,borderRadius:10,background:t.type==="credit"?"rgba(44,198,83,.12)":"rgba(230,57,70,.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{t.icon}</div>
+        <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.label}</div><div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{t.date}</div></div>
+        <div style={{fontFamily:"Space Mono,monospace",fontSize:14,fontWeight:700,color:t.type==="credit"?"#2dc653":"#e63946",flexShrink:0}}>{t.amount} {dc}</div>
+      </div>)}
+    </div>
+  </div>)
 }
