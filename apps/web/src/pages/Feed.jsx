@@ -15,7 +15,7 @@ const FLAGS={"KM":"🇰🇲","MG":"🇲🇬","NG":"🇳🇬","CI":"🇨🇮","SN
 export default function Feed() {
   const { toggle, currentTrack, isPlaying } = usePlayerStore()
   const { setPage } = usePageStore()
-  const { devise } = useDeviseStore()
+  // devise depuis store
   const [buyModal,setBuyModal]=useState(null)
   const [tab,setTab]=useState("Tous")
   const [posts,setPosts]=useState([])

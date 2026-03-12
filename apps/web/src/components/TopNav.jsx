@@ -141,7 +141,7 @@ export default function TopNav() {
       </div>
 
       <NotifPanel open={notifOpen} onClose={()=>setNotifOpen(false)}/>
-      <DeviseModal open={deviseOpen} onClose={()=>setDeviseOpen(false)} current={devise.code} onChange={setDevise}/>
+      <DeviseModal open={deviseOpen} onClose={()=>setDeviseOpen(false)} current={devise.code} onChange={(d)=>{setDevise(d)}}/>
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { usePlayerStore } from "../stores/index.js"
+import { usePlayerStore, useDeviseStore } from "../stores/index.js"
 import api from "../services/api.js"
 
 const CATS = ["Tous","Musique","Podcast","Compilation"]

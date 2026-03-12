@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useAuthStore } from "../stores/index.js"
+import { useAuthStore, useDeviseStore } from "../stores/index.js"
 import api from "../services/api.js"
 
 const DEVISES=[{code:"KMF",flag:"🇰🇲",label:"Franc Comorien"},{code:"MGA",flag:"🇲🇬",label:"Ariary Malgache"},{code:"TZS",flag:"🇹🇿",label:"Shilling Tanzanien"},{code:"RWF",flag:"🇷🇼",label:"Franc Rwandais"},{code:"XOF",flag:"🇨🇮",label:"FCFA Ouest"},{code:"XAF",flag:"🇨🇩",label:"FCFA Central"},{code:"NGN",flag:"🇳🇬",label:"Naira"},{code:"USD",flag:"🇺🇸",label:"Dollar US"},{code:"EUR",flag:"🇪🇺",label:"Euro"}]
@@ -18,7 +18,7 @@ const MOCK_TX=[
 
 export default function Wallet() {
   const { user } = useAuthStore()
-  const [devise, setDevise] = useState("KMF")
+  const { devise, setDevise } = useDeviseStore()
   const [period, setPeriod] = useState("Mois")
   const [txType, setTxType] = useState("Tous types")
   const [balance,setBalance] = useState(null)
