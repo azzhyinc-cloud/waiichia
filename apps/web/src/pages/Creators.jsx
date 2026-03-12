@@ -1,155 +1,72 @@
-import { useState, useEffect } from 'react'
-import { usePageStore, useAuthStore } from '../stores/index.js'
-import api from '../services/api.js'
+import { useState, useEffect } from "react"
+import { usePageStore } from "../stores/index.js"
+import api from "../services/api.js"
 
-const formatK = (n) => {
-  if (!n) return '0'
-  if (n >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M'
-  if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'K'
-  return n.toString()
-}
-
-const TYPES = [['all','Tous'],['artist','Artiste'],['media','Media'],['label','Label'],['influencer','Influenceur'],['entrepreneur','Entrepreneur'],['pro','Pro']]
-
-const GRADIENTS = [
-  'linear-gradient(135deg,#f5a623,#e74c3c)',
-  'linear-gradient(135deg,#6c63ff,#3b82f6)',
-  'linear-gradient(135deg,#a855f7,#6c63ff)',
-  'linear-gradient(135deg,#10b981,#3b82f6)',
-  'linear-gradient(135deg,#f97316,#ef4444)',
-  'linear-gradient(135deg,#e11d48,#f97316)',
-  'linear-gradient(135deg,#0ea5e9,#6c63ff)',
-  'linear-gradient(135deg,#f59e0b,#10b981)',
-]
-
-const TYPE_LABELS = {
-  artist: 'ARTISTE', media: 'MEDIA', label: 'LABEL',
-  influencer: 'INFLUENCEUR', entrepreneur: 'ENTREPRENEUR', pro: 'PRO', listener: 'MEMBRE'
-}
-
-const FLAGS = { KM: '🇰🇲', FR: '🇫🇷', NG: '🇳🇬', SN: '🇸🇳', CI: '🇨🇮', CM: '🇨🇲', MA: '🇲🇦', TZ: '🇹🇿' }
+const TYPES=["Tous","Artiste","Media","Label","Influenceur","Entrepreneur","Pro"]
+const PAYS=["🌍 Tous pays","🇰🇲 Comores","🇲🇬 Madagascar","🇳🇬 Nigeria","🇨🇮 Côte d'Ivoire","🇸🇳 Sénégal"]
+const BGS=["linear-gradient(135deg,#f5a623,#e63946)","linear-gradient(135deg,#2dc653,#1060a0)","linear-gradient(135deg,#9b59f5,#4d9fff)","linear-gradient(135deg,#ff6b35,#cc4411)","linear-gradient(135deg,#f5a623,#2dc653)","linear-gradient(135deg,#e63946,#9b59f5)"]
+const AVAS=["KO","DJ","FK","NP","WB","OS","KM","EM","MF","AS","WA","RC"]
+const MOCK=Array.from({length:18},(_,i)=>({id:`c${i}`,display_name:["Kolo Officiel","DJ Comoros","Fatima K","Nadjib Pro","Waiichia Beats","Omar Said","Studio KM","East Mix","Moroni Flow","Afrika Sound","Wanzani Records","Comoros Creative"][i%12],username:["kolo","djcomoros","fatimak","nadjib","wbeats","omar","studiokm","eastmix","moroniflow","afrikasound","wanzani","comocreate"][i%12],profile_type:["artist","artist","artist","artist","label","media","artist","artist","artist","label","label","artist"][i%12],fans_count:Math.floor(Math.random()*50000+500),country:["KM","KM","KM","KM","MG","NG","KM","KM","KM","CI","SN","KM"][i%12],is_verified:i%3===0,avatar_url:null,tracks_count:Math.floor(Math.random()*80+5)}))
+const fmtK=n=>n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
+const FLAGS={"KM":"🇰🇲","MG":"🇲🇬","NG":"🇳🇬","CI":"🇨🇮","SN":"🇸🇳","TZ":"🇹🇿","RW":"🇷🇼"}
 
 export default function Creators() {
   const { setPage } = usePageStore()
-  const { user } = useAuthStore()
-  const [profiles, setProfiles] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [type, setType] = useState('all')
-  const [search, setSearch] = useState('')
-  const [following, setFollowing] = useState({})
+  const [type,setType]=useState("Tous")
+  const [pays,setPays]=useState("")
+  const [creators,setCreators]=useState([])
+  const [loading,setLoading]=useState(true)
+  const [followed,setFollowed]=useState({})
 
-  useEffect(() => {
-    setLoading(true)
-    const q = new URLSearchParams()
-    q.set('limit', '50')
-    if (type !== 'all') q.set('type', type)
-    if (search) q.set('search', search)
-    fetch(import.meta.env.VITE_API_URL + '/api/profiles/?' + q.toString())
-      .then(r => r.json())
-      .then(d => { setProfiles(d.profiles || []); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [type, search])
+  useEffect(()=>{
+    api.profiles.list("?limit=50")
+      .then(d=>setCreators(d.profiles?.length?d.profiles:MOCK))
+      .catch(()=>setCreators(MOCK))
+      .finally(()=>setLoading(false))
+  },[])
 
-  const handleFollow = async (e, username, idx) => {
-    e.stopPropagation()
-    if (!user) return setPage('login')
-    try {
-      if (following[username]) {
-        await api.profiles.unfollow(username)
-        setFollowing(f => ({...f, [username]: false}))
-      } else {
-        await api.profiles.follow(username)
-        setFollowing(f => ({...f, [username]: true}))
-      }
-    } catch(err) {}
-  }
+  const filtered=creators.filter(c=>{
+    if(type!=="Tous"&&c.profile_type!==type.toLowerCase())return false
+    return true
+  })
 
-  const initials = (p) => {
-    const name = p.display_name || p.username || 'XX'
-    return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)
-  }
-
-  return (
-    <div style={{padding:'24px 20px 100px'}}>
-      <h1 style={{fontSize:28,fontWeight:900,margin:'0 0 20px'}}>Createurs Waiichia</h1>
-
-      {/* FILTRES TYPE */}
-      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
-        {TYPES.map(([v,l]) => (
-          <button key={v} onClick={() => setType(v)}
-            style={{padding:'7px 18px',borderRadius:99,border:'1px solid var(--border)',cursor:'pointer',fontSize:13,fontWeight:600,
-              background:type===v?'var(--gold)':'var(--card)',
-              color:type===v?'#000':'var(--text2)'}}>
-            {l}
-          </button>
-        ))}
+  return(
+    <div style={{paddingBottom:40}}>
+      <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:800,marginBottom:20}}>⭐ Créateurs Waiichia</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:24,alignItems:"center"}}>
+        {TYPES.map(t=>(<button key={t} onClick={()=>setType(t)} style={{padding:"6px 14px",borderRadius:50,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .18s",fontFamily:"Plus Jakarta Sans,sans-serif",borderColor:type===t?"var(--gold)":"var(--border)",background:type===t?"var(--gold)":"var(--card)",color:type===t?"#000":"var(--text2)"}}>{t}</button>))}
+        <select value={pays} onChange={e=>setPays(e.target.value)} style={{padding:"7px 12px",borderRadius:"var(--radius-sm)",border:"1px solid var(--border)",background:"var(--card)",color:"var(--text)",fontSize:12,cursor:"pointer",outline:"none"}}>
+          {PAYS.map(p=><option key={p} value={p.includes("Tous")?"":p}>{p}</option>)}
+        </select>
       </div>
-
-      {/* SEARCH + PAYS */}
-      <div style={{display:'flex',gap:10,marginBottom:24}}>
-        <div style={{position:'relative',flex:1}}>
-          <span style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--text3)'}}>🔍</span>
-          <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="Rechercher un createur..."
-            style={{width:'100%',background:'var(--card)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px 10px 36px',color:'var(--text)',fontSize:14,boxSizing:'border-box'}}/>
-        </div>
-      </div>
-
-      {/* GRILLE */}
-      {loading ? (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>
-          {[...Array(8)].map((_,i) => <div key={i} className="skeleton" style={{height:260,borderRadius:16}}/>)}
-        </div>
-      ) : profiles.length === 0 ? (
-        <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-          <div style={{fontSize:48,marginBottom:12}}>👤</div>
-          <p>Aucun createur trouve</p>
-        </div>
-      ) : (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:16}}>
-          {profiles.map((p, idx) => (
-            <div key={p.id} onClick={() => setPage('profile', {profileUsername: p.username})}
-              style={{background:'var(--card)',borderRadius:16,border:'1px solid var(--border)',padding:'24px 16px 16px',cursor:'pointer',textAlign:'center',transition:'transform 0.2s, border-color 0.2s'}}>
-              
-              {/* AVATAR */}
-              <div style={{width:96,height:96,borderRadius:'50%',margin:'0 auto 12px',background:p.avatar_url?'var(--card2)':GRADIENTS[idx%GRADIENTS.length],display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:800,color:'#fff',overflow:'hidden',position:'relative'}}>
-                {p.avatar_url
-                  ? <img src={p.avatar_url} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-                  : initials(p)
-                }
-                {p.is_verified && (
-                  <div style={{position:'absolute',bottom:4,right:4,width:20,height:20,borderRadius:'50%',background:'var(--primary)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10}}>✓</div>
-                )}
-              </div>
-
-              {/* TYPE */}
-              <div style={{fontSize:10,fontWeight:700,letterSpacing:2,color:'var(--text3)',marginBottom:6,textTransform:'uppercase'}}>
-                {TYPE_LABELS[p.profile_type] || 'MEMBRE'}
-              </div>
-
-              {/* NOM */}
-              <div style={{fontWeight:800,fontSize:16,marginBottom:6,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                {p.display_name || p.username}
-              </div>
-
-              {/* FANS + PAYS */}
-              <div style={{fontSize:13,color:'var(--text2)',marginBottom:16}}>
-                <strong style={{color:'var(--text)'}}>{formatK(p.followers_count||0)}</strong> fans
-                {p.country && <span style={{marginLeft:6}}>{FLAGS[p.country] || '🌍'}</span>}
-              </div>
-
-              {/* BOUTON SUIVRE */}
-              <button onClick={(e) => handleFollow(e, p.username, idx)}
-                style={{width:'100%',padding:'9px',borderRadius:8,border:`2px solid ${following[p.username]?'var(--border)':'var(--gold)'}`,
-                  background:following[p.username]?'transparent':'transparent',
-                  color:following[p.username]?'var(--text2)':'var(--gold)',
-                  cursor:'pointer',fontWeight:700,fontSize:14,transition:'all 0.2s'}}>
-                {following[p.username] ? 'Abonne' : 'Suivre'}
-              </button>
-            </div>
-          ))}
+      {loading?<Skel/>:(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
+          {filtered.map((c,i)=><CreatorCard key={c.id} creator={c} bg={BGS[i%BGS.length]} ava={AVAS[i%AVAS.length]} followed={!!followed[c.id]} onFollow={()=>setFollowed(p=>({...p,[c.id]:!p[c.id]}))} onProfile={()=>setPage("profile",{profileUsername:c.username})} fmtK={fmtK} flag={FLAGS[c.country]||"🌍"}/>)}
+          {!filtered.length&&<div style={{color:"var(--text3)",fontSize:13,padding:"40px 0",gridColumn:"1/-1",textAlign:"center"}}>Aucun créateur dans cette catégorie</div>}
         </div>
       )}
     </div>
   )
 }
+
+function CreatorCard({creator:c,bg,ava,followed,onFollow,onProfile,fmtK,flag}){
+  const[hov,setHov]=useState(false)
+  const typeLabel={artist:"Artiste",label:"Label",media:"Media",influencer:"Influenceur",entrepreneur:"Entrepreneur",pro:"Pro"}[c.profile_type]||"Artiste"
+  return(
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{background:"var(--card)",border:`1px solid ${hov?"rgba(245,166,35,.4)":"var(--border)"}`,borderRadius:"var(--radius)",padding:"18px 14px",textAlign:"center",transition:"all .25s",transform:hov?"translateY(-4px)":"none",boxShadow:hov?"0 12px 30px var(--shadow)":"none",cursor:"pointer"}}>
+      <div style={{position:"relative",width:64,height:64,margin:"0 auto 10px"}} onClick={onProfile}>
+        <div style={{width:64,height:64,borderRadius:"50%",background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,color:"#000",overflow:"hidden"}}>
+          {c.avatar_url?<img src={c.avatar_url} alt={c.display_name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:ava}
+        </div>
+        {c.is_verified&&<div style={{position:"absolute",bottom:0,right:0,width:18,height:18,borderRadius:"50%",background:"var(--blue)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#fff",border:"2px solid var(--card)"}}>✓</div>}
+      </div>
+      <div style={{fontSize:10,color:"var(--text3)",fontFamily:"Space Mono,monospace",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>{typeLabel}</div>
+      <div style={{fontWeight:700,fontSize:13,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} onClick={onProfile}>{c.display_name}</div>
+      <div style={{fontSize:11.5,color:"var(--text2)",marginBottom:10}}>{fmtK(c.fans_count)} fans · {flag}</div>
+      <button onClick={onFollow} style={{width:"100%",padding:"7px",borderRadius:50,fontSize:12,fontWeight:700,cursor:"pointer",transition:"all .2s",fontFamily:"Plus Jakarta Sans,sans-serif",border:followed?"none":"1px solid var(--border)",background:followed?"var(--gold)":"transparent",color:followed?"#000":"var(--text2)"}}>
+        {followed?"✓ Suivi":"Suivre"}
+      </button>
+    </div>
+  )
+}
+function Skel(){return(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>{[...Array(12)].map((_,i)=><div key={i} style={{height:180,background:"var(--card)",borderRadius:"var(--radius)",border:"1px solid var(--border)",animation:"shimmer 1.5s infinite"}}/>)}</div>)}

@@ -1,235 +1,104 @@
-import { useState, useEffect } from 'react'
-import { usePlayerStore, usePageStore, useAuthStore } from '../stores/index.js'
-import api from '../services/api.js'
+import { useState, useEffect } from "react"
+import { usePlayerStore } from "../stores/index.js"
+import api from "../services/api.js"
 
-const formatK = (n) => {
-  if (!n) return '0'
-  if (n >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M'
-  if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'K'
-  return n.toString()
-}
-
-const FLAGS = { KM:'🇰🇲', FR:'🇫🇷', NG:'🇳🇬', SN:'🇸🇳', CI:'🇨🇮', MA:'🇲🇦', TZ:'🇹🇿', MG:'🇲🇬', RW:'🇷🇼', CD:'🇨🇩' }
-const PAYS = [['','Tous les pays'],['KM','Comores'],['FR','France'],['NG','Nigeria'],['SN','Senegal'],['MG','Madagascar'],['RW','Rwanda']]
-const TYPES = [['','Tout'],['radio_live','Radio'],['emission','Emission']]
-const LANGUES = [['','Toutes'],['fr','Francais'],['ar','Arabe'],['sw','Swahili'],['km','Comorien'],['en','Anglais']]
-const CATS = [['','Toutes'],['Twarab & Varie','Twarab'],['Actualites','Actualites'],['Business','Business'],['Musique','Musique'],['Religion','Religion'],['Sport','Sport']]
+const PAYS=["Tous les pays","🇰🇲 Comores","🇲🇬 Madagascar","🇹🇿 Tanzanie","🇷🇼 Rwanda","🇨🇮 Côte d'Ivoire","🇳🇬 Nigeria","🇨🇩 RD Congo","🇨🇬 Congo Brazzaville","🇸🇳 Sénégal","🇬🇭 Ghana"]
+const TYPES=["Tout","📻 Radio","🎪 Événement Live","📺 Émission","🎙️ Podcast Live"]
+const LANGS=["Toutes","Shikomori","Français","Swahili","Anglais","Kinyarwanda","Malagasy","Yoruba"]
+const BGS=["linear-gradient(135deg,#f5a623,#e63946)","linear-gradient(135deg,#2dc653,#1060a0)","linear-gradient(135deg,#9b59f5,#4d9fff)","linear-gradient(135deg,#ff6b35,#cc4411)","linear-gradient(135deg,#f5a623,#2dc653)"]
+const MOCK=[
+  {id:"r1",name:"Radio Comores Nationale",station:"RCN 88.7 FM",listeners:1240,country:"KM",language:"Shikomori/Français",category:"radio",stream_url:null,logo_url:null,is_live:true},
+  {id:"r2",name:"Waiichia Live Radio",station:"Waiichia FM",listeners:892,country:"KM",language:"Français",category:"radio",stream_url:null,logo_url:null,is_live:true},
+  {id:"r3",name:"Comoros Hip-Hop Night",station:"Event Live",listeners:3400,country:"KM",language:"Français",category:"event",stream_url:null,logo_url:null,is_live:true},
+  {id:"r4",name:"Radio Madagascar Inter",station:"RMI 102.3",listeners:2100,country:"MG",language:"Malagasy/Français",category:"radio",stream_url:null,logo_url:null,is_live:false},
+  {id:"r5",name:"Afrika Podcast Live",station:"Podcast Stream",listeners:670,country:"NG",language:"Anglais",category:"podcast",stream_url:null,logo_url:null,is_live:true},
+]
+const fmtK=n=>n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
+const FLAGS={"KM":"🇰🇲","MG":"🇲🇬","NG":"🇳🇬","CI":"🇨🇮","SN":"🇸🇳","TZ":"🇹🇿","RW":"🇷🇼","CD":"🇨🇩","CG":"🇨🇬","GH":"🇬🇭"}
 
 export default function Radio() {
-  const { toggle, currentTrack, isPlaying } = usePlayerStore()
-  const { setPage } = usePageStore()
-  const { user } = useAuthStore()
-  const [stations, setStations] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [pays, setPays] = useState('')
-  const [type, setType] = useState('')
-  const [langue, setLangue] = useState('')
-  const [cat, setCat] = useState('')
-  const [search, setSearch] = useState('')
-  const [reactions, setReactions] = useState({})
-  const [comments, setComments] = useState({})
-  const [showComments, setShowComments] = useState(null)
-  const [commentText, setCommentText] = useState('')
+  const { play, currentTrack, isPlaying, pause, resume } = usePlayerStore()
+  const [pays,setPays]=useState("")
+  const [type,setType]=useState("Tout")
+  const [lang,setLang]=useState("")
+  const [stations,setStations]=useState([])
+  const [loading,setLoading]=useState(true)
 
-  useEffect(() => {
-    setLoading(true)
-    const q = new URLSearchParams()
-    if (type) q.set('type', type)
-    q.set('limit', '40')
-    if (pays) q.set('country', pays)
-    if (langue) q.set('language', langue)
-    if (search) q.set('search', search)
-    if (!type) {
-      // Charger radio_live ET emission
-      Promise.all([
-        api.tracks.list('?' + new URLSearchParams({...Object.fromEntries(q), type:'radio_live'}).toString()),
-        api.tracks.list('?' + new URLSearchParams({...Object.fromEntries(q), type:'emission'}).toString()),
-      ]).then(([r1, r2]) => {
-        setStations([...(r1.tracks||[]), ...(r2.tracks||[])])
-        setLoading(false)
-      }).catch(() => setLoading(false))
-    } else {
-      api.tracks.list('?' + q.toString()).then(res => {
-        setStations(res.tracks || [])
-        setLoading(false)
-      }).catch(() => setLoading(false))
-    }
-  }, [pays, type, langue, search])
+  useEffect(()=>{
+    api.radio.list("?limit=30")
+      .then(d=>setStations(d.stations?.length?d.stations:MOCK))
+      .catch(()=>setStations(MOCK))
+      .finally(()=>setLoading(false))
+  },[])
 
-  const handleReact = async (stationId, emoji) => {
-    try {
-      await api.social.react({ target_type:'track', target_id:stationId, emoji })
-      const r = await api.social.reactions('track', stationId)
-      setReactions(prev => ({...prev, [stationId]: r.reactions||{}}))
-    } catch(e) {}
+  const filtered=stations.filter(s=>{
+    if(pays&&!s.country?.includes(pays.split(" ").pop().replace(/[^A-Z🇦-🇿]/g,"")))return false
+    if(type!=="Tout"&&!s.category?.toLowerCase().includes(type.replace(/[^a-z]/gi,"").toLowerCase().slice(0,5)))return false
+    if(lang&&lang!=="Toutes"&&!s.language?.includes(lang))return false
+    return true
+  })
+  const live=filtered.filter(s=>s.is_live!==false)
+  const offline=filtered.filter(s=>s.is_live===false)
+
+  const handlePlay=s=>{
+    if(currentTrack?.title===s.name){isPlaying?pause():resume()}
+    else play({id:s.id,title:s.name,artist:s.station,profiles:{display_name:s.station},audio_url_128:s.stream_url||""})
   }
 
-  const loadComments = async (id) => {
-    const r = await api.social.comments('track', id)
-    setComments(prev => ({...prev, [id]: r.comments||[]}))
-  }
-
-  const toggleComments = async (id) => {
-    if (showComments === id) { setShowComments(null); return }
-    setShowComments(id)
-    await loadComments(id)
-  }
-
-  const sendComment = async (stationId) => {
-    if (!commentText.trim() || !user) return
-    await api.social.comment({ target_type:'track', target_id:stationId, content:commentText })
-    setCommentText('')
-    loadComments(stationId)
-  }
-
-  const sel = {background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',color:'var(--text)',fontSize:13,cursor:'pointer',flex:1}
-
-  return (
-    <div style={{padding:'24px 20px 100px'}}>
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:24}}>
-        <div style={{fontSize:32}}>📻</div>
-        <div>
-          <h1 style={{fontSize:24,fontWeight:900,margin:0}}>Radio et Emissions Live</h1>
-          <p style={{color:'var(--text2)',fontSize:13,margin:0}}>Ecoutez en direct depuis toute l Afrique</p>
-        </div>
+  return(
+    <div style={{paddingBottom:40}}>
+      <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:800,marginBottom:20}}>📻 Radio &amp; Émissions Live</div>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:24,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:16}}>
+        {[{label:"🌍 Pays",val:pays,set:setPays,opts:PAYS},{label:"📡 Type",val:type,set:setType,opts:TYPES},{label:"🗣️ Langue",val:lang,set:setLang,opts:LANGS}].map(f=>(
+          <div key={f.label} style={{display:"flex",flexDirection:"column",gap:6}}>
+            <label style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace",textTransform:"uppercase",letterSpacing:1}}>{f.label}</label>
+            <select value={f.val} onChange={e=>f.set(e.target.value)} style={{padding:"7px 12px",borderRadius:"var(--radius-sm)",border:"1px solid var(--border)",background:"var(--bg2)",color:"var(--text)",fontSize:12,cursor:"pointer",outline:"none"}}>
+              {f.opts.map(o=><option key={o} value={o.includes("Tous")||o.includes("Tout")||o.includes("Toutes")?"":o}>{o}</option>)}
+            </select>
+          </div>
+        ))}
       </div>
-
-      {/* FILTRES */}
-      <div style={{background:'var(--card)',borderRadius:12,padding:16,marginBottom:20,border:'1px solid var(--border)'}}>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:10}}>
-          <div>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:6}}>🌍 PAYS</div>
-            <select style={sel} value={pays} onChange={e=>setPays(e.target.value)}>
-              {PAYS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:6}}>📡 TYPE</div>
-            <select style={sel} value={type} onChange={e=>setType(e.target.value)}>
-              {TYPES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:6}}>💬 LANGUE</div>
-            <select style={sel} value={langue} onChange={e=>setLangue(e.target.value)}>
-              {LANGUES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
+      {live.length>0&&<><Hdr title="🔴 En Direct" right={<div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--text2)"}}><div style={{width:7,height:7,borderRadius:"50%",background:"var(--red)",animation:"live-pulse 1.4s infinite"}}/>Diffusion en cours</div>}/>
+        {loading?<Skel/>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14,marginBottom:28}}>
+          {live.map((s,i)=><StationCard key={s.id} station={s} bg={BGS[i%BGS.length]} flag={FLAGS[s.country]||"🌍"} isCurrent={currentTrack?.title===s.name} isPlaying={isPlaying&&currentTrack?.title===s.name} onPlay={()=>handlePlay(s)} fmtK={fmtK}/>)}
+        </div>}
+      </>}
+      {offline.length>0&&<><Hdr title="📡 Prochainement en direct"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+          {offline.map((s,i)=><StationCard key={s.id} station={s} bg={BGS[i%BGS.length]} flag={FLAGS[s.country]||"🌍"} offline fmtK={fmtK}/>)}
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-          <div>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:6}}>🎵 CATEGORIE</div>
-            <select style={sel} value={cat} onChange={e=>setCat(e.target.value)}>
-              {CATS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:6}}>🔍 RECHERCHE</div>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nom de la radio..."
-              style={{...sel,width:'100%',boxSizing:'border-box'}}/>
-          </div>
-        </div>
-      </div>
-
-      {/* BADGE LIVE */}
-      {!loading && stations.length > 0 && (
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
-          <div style={{display:'flex',alignItems:'center',gap:6,background:'#e74c3c',borderRadius:99,padding:'5px 14px'}}>
-            <div style={{width:8,height:8,borderRadius:'50%',background:'#fff',animation:'pulse 1s infinite'}}/>
-            <span style={{color:'#fff',fontWeight:700,fontSize:13}}>LIVE</span>
-          </div>
-          <span style={{color:'var(--text2)',fontSize:13}}>{stations.length} diffusions actives</span>
-        </div>
-      )}
-
-      {/* GRILLE STATIONS */}
-      {loading ? (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:16}}>
-          {[...Array(6)].map((_,i) => <div key={i} className="skeleton" style={{height:180,borderRadius:12}}/>)}
-        </div>
-      ) : stations.length === 0 ? (
-        <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-          <div style={{fontSize:48,marginBottom:12}}>📻</div>
-          <h3 style={{marginBottom:8}}>Aucune radio disponible</h3>
-          <p style={{fontSize:14,marginBottom:24}}>Soyez le premier a diffuser une radio live</p>
-          <button onClick={()=>setPage('upload')} style={{background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer',fontWeight:600}}>
-            Creer une radio
-          </button>
-        </div>
-      ) : (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:16}}>
-          {stations.map(s => {
-            const isActive = currentTrack?.id === s.id
-            const rxns = reactions[s.id] || {}
-            return (
-              <div key={s.id} style={{background:'var(--card)',borderRadius:14,border:`1px solid ${isActive?'var(--primary)':'var(--border)'}`,overflow:'hidden'}}>
-                <div style={{display:'flex',gap:12,padding:16,alignItems:'flex-start'}}>
-                  {/* LOGO */}
-                  <div style={{width:64,height:64,borderRadius:10,background:'var(--card2)',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28}}>
-                    {s.cover_url ? <img src={s.cover_url} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : '📻'}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:800,fontSize:16,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.title}</div>
-                    <div style={{fontSize:12,color:'var(--text2)',marginBottom:6}}>
-                      {s.profiles?.display_name} · {s.genre}
-                    </div>
-                    <div style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'var(--text3)'}}>
-                      <span>🎧 {formatK(s.play_count)} auditeurs</span>
-                      {s.country && <span>{FLAGS[s.country]||'🌍'}</span>}
-                      {s.language && <span style={{padding:'1px 6px',borderRadius:4,background:'var(--card2)',fontSize:11}}>{s.language}</span>}
-                    </div>
-                  </div>
-                  {/* BOUTON LIVE */}
-                  <button onClick={()=>toggle(s)}
-                    style={{background:isActive&&isPlaying?'#e74c3c':'var(--gold)',border:'none',color:isActive&&isPlaying?'#fff':'#000',borderRadius:8,padding:'8px 14px',cursor:'pointer',fontWeight:800,fontSize:13,flexShrink:0,display:'flex',alignItems:'center',gap:6}}>
-                    {isActive && isPlaying ? '⏸' : '▶'} {isActive&&isPlaying?'En cours':'Live'}
-                  </button>
-                </div>
-                {/* REACTIONS */}
-                <div style={{borderTop:'1px solid var(--border)',padding:'10px 16px',display:'flex',gap:12,alignItems:'center'}}>
-                  {['❤️','🔥','😮'].map(e => (
-                    <button key={e} onClick={()=>handleReact(s.id,e)}
-                      style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'var(--text2)',display:'flex',alignItems:'center',gap:4,padding:'4px 6px',borderRadius:6}}>
-                      {e} <span>{formatK(rxns[e]||0)}</span>
-                    </button>
-                  ))}
-                  <button onClick={()=>toggleComments(s.id)}
-                    style={{background:'none',border:'none',cursor:'pointer',fontSize:13,color:showComments===s.id?'var(--primary)':'var(--text2)',display:'flex',alignItems:'center',gap:4,padding:'4px 6px',borderRadius:6}}>
-                    💬 {(comments[s.id]||[]).length||0}
-                  </button>
-                  <button onClick={()=>navigator.share&&navigator.share({title:s.title,url:window.location.href})}
-                    style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',fontSize:12,color:'var(--text2)',display:'flex',alignItems:'center',gap:4}}>
-                    📤 Partager
-                  </button>
-                </div>
-                {showComments===s.id && (
-                  <div style={{padding:'12px 16px',borderTop:'1px solid var(--border)',background:'var(--card2)'}}>
-                    {(comments[s.id]||[]).map(cm => (
-                      <div key={cm.id} style={{fontSize:12,marginBottom:8,display:'flex',gap:8}}>
-                        <strong style={{color:'var(--gold)'}}>{cm.profiles?.username}</strong>
-                        <span style={{color:'var(--text2)'}}>{cm.content}</span>
-                      </div>
-                    ))}
-                    {(comments[s.id]||[]).length===0 && <div style={{fontSize:11,color:'var(--text3)',marginBottom:8}}>Aucun commentaire</div>}
-                    {user && (
-                      <div style={{display:'flex',gap:6,marginTop:6}}>
-                        <input value={commentText} onChange={e=>setCommentText(e.target.value)}
-                          onKeyDown={e=>e.key==='Enter'&&sendComment(s.id)}
-                          placeholder="Ajouter un commentaire..."
-                          style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,padding:'6px 10px',color:'var(--text)',fontSize:12}}/>
-                        <button onClick={()=>sendComment(s.id)}
-                          style={{background:'var(--primary)',border:'none',color:'#fff',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontSize:12}}>
-                          Envoyer
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      </>}
+      {!filtered.length&&!loading&&<div style={{textAlign:"center",color:"var(--text3)",padding:60,fontSize:14}}>Aucune station avec ces filtres</div>}
     </div>
   )
 }
+
+function StationCard({station:s,bg,flag,isCurrent,isPlaying,onPlay,offline,fmtK}){
+  const[hov,setHov]=useState(false)
+  return(
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{background:"var(--card)",border:`1px solid ${isCurrent?"var(--gold)":hov?"rgba(245,166,35,.3)":"var(--border)"}`,borderRadius:"var(--radius)",overflow:"hidden",transition:"all .25s",boxShadow:isCurrent?"0 0 0 2px rgba(245,166,35,.2)":"none"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,padding:16}}>
+        <div style={{width:56,height:56,borderRadius:12,background:bg,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:"0 4px 14px rgba(0,0,0,.3)",position:"relative",overflow:"hidden"}}>
+          {s.logo_url?<img src={s.logo_url} alt={s.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"📻"}
+          {s.is_live&&!offline&&<div style={{position:"absolute",bottom:0,left:0,right:0,background:"var(--red)",fontSize:8,fontFamily:"Space Mono,monospace",fontWeight:700,textAlign:"center",padding:"2px 0",color:"#fff",letterSpacing:1}}>LIVE</div>}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:600,fontSize:13.5,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+          <div style={{fontSize:11.5,color:"var(--text2)",marginBottom:4}}>{s.station}</div>
+          <div style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace"}}>🎧 {fmtK(s.listeners)} · {flag} · {s.language?.split("/")[0]}</div>
+        </div>
+        {!offline&&<button onClick={onPlay} style={{padding:"8px 16px",borderRadius:50,border:"none",flexShrink:0,background:isPlaying?"var(--red)":isCurrent?"var(--gold)":"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif",transition:"all .2s"}}>
+          {isPlaying?"⏸ Pause":"▶ Live"}
+        </button>}
+        {offline&&<span style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace",flexShrink:0}}>⏰ Bientôt</span>}
+      </div>
+      <div style={{display:"flex",gap:5,padding:"8px 16px",borderTop:"1px solid var(--border)"}}>
+        {["❤️","🔥","🫶","👏"].map(e=>(<button key={e} style={{display:"flex",alignItems:"center",gap:3,padding:"4px 9px",borderRadius:20,border:"1px solid var(--border)",background:"var(--card2)",fontSize:12,cursor:"pointer",color:"var(--text2)"}} onMouseEnter={ev=>{ev.currentTarget.style.borderColor="var(--gold)"}} onMouseLeave={ev=>{ev.currentTarget.style.borderColor="var(--border)"}}>
+          {e}<span>{Math.floor(Math.random()*400+10)}</span>
+        </button>))}
+      </div>
+    </div>
+  )
+}
+function Hdr({title,right}){return(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}><div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:700,display:"flex",alignItems:"center",gap:8}}><span style={{width:3,height:18,background:"linear-gradient(180deg,var(--red),var(--gold))",borderRadius:3,display:"inline-block"}}/>{title}</div>{right}</div>)}
+function Skel(){return(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14,marginBottom:28}}>{[...Array(4)].map((_,i)=><div key={i} style={{height:100,background:"var(--card)",borderRadius:"var(--radius)",border:"1px solid var(--border)",animation:"shimmer 1.5s infinite"}}/>)}</div>)}
