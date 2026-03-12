@@ -1,109 +1,107 @@
-import { useState, useEffect } from 'react'
-import { usePlayerStore, usePageStore, useAuthStore } from '../stores/index.js'
-import api from '../services/api.js'
+import { useState, useEffect } from "react"
+import { usePlayerStore } from "../stores/index.js"
+import { usePageStore } from "../stores/index.js"
+import api from "../services/api.js"
 
-const formatK = (n) => {
-  if (!n) return '0'
-  if (n >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + 'M'
-  if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'K'
-  return n.toString()
-}
-
-const formatDate = (d) => {
-  const diff = Date.now() - new Date(d).getTime()
-  const min = Math.floor(diff/60000)
-  const h = Math.floor(diff/3600000)
-  const day = Math.floor(diff/86400000)
-  if (min < 60) return min + ' min'
-  if (h < 24) return h + 'h'
-  return day + 'j'
-}
+const TABS=["Tous","Musique","Podcast","Émission","Événements"]
+const BGS=["linear-gradient(135deg,#f5a623,#e63946)","linear-gradient(135deg,#2dc653,#0a9e4a)","linear-gradient(135deg,#4d9fff,#1a6fcc)","linear-gradient(135deg,#9b59f5,#6d3db5)","linear-gradient(135deg,#ff6b35,#cc4411)","linear-gradient(135deg,#f5a623,#cc7700)"]
+const AVAS=["KO","DJ","FK","NP","WB","OS","KM","EM"]
+const MOCK=Array.from({length:8},(_,i)=>({id:`f${i}`,title:["Twarab ya Komori","Moroni Flow","Afrika Rising","Pumzika Beat","Vibrate Afrika","Zanzibar Night","Kolo Sound","Comoros Pride"][i],profiles:{display_name:["Kolo Officiel","DJ Comoros","Fatima K","Nadjib Pro","Waiichia Beats","Omar Said","Studio KM","East Mix"][i],username:["kolo","djcomoros","fatimak","nadjib","wbeats","omar","studiokm","eastmix"][i]},genre:["Twarab","Afrobeats","Amapiano","Sebene","Gospel","RnB Afro","Afrotrap","Jazz Afro"][i],country:["KM","KM","MG","KM","NG","KM","CI","KM"][i],type:"music",cover_url:null,access_type:i%3===0?"premium":"free",sale_price:i%3===0?2500:0}))
+const rnd=(a,b)=>Math.floor(Math.random()*(b-a)+a)
+const fmtK=n=>n>=1000?(n/1000).toFixed(1)+"K":String(n)
+const FLAGS={"KM":"🇰🇲","MG":"🇲🇬","NG":"🇳🇬","CI":"🇨🇮","SN":"🇸🇳","TZ":"🇹🇿"}
 
 export default function Feed() {
   const { toggle, currentTrack, isPlaying } = usePlayerStore()
-  const { user } = useAuthStore()
   const { setPage } = usePageStore()
-  const [feed, setFeed] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [tab,setTab]=useState("Tous")
+  const [posts,setPosts]=useState([])
+  const [loading,setLoading]=useState(true)
+  const [reacts,setReacts]=useState({})
 
-  useEffect(() => {
-    if (!user) { setLoading(false); return }
-    api.social.feed().then(res => {
-      setFeed(res.feed || [])
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [user])
+  useEffect(()=>{
+    api.tracks.list("?limit=20")
+      .then(d=>setPosts(d.tracks?.length?d.tracks:MOCK))
+      .catch(()=>setPosts(MOCK))
+      .finally(()=>setLoading(false))
+  },[])
 
-  if (!user) return (
-    <div style={{textAlign:'center',padding:80}}>
-      <div style={{fontSize:56,marginBottom:16}}>⚡</div>
-      <h2 style={{marginBottom:8}}>Mon Activite</h2>
-      <p style={{color:'var(--text2)',marginBottom:24}}>Connectez-vous pour voir les sons des artistes que vous suivez</p>
-      <div style={{display:'flex',gap:12,justifyContent:'center'}}>
-        <button onClick={()=>setPage('login')} style={{background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer',fontWeight:600}}>Se connecter</button>
-        <button onClick={()=>setPage('register')} style={{background:'var(--card)',border:'1px solid var(--border)',color:'var(--text)',padding:'10px 24px',borderRadius:8,cursor:'pointer',fontWeight:600}}>S inscrire</button>
+  const react=(id,r)=>setReacts(p=>({...p,[id]:{...p[id],[r]:((p[id]?.[r]||rnd(10,500))+1)}}))
+
+  return(
+    <div style={{paddingBottom:40}}>
+      <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:800,marginBottom:18}}>📡 Fil d&apos;actualité</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:22}}>
+        {TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"7px 16px",borderRadius:50,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .18s",fontFamily:"Plus Jakarta Sans,sans-serif",borderColor:tab===t?"var(--gold)":"var(--border)",background:tab===t?"var(--gold)":"var(--card)",color:tab===t?"#000":"var(--text2)"}}>{t}</button>)}
       </div>
+      {loading
+        ?[...Array(3)].map((_,i)=><div key={i} style={{height:180,background:"var(--card)",borderRadius:"var(--radius)",border:"1px solid var(--border)",marginBottom:14,animation:"shimmer 1.5s infinite"}}/>)
+        :posts.map((t,i)=><FeedPost key={t.id} post={t} idx={i} bg={BGS[i%BGS.length]} ava={AVAS[i%AVAS.length]} flag={FLAGS[t.profiles?.country||t.country]||"🌍"} isPlaying={isPlaying&&currentTrack?.id===t.id} onPlay={()=>toggle(t)} reacts={reacts[t.id]||{}} onReact={r=>react(t.id,r)} onProfile={()=>setPage("profile",{profileUsername:t.profiles?.username})} fmtK={fmtK} rnd={rnd}/>)
+      }
     </div>
   )
+}
 
-  return (
-    <div style={{maxWidth:700,margin:'0 auto',padding:'24px 20px 100px'}}>
-      <div style={{marginBottom:24}}>
-        <h1 style={{fontSize:24,fontWeight:800,margin:'0 0 4px'}}>⚡ Mon Activite</h1>
-        <p style={{color:'var(--text2)',fontSize:14,margin:0}}>Sons des artistes que vous suivez</p>
+function FeedPost({post:t,idx,bg,ava,flag,isPlaying,onPlay,reacts,onReact,onProfile,fmtK,rnd}){
+  const WF=32
+  const isPremium=t.access_type==="premium"||t.access_type==="paid"
+  const rights=idx%2===0?{label:"© ALL",color:"var(--red)"}:{label:"CC BY",color:"var(--blue)"}
+  return(
+    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:18,marginBottom:14,transition:"border-color .2s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(245,166,35,.2)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:14}}>
+        <div onClick={onProfile} style={{width:38,height:38,borderRadius:"50%",background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:"#000",flexShrink:0,cursor:"pointer",fontSize:13,overflow:"hidden"}}>
+          {t.profiles?.avatar_url?<img src={t.profiles.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:ava}
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:600,fontSize:14,display:"flex",alignItems:"center",gap:6}}>
+            <span onClick={onProfile} style={{cursor:"pointer"}} onMouseEnter={e=>e.target.style.color="var(--gold)"} onMouseLeave={e=>e.target.style.color="var(--text)"}>{t.profiles?.display_name||"Artiste"}</span>
+            <span style={{fontSize:9,padding:"2px 7px",borderRadius:20,fontFamily:"Space Mono,monospace",fontWeight:700,letterSpacing:.5,border:`1px solid ${rights.color}`,color:rights.color,background:`${rights.color}18`}}>{rights.label}</span>
+          </div>
+          <div style={{fontSize:11.5,color:"var(--text2)",marginTop:1}}>{t.genre||"Artiste"} · {flag}</div>
+        </div>
+        <div style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace",flexShrink:0}}>{idx+1}h</div>
       </div>
-
-      {loading ? (
-        <div style={{display:'flex',flexDirection:'column',gap:12}}>
-          {[...Array(5)].map((_,i) => <div key={i} className="skeleton" style={{height:80,borderRadius:12}}/>)}
+      {/* Player */}
+      <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+        <button onClick={onPlay} style={{width:34,height:34,background:"var(--gold)",borderRadius:"50%",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"#000",fontSize:13,cursor:"pointer",transition:"all .2s",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+          {isPlaying?"⏸":"▶"}
+        </button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:600,fontSize:12.5,marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+          <div style={{display:"flex",alignItems:"center",gap:1,height:32,cursor:"pointer"}} onClick={onPlay}>
+            {Array.from({length:WF},(_,i)=>{
+              const h=Math.floor(Math.random()*70+30)
+              const played=i<Math.floor(WF*0.3)
+              return<div key={i} style={{flex:1,height:`${h}%`,background:played||isPlaying?"var(--gold)":"var(--border)",borderRadius:2,transition:"background .18s"}}/>
+            })}
+          </div>
         </div>
-      ) : feed.length === 0 ? (
-        <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-          <div style={{fontSize:48,marginBottom:16}}>🎵</div>
-          <h3 style={{marginBottom:8}}>Votre fil est vide</h3>
-          <p style={{fontSize:14,marginBottom:24}}>Suivez des artistes pour voir leurs nouveautes ici</p>
-          <button onClick={()=>setPage('creators')} style={{background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer',fontWeight:600}}>
-            Decouvrir des artistes
+        <span style={{fontFamily:"Space Mono,monospace",fontSize:10.5,color:"var(--text2)",flexShrink:0}}>3:{String(idx%60).padStart(2,"0")}</span>
+      </div>
+      {/* Achat */}
+      {isPremium&&<div style={{display:"flex",gap:8,marginBottom:12}}>
+        <button style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+          🛒 Acheter <span style={{background:"rgba(0,0,0,.15)",borderRadius:20,padding:"1px 7px",fontSize:11}}>{t.sale_price||2500} KMF</span>
+        </button>
+        <button style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:50,border:"1px solid var(--border)",background:"transparent",color:"var(--text2)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
+          ⏳ Louer <span style={{fontSize:11,color:"var(--text3)"}}>dès 200 KMF/j</span>
+        </button>
+      </div>}
+      {/* Réactions */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        {[["❤️","like"],["🔥","fire"],["🫶","love"],["👏","clap"]].map(([emoji,key])=>(
+          <button key={key} onClick={()=>onReact(key)} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:50,border:"1px solid var(--border)",background:"var(--card2)",fontSize:12,cursor:"pointer",color:"var(--text2)",fontFamily:"Plus Jakarta Sans,sans-serif",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text2)"}}>
+            {emoji}<span>{reacts[key]||fmtK(rnd(10,5000))}</span>
           </button>
-        </div>
-      ) : (
-        <div style={{display:'flex',flexDirection:'column',gap:12}}>
-          {feed.map(t => {
-            const isActive = currentTrack?.id === t.id
-            return (
-              <div key={t.id} style={{background:'var(--card)',borderRadius:12,border:`1px solid ${isActive?'var(--primary)':'var(--border)'}`,overflow:'hidden'}}>
-                <div style={{display:'flex',gap:12,padding:16,alignItems:'center'}}>
-                  <div style={{width:56,height:56,borderRadius:10,background:'var(--card2)',overflow:'hidden',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24}}>
-                    {t.cover_url ? <img src={t.cover_url} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : ''}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
-                      <div style={{width:24,height:24,borderRadius:'50%',background:'var(--primary)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,flexShrink:0}}>
-                        {(t.profiles?.display_name||'A')[0]}
-                      </div>
-                      <span style={{fontSize:13,fontWeight:600,color:'var(--text2)'}}>{t.profiles?.display_name}</span>
-                      <span style={{fontSize:11,color:'var(--text3)'}}>a publie</span>
-                      <span style={{fontSize:11,color:'var(--text3)',marginLeft:'auto'}}>{formatDate(t.published_at||t.created_at)}</span>
-                    </div>
-                    <div style={{fontWeight:700,fontSize:15,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</div>
-                    <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{t.genre} · {formatK(t.play_count)} ecoutes</div>
-                  </div>
-                  <button onClick={() => toggle(t)}
-                    style={{width:44,height:44,borderRadius:'50%',background:isActive&&isPlaying?'var(--primary)':'var(--card2)',border:'none',cursor:'pointer',fontSize:18,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                    {isActive && isPlaying ? '⏸' : '▶'}
-                  </button>
-                </div>
-                {t.access_type !== 'free' && (
-                  <div style={{padding:'8px 16px',borderTop:'1px solid var(--border)',background:'var(--card2)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                    <span style={{fontSize:12,color:'var(--text2)'}}>Contenu payant</span>
-                    <span style={{fontSize:13,fontWeight:700,color:'var(--gold)'}}>{(t.sale_price||0).toLocaleString()} KMF</span>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+        ))}
+        <button style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:50,border:"1px solid var(--border)",background:"var(--card2)",fontSize:12,cursor:"pointer",color:"var(--text2)",fontFamily:"Plus Jakarta Sans,sans-serif",marginLeft:"auto"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
+          💬 {fmtK(rnd(5,200))}
+        </button>
+        <button style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:50,border:"1px solid var(--border)",background:"var(--card2)",fontSize:12,cursor:"pointer",color:"var(--text2)",fontFamily:"Plus Jakarta Sans,sans-serif"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
+          📤 Partager
+        </button>
+      </div>
     </div>
   )
 }
