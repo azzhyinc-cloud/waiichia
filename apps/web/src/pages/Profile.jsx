@@ -1,251 +1,199 @@
-import { useState, useEffect, useRef } from 'react'
-import { useAuthStore, usePageStore } from '../stores/index.js'
-import api from '../services/api.js'
+import { useState, useEffect } from "react"
+import { useAuthStore, usePageStore, useDeviseStore } from "../stores/index.js"
+import { usePlayerStore } from "../stores/index.js"
+import api from "../services/api.js"
 
-const API = import.meta.env.VITE_API_URL
-const formatK = (n) => { if(!n)return'0'; if(n>=1000000)return(n/1000000).toFixed(1)+'M'; if(n>=1000)return(n/1000).toFixed(1)+'K'; return String(n) }
-const FLAGS = { KM:'🇰🇲', FR:'🇫🇷', NG:'🇳🇬', SN:'🇸🇳', MG:'🇲🇬', CI:'🇨🇮', TZ:'🇹🇿' }
-const GRADIENTS = ['linear-gradient(135deg,#0d1620,#2a1040)','linear-gradient(135deg,#0a1a0e,#1a3a20)','linear-gradient(135deg,#1a0a0e,#3a1020)','linear-gradient(135deg,#0a1020,#1a2a40)']
+const TABS=["🎵 Sons","💿 Albums","📋 Playlists","📻 Diffusions","🛍️ Boutique","🎪 Événements","🛒 Mes achats","📥 Hors-ligne"]
+const BGS=["linear-gradient(135deg,#f5a623,#e63946)","linear-gradient(135deg,#2dc653,#0a9e4a)","linear-gradient(135deg,#4d9fff,#1a6fcc)","linear-gradient(135deg,#9b59f5,#6d3db5)","linear-gradient(135deg,#ff6b35,#cc4411)","linear-gradient(135deg,#f5a623,#cc7700)"]
+const fmtK=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
 
-export default function Profile() {
+export default function Profile({ username }) {
   const { user } = useAuthStore()
   const { setPage } = usePageStore()
+  const { devise } = useDeviseStore()
+  const { toggle, currentTrack, isPlaying } = usePlayerStore()
+  const [tab, setTab] = useState("🎵 Sons")
   const [profile, setProfile] = useState(null)
-  const [stats, setStats] = useState(null)
   const [tracks, setTracks] = useState([])
-  const [tab, setTab] = useState('Sons')
   const [loading, setLoading] = useState(true)
-  const [uploadingCover, setUploadingCover] = useState(false)
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const coverRef = useRef()
-  const avatarRef = useRef()
-  const token = localStorage.getItem('waiichia_token')
+  const [following, setFollowing] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
 
-  useEffect(() => { if(user) loadProfile() }, [user])
+  const isOwn = !username || username === user?.username
 
-  const loadProfile = async () => {
-    setLoading(true)
+  useEffect(() => {
+    const uname = username || user?.username
+    if (!uname) { setLoading(false); return }
+    Promise.all([
+      api.profiles.get(uname).catch(() => null),
+      api.profiles.tracks(uname).catch(() => ({ tracks: [] }))
+    ]).then(([p, t]) => {
+      setProfile(p?.profile || p || null)
+      setTracks(t?.tracks || [])
+    }).finally(() => setLoading(false))
+  }, [username, user?.username])
+
+  const handleFollow = async () => {
+    if (!profile) return
+    setFollowLoading(true)
     try {
-      const [profileRes, statsRes, tracksRes] = await Promise.all([
-        fetch(API+'/api/profiles/'+user.username).then(r=>r.json()),
-        fetch(API+'/api/profiles/'+user.username+'/stats').then(r=>r.json()),
-        api.tracks.myTracks(),
-      ])
-      setProfile(profileRes.profile || profileRes)
-      setStats(statsRes)
-      setTracks(tracksRes.tracks || [])
-    } catch(e) {}
-    setLoading(false)
+      if (following) { await api.profiles.unfollow(profile.username); setFollowing(false) }
+      else { await api.profiles.follow(profile.username); setFollowing(true) }
+    } catch(e) { console.error(e) }
+    setFollowLoading(false)
   }
 
-  const uploadFile = async (file, type) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    const endpoint = type === 'cover' ? '/api/upload/image' : '/api/upload/image'
-    const res = await fetch(API+endpoint, { method:'POST', headers:{'Authorization':'Bearer '+token}, body:formData })
-    const data = await res.json()
-    return data.url
-  }
-
-  const handleCoverChange = async (e) => {
-    const file = e.target.files[0]; if(!file) return
-    setUploadingCover(true)
-    try {
-      const url = await uploadFile(file, 'cover')
-      await fetch(API+'/api/profiles/me', { method:'PATCH', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({cover_url:url}) })
-      setProfile(p=>({...p, cover_url:url}))
-    } catch(e) {}
-    setUploadingCover(false)
-  }
-
-  const handleAvatarChange = async (e) => {
-    const file = e.target.files[0]; if(!file) return
-    setUploadingAvatar(true)
-    try {
-      const url = await uploadFile(file, 'avatar')
-      await fetch(API+'/api/profiles/me', { method:'PATCH', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({avatar_url:url}) })
-      setProfile(p=>({...p, avatar_url:url}))
-    } catch(e) {}
-    setUploadingAvatar(false)
-  }
-
-  const TABS = ['🎵 Sons','💿 Albums','📋 Playlists','📻 Diffusions','🛍️ Boutique','🎪 Evenements']
-
-  if(!user) return (
-    <div style={{textAlign:'center',padding:80}}>
-      <div style={{fontSize:56,marginBottom:16}}>👤</div>
-      <h2>Mon Profil</h2>
-      <button onClick={()=>setPage('login')} style={{marginTop:16,background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer'}}>Se connecter</button>
+  if (loading) return <ProfileSkel/>
+  if (!profile && !user) return (
+    <div style={{textAlign:"center",padding:60}}>
+      <div style={{fontSize:48,marginBottom:12}}>🔒</div>
+      <div style={{fontFamily:"Syne,sans-serif",fontSize:20,fontWeight:800,marginBottom:8}}>Connectez-vous</div>
+      <button onClick={()=>setPage("login")} style={{padding:"10px 24px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontWeight:700,cursor:"pointer",fontSize:13}}>Se connecter</button>
     </div>
   )
 
   const p = profile || user
-  const initials = (p?.display_name||p?.username||'U').slice(0,2).toUpperCase()
-  const walletBalance = stats?.wallet_balance || p?.wallet_balance || 0
+  const initials = p?.display_name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase() || p?.username?.slice(0,2).toUpperCase() || "W"
+  const stats = [
+    { num: fmtK(p?.tracks_count||tracks.length||0), label: "Sons" },
+    { num: fmtK(p?.albums_count||0), label: "Albums" },
+    { num: fmtK(p?.followers_count||p?.fans_count||0), label: "Fans" },
+    { num: fmtK(p?.total_plays||0), label: "Écoutes" },
+    { num: fmtK(p?.total_earnings||0)+" "+devise.code, label: "Gains" },
+  ]
 
   return (
-    <div style={{paddingBottom:100}}>
-      {/* ── COVER ── */}
-      <div style={{width:'100%',height:220,borderRadius:16,background:p?.cover_url?'#000':GRADIENTS[0],position:'relative',overflow:'hidden',marginBottom:-60}}>
-        {p?.cover_url
-          ? <img src={p.cover_url} style={{width:'100%',height:'100%',objectFit:'cover',opacity:0.85}}/>
-          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:80,opacity:0.15}}>🌊</div>
-        }
-        <div style={{position:'absolute',top:12,right:12,display:'flex',gap:8}}>
-          <button onClick={()=>coverRef.current.click()}
-            style={{background:'rgba(0,0,0,0.6)',backdropFilter:'blur(8px)',border:'1px solid rgba(255,255,255,0.2)',color:'#fff',borderRadius:8,padding:'7px 14px',cursor:'pointer',fontSize:13,fontWeight:600}}>
-            {uploadingCover ? '⏳ ...' : '📷 Modifier couverture'}
+    <div style={{paddingBottom:40}}>
+      {/* COVER */}
+      <div style={{width:"100%",height:220,borderRadius:"var(--radius)",
+        background:p?.cover_url?`url(${p.cover_url}) center/cover`:"linear-gradient(135deg,#0d1620,#2a1040)",
+        position:"relative",overflow:"hidden",marginBottom:-60}}>
+        <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:64,opacity:.3}}>
+          {!p?.cover_url&&"🌊"}
+        </div>
+        {isOwn&&<div style={{position:"absolute",top:12,right:12,display:"flex",gap:8}}>
+          <button style={{padding:"6px 14px",borderRadius:50,border:"1px solid rgba(255,255,255,.3)",background:"rgba(0,0,0,.4)",color:"rgba(255,255,255,.85)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif",backdropFilter:"blur(8px)"}}>
+            📷 Modifier couverture
           </button>
-        </div>
-        <input ref={coverRef} type="file" accept="image/*" onChange={handleCoverChange} style={{display:'none'}}/>
+        </div>}
       </div>
 
-      {/* ── INFO ROW ── */}
-      <div style={{display:'flex',alignItems:'flex-end',gap:18,padding:'0 20px',marginBottom:18,position:'relative',zIndex:1}}>
-        {/* AVATAR */}
-        <div style={{position:'relative',flexShrink:0}} onClick={()=>avatarRef.current.click()}>
-          <div style={{width:110,height:110,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),#e8920a)',border:'4px solid var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:36,fontWeight:800,color:'#000',overflow:'hidden',cursor:'pointer'}}>
-            {p?.avatar_url ? <img src={p.avatar_url} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : initials}
-            {uploadingAvatar && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',fontSize:20}}>⏳</div>}
-          </div>
-          <div style={{position:'absolute',bottom:4,right:4,width:28,height:28,background:'var(--gold)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,cursor:'pointer',border:'2px solid var(--bg)'}}>📷</div>
+      {/* AVATAR + META */}
+      <div style={{display:"flex",alignItems:"flex-end",gap:18,padding:"0 4px",marginBottom:18,position:"relative",zIndex:1}}>
+        <div style={{width:110,height:110,borderRadius:"50%",
+          background:"linear-gradient(135deg,var(--gold),var(--red))",
+          border:"4px solid var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:38,fontWeight:800,color:"#000",flexShrink:0,overflow:"hidden",position:"relative"}}>
+          {p?.avatar_url?<img src={p.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:initials}
+          {isOwn&&<div style={{position:"absolute",bottom:4,right:4,width:28,height:28,background:"var(--gold)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer",border:"2px solid var(--bg)"}}>📷</div>}
         </div>
-        <input ref={avatarRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{display:'none'}}/>
-
-        {/* META */}
         <div style={{flex:1,paddingTop:70}}>
-          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:3}}>
-            <span style={{fontFamily:'var(--font-title)',fontSize:24,fontWeight:800}}>{p?.display_name||p?.username}</span>
-            {p?.is_verified && (
-              <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:1,textTransform:'uppercase',background:'linear-gradient(135deg,rgba(245,166,35,.15),rgba(230,57,70,.1))',border:'1px solid rgba(245,166,35,.25)',color:'var(--gold)'}}>
-                ⭐ Artiste Verifie
-              </span>
-            )}
+          <div style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:800,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            {p?.display_name||p?.username||"Artiste"}
+            {p?.is_verified&&<span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:20,fontSize:10,fontFamily:"Space Mono,monospace",fontWeight:700,textTransform:"uppercase",letterSpacing:1,background:"linear-gradient(135deg,rgba(245,166,35,.15),rgba(230,57,70,.1))",border:"1px solid rgba(245,166,35,.25)",color:"var(--gold)"}}>⭐ Artiste Vérifié</span>}
           </div>
-          <div style={{fontSize:13,color:'var(--text2)',marginBottom:10}}>
-            @{p?.username} · {FLAGS[p?.country]||'🌍'} {p?.city||''}{p?.city&&p?.country?', ':''}
-            {p?.country==='KM'?'Comores':p?.country==='FR'?'France':p?.country==='MG'?'Madagascar':p?.country||''}
+          <div style={{fontSize:13,color:"var(--text2)",margin:"3px 0 10px"}}>
+            @{p?.username||"utilisateur"} · {p?.country?"🌍 "+p.country:"🌍"}
           </div>
-          {p?.bio && <div style={{fontSize:13,color:'var(--text2)',marginBottom:10,maxWidth:500}}>{p.bio}</div>}
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            <button onClick={()=>setPage('upload')}
-              style={{background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontWeight:700,fontSize:13}}>
-              + Publier
-            </button>
-            <button onClick={()=>setPage('settings')}
-              style={{background:'var(--card)',border:'1px solid var(--border)',color:'var(--text)',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13,fontWeight:600}}>
-              ⚙️ Parametres
-            </button>
-            <button onClick={()=>setPage('wallet')}
-              style={{background:'var(--card)',border:'1px solid var(--border)',color:'var(--gold)',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontSize:13,fontWeight:700}}>
-              💰 {walletBalance.toLocaleString()} KMF
-            </button>
+          {p?.bio&&<div style={{fontSize:13,color:"var(--text2)",marginBottom:10,lineHeight:1.5,maxWidth:480}}>{p.bio}</div>}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {isOwn ? <>
+              <button onClick={()=>setPage("upload")} style={btnGold}>+ Publier</button>
+              <button onClick={()=>setPage("settings")} style={btnSec}>⚙️ Paramètres</button>
+              <button onClick={()=>setPage("wallet")} style={btnOut}>💰 Portefeuille</button>
+            </> : <>
+              <button onClick={handleFollow} disabled={followLoading} style={following?btnSec:btnGold}>
+                {followLoading?"...":following?"✓ Suivi":"+ Suivre"}
+              </button>
+              <button onClick={()=>setPage("messages")} style={btnSec}>💬 Message</button>
+              <button style={btnOut}>🎁 Don</button>
+            </>}
           </div>
         </div>
       </div>
 
-      {/* ── STATS BAR ── */}
-      <div style={{display:'flex',gap:0,background:'var(--card)',border:'1px solid var(--border)',borderRadius:12,padding:'16px 22px',marginBottom:22,marginLeft:20,marginRight:20,overflowX:'auto'}}>
-        {[
-          { num: formatK(stats?.tracks_count||p?.tracks_count||tracks.length), label:'Sons' },
-          { num: formatK(stats?.albums_count||0), label:'Albums' },
-          { num: formatK(stats?.followers_count||p?.followers_count||0), label:'Fans' },
-          { num: formatK(stats?.total_plays||p?.total_plays||0), label:'Ecoutes' },
-          { num: formatK(walletBalance), label:'KMF gagnes' },
-        ].map((s,i) => (
-          <div key={i} style={{textAlign:'center',flex:1,minWidth:70,borderRight:i<4?'1px solid var(--border)':'none',padding:'0 12px'}}>
-            <div style={{fontFamily:'var(--font-title)',fontSize:20,fontWeight:800}}>{s.num}</div>
-            <div style={{fontSize:11,color:'var(--text2)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:0.5,marginTop:2}}>{s.label}</div>
+      {/* STATS */}
+      <div style={{display:"flex",gap:24,background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:"16px 22px",marginBottom:22,flexWrap:"wrap"}}>
+        {stats.map(s=>(
+          <div key={s.label} style={{textAlign:"center"}}>
+            <div style={{fontFamily:"Syne,sans-serif",fontSize:20,fontWeight:800}}>{s.num}</div>
+            <div style={{fontSize:11,color:"var(--text2)",fontFamily:"Space Mono,monospace"}}>{s.label}</div>
           </div>
         ))}
       </div>
 
-      {/* ── TABS ── */}
-      <div style={{display:'flex',gap:4,padding:'0 20px',marginBottom:20,overflowX:'auto'}}>
-        {TABS.map(t => {
-          const key = t.split(' ').slice(1).join(' ')
-          return (
-            <button key={t} onClick={()=>setTab(key)}
-              style={{padding:'8px 16px',borderRadius:8,border:'1px solid var(--border)',cursor:'pointer',fontSize:13,fontWeight:700,whiteSpace:'nowrap',flexShrink:0,
-                background:tab===key?'var(--primary)':'var(--card)',color:tab===key?'#fff':'var(--text2)'}}>
-              {t}
-            </button>
-          )
-        })}
+      {/* TABS */}
+      <div style={{display:"flex",gap:2,borderBottom:"1px solid var(--border)",marginBottom:22,overflowX:"auto",paddingBottom:1}}>
+        {TABS.map(t=>(
+          <button key={t} onClick={()=>setTab(t)} style={{padding:"9px 16px",border:"none",background:"none",cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap",color:tab===t?"var(--gold)":"var(--text2)",borderBottom:tab===t?"2px solid var(--gold)":"2px solid transparent",marginBottom:-1,transition:"color .18s"}}>
+            {t}
+          </button>
+        ))}
       </div>
 
-      {/* ── CONTENU TABS ── */}
-      <div style={{padding:'0 20px'}}>
-        {tab==='Sons' && (
-          loading ? (
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:12}}>
-              {[...Array(6)].map((_,i)=><div key={i} className="skeleton" style={{height:200,borderRadius:12}}/>)}
-            </div>
-          ) : tracks.length===0 ? (
-            <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-              <div style={{fontSize:48,marginBottom:12}}>🎵</div>
-              <p>Aucun son publie</p>
-              <button onClick={()=>setPage('upload')} style={{marginTop:12,background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer',fontWeight:600}}>Publier mon premier son</button>
-            </div>
-          ) : (
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12}}>
-              {tracks.filter(t=>t.content_type==='music'||!t.content_type).map(t=>(
-                <div key={t.id} style={{background:'var(--card)',borderRadius:12,border:'1px solid var(--border)',overflow:'hidden',cursor:'pointer'}}>
-                  <div style={{height:160,background:t.cover_url?'#000':'var(--card2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:40,position:'relative'}}>
-                    {t.cover_url ? <img src={t.cover_url} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : '🎵'}
-                    {t.genre && <span style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,0.7)',borderRadius:6,padding:'2px 8px',fontSize:9,fontWeight:700,color:'#fff',letterSpacing:1}}>{t.genre.toUpperCase()}</span>}
-                  </div>
-                  <div style={{padding:10}}>
-                    <div style={{fontWeight:700,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>{t.title}</div>
-                    <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--text3)'}}>
-                      <span>{formatK(t.play_count||0)} 🎧</span>
-                      <span style={{color:t.access_type==='free'?'#2cc653':'var(--gold)',fontWeight:700}}>{t.access_type==='free'?'Gratuit':(t.sale_price||0).toLocaleString()+' KMF'}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        )}
-
-        {tab==='Albums' && (
-          <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-            <div style={{fontSize:48,marginBottom:12}}>💿</div>
-            <p>Aucun album publie</p>
-            <button onClick={()=>setPage('upload')} style={{marginTop:12,background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer',fontWeight:600}}>Creer un album</button>
+      {/* CONTENU TAB */}
+      {tab==="🎵 Sons"&&(
+        tracks.length>0
+          ?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(185px,1fr))",gap:14}}>
+            {tracks.map((t,i)=><MiniTrackCard key={t.id} track={t} bg={BGS[i%BGS.length]} isPlaying={isPlaying&&currentTrack?.id===t.id} onPlay={()=>toggle(t)}/>)}
           </div>
-        )}
+          :<Empty icon="🎵" label="Aucun son publié" sub={isOwn?"Publiez votre premier son !":"Cet artiste n'a pas encore publié de son."}/>
+      )}
+      {tab==="💿 Albums"&&<Empty icon="💿" label="Aucun album" sub="Bientôt disponible"/>}
+      {tab==="📋 Playlists"&&<Empty icon="📋" label="Aucune playlist" sub="Bientôt disponible"/>}
+      {tab==="📻 Diffusions"&&<Empty icon="📻" label="Aucune diffusion" sub="Bientôt disponible"/>}
+      {tab==="🛍️ Boutique"&&<Empty icon="🛍️" label="Boutique vide" sub={isOwn?"Ajoutez des produits dans Mon Shop":"Aucun produit disponible"}/>}
+      {tab==="🎪 Événements"&&<Empty icon="🎪" label="Aucun événement" sub="Bientôt disponible"/>}
+      {tab==="🛒 Mes achats"&&<Empty icon="🛒" label="Aucun achat" sub="Vos titres achetés apparaîtront ici"/>}
+      {tab==="📥 Hors-ligne"&&<Empty icon="📥" label="Aucun contenu hors-ligne" sub="Téléchargez des sons pour les écouter sans connexion"/>}
+    </div>
+  )
+}
 
-        {tab==='Playlists' && (
-          <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-            <div style={{fontSize:48,marginBottom:12}}>📋</div>
-            <p>Aucune playlist creee</p>
-          </div>
-        )}
-
-        {tab==='Diffusions' && (
-          <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-            <div style={{fontSize:48,marginBottom:12}}>📻</div>
-            <p>Aucune diffusion</p>
-          </div>
-        )}
-
-        {tab==='Boutique' && (
-          <div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
-            <div style={{fontSize:48,marginBottom:12}}>🛍️</div>
-            <p>Boutique vide</p>
-          </div>
-        )}
-
-        {tab==='Evenements' && (
-          <div>
-            <button onClick={()=>setPage('my_events')}
-              style={{marginBottom:16,background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontWeight:600,fontSize:13}}>
-              Voir tous mes evenements →
-            </button>
-          </div>
-        )}
+function MiniTrackCard({track:t,bg,isPlaying,onPlay}){
+  const[hov,setHov]=useState(false)
+  return(
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{background:"var(--card)",border:`1px solid ${hov?"rgba(245,166,35,.4)":"var(--border)"}`,borderRadius:"var(--radius)",overflow:"hidden",transition:"all .22s",transform:hov?"translateY(-3px)":"none"}}>
+      <div onClick={onPlay} style={{position:"relative",height:140,background:bg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,overflow:"hidden"}}>
+        {t.cover_url?<img src={t.cover_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🎵"}
+        {hov&&<div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{width:44,height:44,borderRadius:"50%",background:"var(--gold)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#000"}}>{isPlaying?"⏸":"▶"}</div>
+        </div>}
+        {isPlaying&&<div style={{position:"absolute",bottom:6,right:6,background:"var(--gold)",borderRadius:20,padding:"2px 7px",fontSize:9,color:"#000",fontWeight:700,fontFamily:"Space Mono,monospace"}}>▶ EN COURS</div>}
+      </div>
+      <div style={{padding:"10px 12px"}}>
+        <div style={{fontWeight:600,fontSize:12.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+        <div style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace",marginTop:2}}>{t.play_count?((t.play_count/1000).toFixed(1)+"K"):"0"} écoutes</div>
       </div>
     </div>
   )
 }
+
+function Empty({icon,label,sub}){
+  return(
+    <div style={{textAlign:"center",padding:"50px 20px",color:"var(--text3)"}}>
+      <div style={{fontSize:40,marginBottom:10}}>{icon}</div>
+      <div style={{fontSize:14,fontWeight:600,color:"var(--text2)",marginBottom:4}}>{label}</div>
+      <div style={{fontSize:12}}>{sub}</div>
+    </div>
+  )
+}
+
+function ProfileSkel(){
+  return(
+    <div style={{paddingBottom:40}}>
+      <div style={{height:220,background:"var(--card)",borderRadius:"var(--radius)",marginBottom:-60,animation:"shimmer 1.5s infinite"}}/>
+      <div style={{display:"flex",gap:18,padding:"0 4px",marginBottom:18,zIndex:1,position:"relative"}}>
+        <div style={{width:110,height:110,borderRadius:"50%",background:"var(--card2)",border:"4px solid var(--bg)",animation:"shimmer 1.5s infinite",flexShrink:0}}/>
+        <div style={{flex:1,paddingTop:70}}>
+          <div style={{height:24,width:200,background:"var(--card2)",borderRadius:6,marginBottom:8,animation:"shimmer 1.5s infinite"}}/>
+          <div style={{height:14,width:150,background:"var(--card2)",borderRadius:6,animation:"shimmer 1.5s infinite"}}/>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const btnGold={padding:"8px 18px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif",boxShadow:"0 3px 12px rgba(245,166,35,.3)"}
+const btnSec={padding:"8px 18px",borderRadius:50,border:"1px solid var(--border)",background:"var(--card2)",color:"var(--text)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}
+const btnOut={padding:"8px 18px",borderRadius:50,border:"1px solid var(--border)",background:"transparent",color:"var(--text2)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}
