@@ -1,7 +1,8 @@
-import Sidebar from './Sidebar.jsx'
-import TopNav from './TopNav.jsx'
+import Sidebar   from './Sidebar.jsx'
+import TopNav    from './TopNav.jsx'
 import RightPanel from './RightPanel.jsx'
-import Player from './Player.jsx'
+import Player    from './Player.jsx'
+import BottomNav from './BottomNav.jsx'
 
 export default function Layout({ children }) {
   return (
@@ -9,10 +10,13 @@ export default function Layout({ children }) {
       <Sidebar />
       <div className="app-layout">
         <TopNav />
-        <div className="page-content">{children}</div>
+        <div id="waiichia-layout-main" className="page-content">
+          {children}
+        </div>
       </div>
       <RightPanel />
       <Player />
+      <BottomNav />
     </>
   )
 }
