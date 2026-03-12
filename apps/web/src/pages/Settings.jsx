@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAuthStore, usePageStore } from '../stores/index.js'
+import { useAuthStore, usePageStore, useDeviseStore, useThemeStore } from '../stores/index.js'
 import api from '../services/api.js'
 
 const LANGS = ['Français','English','Shikomori','Swahili','Malagasy']
@@ -9,6 +9,9 @@ const DEVISES = ['KMF - Franc Comorien','USD - Dollar','EUR - Euro','MGA - Ariar
 
 export default function Settings() {
   const { user, logout } = useAuthStore()
+  const { devise, setDevise } = useDeviseStore()
+  const { theme, toggle: toggleTheme } = useThemeStore()
+  const dc = devise?.code || 'KMF'
   const { setPage } = usePageStore()
   const [tab, setTab] = useState('profil')
   const [saving, setSaving] = useState(false)
@@ -28,6 +31,7 @@ export default function Settings() {
     notif_reaction: true,
     notif_purchase: true,
     notif_email: false,
+    notif_sms: false,
     old_password: '',
     new_password: '',
     confirm_password: '',
@@ -42,6 +46,8 @@ export default function Settings() {
     ['notifications','🔔 Notifications'],
     ['langue','🌍 Langue & Région'],
     ['facturation','💳 Facturation'],
+    ['notifs','🔔 Notifications'],
+    ['droits','⚖️ Droits d'auteur'],
     ['confidentialite','🛡️ Confidentialité'],
   ]
 
@@ -282,6 +288,73 @@ export default function Settings() {
           )}
 
           {/* CONFIDENTIALITE */}
+          
+          {tab === 'notifs' && (
+            <div>
+              <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:24,marginBottom:16}}>
+                <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,marginBottom:18}}>🔔 Préférences de notifications</div>
+                {[
+                  {label:"Ventes & revenus",sub:"Quand un titre est acheté ou loué",key:"notif_purchase"},
+                  {label:"Nouveaux fans",sub:"Quand quelqu'un vous suit",key:"notif_follow"},
+                  {label:"Commentaires",sub:"Réactions sur vos publications",key:"notif_comment"},
+                  {label:"Événements Live",sub:"Émissions et concerts en direct",key:"notif_reaction"},
+                ].map(n=>(
+                  <div key={n.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:"1px solid var(--border)"}}>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:13}}>{n.label}</div>
+                      <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{n.sub}</div>
+                    </div>
+                    <button onClick={()=>setForm(f=>({...f,[n.key]:!f[n.key]}))}
+                      style={{width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",position:"relative",background:form[n.key]?"var(--gold)":"var(--card2)",transition:"background .3s",flexShrink:0}}>
+                      <div style={{position:"absolute",top:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .3s",left:form[n.key]?24:3,boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:24}}>
+                <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,marginBottom:18}}>📬 Canaux</div>
+                {[{label:"Email",key:"notif_email"},{label:"SMS",key:"notif_sms"}].map(n=>(
+                  <div key={n.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:"1px solid var(--border)"}}>
+                    <div style={{fontWeight:600,fontSize:13}}>{n.label}</div>
+                    <button onClick={()=>setForm(f=>({...f,[n.key]:!f[n.key]}))}
+                      style={{width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",position:"relative",background:form[n.key]?"var(--gold)":"var(--card2)",transition:"background .3s",flexShrink:0}}>
+                      <div style={{position:"absolute",top:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .3s",left:form[n.key]?24:3,boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === 'droits' && (
+            <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:24}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,marginBottom:18}}>⚖️ Droits d'auteur & Licences</div>
+              <div style={{fontSize:13,color:"var(--text2)",lineHeight:1.8,marginBottom:16}}>
+                Choisissez comment vos œuvres peuvent être utilisées par d'autres utilisateurs.
+              </div>
+              {[
+                {label:"Partage commercial autorisé",sub:"Votre contenu peut être utilisé dans des projets commerciaux",val:false},
+                {label:"Remix & dérivés autorisés",sub:"Les autres peuvent créer des versions dérivées",val:false},
+                {label:"Attribution obligatoire",sub:"Votre nom doit apparaître sur toute réutilisation",val:true},
+              ].map((d,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:"1px solid var(--border)"}}>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:13}}>{d.label}</div>
+                    <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{d.sub}</div>
+                  </div>
+                  <button style={{width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",position:"relative",background:d.val?"var(--gold)":"var(--card2)",transition:"background .3s",flexShrink:0}}>
+                    <div style={{position:"absolute",top:3,width:20,height:20,borderRadius:"50%",background:"#fff",left:d.val?24:3,boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/>
+                  </button>
+                </div>
+              ))}
+              <div style={{marginTop:20}}>
+                <button style={{padding:"9px 22px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
+                  💾 Sauvegarder
+                </button>
+              </div>
+            </div>
+          )}
+
           {tab === 'confidentialite' && (
             <div style={{background:'var(--card)',borderRadius:12,padding:24,border:'1px solid var(--border)'}}>
               <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:800}}>🛡️ Confidentialité</h3>
