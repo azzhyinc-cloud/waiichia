@@ -21,7 +21,7 @@ const NAV = [
     { id:'wallet',     icon:'💰', label:'Mon Portefeuille' },
     { id:'my_content', icon:'🎵', label:'Mon Contenu' },
     { id:'my_events',  icon:'🎟️', label:'Mes Événements' },
-    { id:'shop',       icon:'🛍️', label:'Ma Boutique' },
+    { id:'shop_mine',   icon:'🏪', label:'Ma Boutique' },
     { id:'dashboard',  icon:'📊', label:'Compte Commercial' },
     { id:'settings',   icon:'⚙️', label:'Paramètres' },
     { id:'regie',      icon:'📢', label:'Régie Publicitaire', badge:'PRO', badgeColor:'gold' },

@@ -25,6 +25,8 @@ import Settings from './pages/Settings.jsx'
 import Regie from './pages/Regie.jsx'
 import Admin from './pages/Admin.jsx'
 import Messagerie from './pages/Messagerie.jsx'
+import Emission from './pages/Emission.jsx'
+import Karaoke  from './pages/Karaoke.jsx'
 
 const Placeholder = ({ title, icon }) => (
   <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
@@ -57,7 +59,8 @@ const PAGES = {
   upload:       <Upload />,
   admin:        <Admin />,
   messages:     <Messagerie />,
-  karaoke:      <Placeholder title='Studio Karaoke' icon='🎤' />,
+  karaoke:      <Karaoke />,
+  emission:     <Emission />,
 }
 
 export default function App() {
