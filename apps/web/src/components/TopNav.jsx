@@ -1,6 +1,7 @@
 import { useThemeStore, useAuthStore, usePageStore } from "../stores/index.js"
 import { useState, useEffect, useRef } from "react"
 import NotifPanel from "./NotifPanel.jsx"
+import { useDeviseStore } from "../stores/index.js"
 import DeviseModal from "./DeviseModal.jsx"
 import api from "../services/api.js"
 
@@ -25,7 +26,7 @@ export default function TopNav() {
   const [showRes, setShowRes]     = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [deviseOpen, setDeviseOpen] = useState(false)
-  const [devise, setDevise]       = useState({code:"KMF",flag:"🇰🇲",country:"Comores"})
+  const { devise, setDevise } = useDeviseStore()
   const [notifCount]              = useState(5)
   const searchRef                 = useRef(null)
 
