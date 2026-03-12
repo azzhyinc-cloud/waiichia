@@ -32,7 +32,7 @@ export default function Radio() {
   },[])
 
   const filtered=stations.filter(s=>{
-    if(pays&&!s.country?.includes(pays.split(" ").pop().replace(/[^A-Z🇦-🇿]/g,"")))return false
+    if(pays&&!s.country?.includes(pays.slice(-2)))return false
     if(type!=="Tout"&&!s.category?.toLowerCase().includes(type.replace(/[^a-z]/gi,"").toLowerCase().slice(0,5)))return false
     if(lang&&lang!=="Toutes"&&!s.language?.includes(lang))return false
     return true
