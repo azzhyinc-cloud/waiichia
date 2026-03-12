@@ -110,8 +110,8 @@ export default function TopNav() {
             style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",background:"var(--card)",border:"1px solid var(--border)",borderRadius:50,cursor:"pointer",fontSize:12,fontFamily:"Plus Jakarta Sans,sans-serif",transition:"all .2s",color:"var(--text2)"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.color="var(--text)"}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text2)"}}>
-            <span>{devise.flag}</span>
-            <span style={{fontFamily:"Space Mono,monospace",fontSize:11}}>{devise.country.slice(0,2).toUpperCase()} · {devise.code}</span>
+            <span>{devise?.flag ?? "🇰🇲"}</span>
+            <span style={{fontFamily:"Space Mono,monospace",fontSize:11}}>{devise?.country?.slice(0,2) ?? "KM".toUpperCase()} · {devise?.code ?? "KMF"}</span>
           </div>
 
           {/* Cloche notifs */}
@@ -142,7 +142,7 @@ export default function TopNav() {
       </div>
 
       <NotifPanel open={notifOpen} onClose={()=>setNotifOpen(false)}/>
-      <DeviseModal open={deviseOpen} onClose={()=>setDeviseOpen(false)} current={devise.code} onChange={(d)=>{setDevise(d)}}/>
+      <DeviseModal open={deviseOpen} onClose={()=>setDeviseOpen(false)} current={devise?.code ?? "KMF"} onChange={(d)=>{setDevise(d)}}/>
     </>
   )
 }
