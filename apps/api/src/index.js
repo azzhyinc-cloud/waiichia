@@ -18,6 +18,7 @@ import eventsRoutes    from './routes/events.js'
 import emissionsRoutes from './routes/emissions.js'
 import radioRoutes     from './routes/radio.js'
 import karaokeRoutes   from './routes/karaoke.js'
+import adminRoutes from './routes/admin.js'
 
 const app = Fastify({
   logger: {
@@ -49,6 +50,7 @@ await app.register(messagesRoutes,  { prefix: '/api/messages' })
 await app.register(emissionsRoutes, { prefix: '/api/emissions' })
 await app.register(radioRoutes,     { prefix: '/api/radio' })
 await app.register(karaokeRoutes,   { prefix: '/api/karaoke' })
+await app.register(adminRoutes, { prefix: '/api/admin' })
 
 app.get('/api/wallet/balance', { preHandler: app.authenticate }, async (req, reply) => {
   const { data } = await supabase.from('wallets').select('balance, currency').eq('user_id', req.user.id).single()
