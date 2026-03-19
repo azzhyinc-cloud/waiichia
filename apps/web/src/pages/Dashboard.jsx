@@ -1,157 +1,170 @@
 import { useState, useEffect } from "react"
-import { useAuthStore, useDeviseStore, usePageStore } from "../stores/index.js"
+import api from "../services/api.js"
+import { useAuthStore, usePageStore } from "../stores/index.js"
 
-const PERIODS=[{id:"7d",label:"7j"},{id:"30d",label:"30j"},{id:"90d",label:"90j"},{id:"1y",label:"1an"}]
+const PERIODS=[{id:'7d',l:'7j'},{id:'30d',l:'30j'},{id:'90d',l:'90j'},{id:'1y',l:'1an'}]
 const fmtK=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
-const MOCK_KPI=[{icon:"🎧",label:"Écoutes",value:42870,delta:"+12%",color:"#f5a623"},{icon:"💰",label:"Revenus",value:186400,delta:"+8%",color:"#2dc653",suffix:true},{icon:"👥",label:"Nouveaux fans",value:1240,delta:"+23%",color:"#9b59f5"},{icon:"📤",label:"Sons actifs",value:34,delta:"+2",color:"#4d9fff"}]
-const MOCK_GEO=[{pays:"🇰🇲 Comores",pct:54,v:23148},{pays:"🇲🇬 Madagascar",pct:18,v:7717},{pays:"🇫🇷 France",pct:12,v:5144},{pays:"🇹🇿 Tanzanie",pct:8,v:3430},{pays:"🇷🇪 Réunion",pct:5,v:2144},{pays:"🌍 Autres",pct:3,v:1287}]
-const MOCK_TOP=[{rank:1,title:"Twarab ya Komori",plays:8420,rev:21050,trend:"↑"},{rank:2,title:"Moroni Flow",plays:6180,rev:15450,trend:"↑"},{rank:3,title:"Island Vibe",plays:4930,rev:7395,trend:"→"},{rank:4,title:"Masiwa Matatu",plays:3760,rev:5640,trend:"↑"},{rank:5,title:"Komori Nights",plays:2890,rev:4335,trend:"↓"}]
-const MOCK_REV=[{label:"Ventes directes",pct:42,color:"#f5a623"},{label:"Streaming",pct:28,color:"#2dc653"},{label:"Événements",pct:18,color:"#9b59f5"},{label:"Publicité",pct:8,color:"#4d9fff"},{label:"Boutique",pct:4,color:"#e63946"}]
-const MOCK_TX=[{icon:"💰",label:"Vente — Twarab ya Komori",amount:"+2500",type:"credit",date:"Auj. 09:14"},{icon:"⏳",label:"Location × 3 — Moroni Flow",amount:"+600",type:"credit",date:"Auj. 08:30"},{icon:"🎟️",label:"Billet — Concert Moroni Live",amount:"+12000",type:"credit",date:"Hier 20:10"},{icon:"🛒",label:"Boost Feed campagne",amount:"-3000",type:"debit",date:"Hier 16:45"},{icon:"💰",label:"Vente — Island Vibe",amount:"+1500",type:"credit",date:"Lun. 14:20"},{icon:"🎁",label:"Tips concert live",amount:"+3200",type:"credit",date:"Lun. 11:30"},{icon:"📢",label:"Campagne pub 2j",amount:"-5000",type:"debit",date:"Dim. 10:00"}]
-
-function genChart(n){return Array.from({length:n},()=>({e:800+Math.floor(Math.random()*1200),r:3000+Math.floor(Math.random()*5000)}))}
-function genHeat(){return["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d=>({day:d,hours:Array.from({length:24},(_,h)=>{const pk=(h>=6&&h<=9)||(h>=12&&h<=14)||(h>=19&&h<=23);return pk?Math.floor(Math.random()*80+20):Math.floor(Math.random()*20)})}))}
-
-function Spark({data,color}){
-  const max=Math.max(...data),min=Math.min(...data),r=max-min||1,W=80,H=28
-  const pts=data.map((v,i)=>`${(i/(data.length-1))*W},${H-((v-min)/r)*(H-4)-2}`).join(" ")
-  return <svg width={W} height={H}><polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round"/></svg>
-}
-function MainChart({data}){
-  const W=800,H=160,maxE=Math.max(...data.map(d=>d.e)),maxR=Math.max(...data.map(d=>d.r))
-  const ptE=data.map((d,i)=>`${(i/(data.length-1))*(W-40)+20},${H-((d.e/maxE)*(H-20))-10}`).join(" ")
-  const ptR=data.map((d,i)=>`${(i/(data.length-1))*(W-40)+20},${H-((d.r/maxR)*(H-20))-10}`).join(" ")
-  return(<svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:H,display:"block"}} preserveAspectRatio="none">
-    {[0,.25,.5,.75,1].map(p=><line key={p} x1={20} y1={H-p*(H-20)-10} x2={W-20} y2={H-p*(H-20)-10} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="4,4"/>)}
-    <polyline points={ptE} fill="none" stroke="#f5a623" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"/>
-    <polyline points={ptR} fill="none" stroke="#2dc653" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="6,3"/>
-  </svg>)
-}
-function Heatmap({data}){
-  const maxV=Math.max(...data.flatMap(r=>r.hours))
-  return(<div style={{overflowX:"auto"}}>
-    <div style={{display:"flex",gap:2,minWidth:600}}>
-      <div style={{display:"flex",flexDirection:"column",gap:2,paddingTop:18}}>
-        {data.map(r=><div key={r.day} style={{height:16,width:26,fontSize:9,color:"var(--text3)",display:"flex",alignItems:"center"}}>{r.day}</div>)}
-      </div>
-      <div>
-        <div style={{display:"flex",gap:2,marginBottom:2}}>{Array.from({length:24},(_,h)=><div key={h} style={{width:16,fontSize:8,color:h%6===0?"var(--text3)":"transparent"}}>{h}h</div>)}</div>
-        {data.map(r=><div key={r.day} style={{display:"flex",gap:2,marginBottom:2}}>{r.hours.map((v,h)=><div key={h} title={`${r.day} ${h}h — ${v}`} style={{width:16,height:16,borderRadius:2,background:`rgba(245,166,35,${0.08+(v/maxV)*0.92})`}}/>)}</div>)}
-      </div>
-    </div>
-  </div>)
-}
+const GEO=[{c:'🇰🇲 Comores',pct:42},{c:'🇲🇬 Madagascar',pct:18},{c:'🇨🇮 Côte d\'Ivoire',pct:12},{c:'🇳🇬 Nigeria',pct:10},{c:'🇫🇷 France',pct:8},{c:'🇸🇳 Sénégal',pct:6},{c:'🇹🇿 Tanzanie',pct:4}]
+const TOP_TRACKS=[{t:'Twarab ya Komori',a:'Kolo Officiel',p:24800},{t:'Moroni by Night',a:'DJ Chami',p:18200},{t:'Afrika Rising',a:'Wally Afro',p:12100},{t:'Mindset Afrique',a:'Coach Amina',p:15000},{t:'Vibrate Africa',a:'Nadjib Pro',p:11200}]
+const REV_SOURCES=[{l:'Ventes de sons',v:'42%',c:'var(--gold)'},{l:'Locations',v:'24%',c:'var(--blue)'},{l:'Tickets événements',v:'18%',c:'var(--green)'},{l:'Tips / Dons',v:'10%',c:'var(--purple)'},{l:'Publicité',v:'6%',c:'var(--red)'}]
+const EXPENSES=[{l:'Commission Waiichia',v:'15%',c:'var(--red)'},{l:'Retraits',v:'35%',c:'var(--gold)'},{l:'Transferts',v:'28%',c:'var(--blue)'},{l:'Boost contenu',v:'12%',c:'var(--purple)'},{l:'Abonnements',v:'10%',c:'var(--green)'}]
+const DAYS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']
+const HOURS=Array.from({length:24},(_,i)=>i+'h')
 
 export default function Dashboard(){
   const {user}=useAuthStore()
-  const {devise}=useDeviseStore()
   const {setPage}=usePageStore()
-  const dc=devise?.code||"KMF"
-  const [period,setPeriod]=useState("30d")
-  const [txFilter,setTxFilter]=useState("Tout")
-  const [chart,setChart]=useState(()=>genChart(30))
-  const [heat]=useState(()=>genHeat())
+  const [period,setPeriod]=useState('30d')
+  const [stats,setStats]=useState({tracks_count:0,creators_count:0,total_plays:0,countries_count:0})
+  useEffect(()=>{api.profiles.stats().then(s=>setStats(s)).catch(()=>{})},[])
+  const [txFilter,setTxFilter]=useState('Aujourd\'hui')
 
-  useEffect(()=>{
-    const d=period==="7d"?7:period==="30d"?30:period==="90d"?90:365
-    setChart(genChart(d))
-  },[period])
+  if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>📊</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
 
-  if(!user)return(<div style={{textAlign:"center",padding:80}}><div style={{fontSize:48,marginBottom:12}}>🔒</div><div style={{fontFamily:"Syne,sans-serif",fontSize:20,fontWeight:800,marginBottom:8}}>Connectez-vous pour accéder aux analytics</div><button onClick={()=>setPage("login")} style={{padding:"10px 24px",borderRadius:50,border:"none",background:"var(--gold)",color:"#000",fontSize:13,fontWeight:700,cursor:"pointer"}}>Se connecter</button></div>)
+  const KPIs=[
+    {icon:'▶',num:stats.total_plays>=1000000?(stats.total_plays/1000000).toFixed(1)+'M':stats.total_plays>=1000?(stats.total_plays/1000).toFixed(1)+'K':String(stats.total_plays||0),label:'Écoutes',delta:'▲ +14%',up:true,color:'var(--gold)'},
+    {icon:'💰',num:'148K KMF',label:'Revenus',delta:'▲ +22%',up:true,color:'var(--green)'},
+    {icon:'👥',num:stats.creators_count>=1000?(stats.creators_count/1000).toFixed(1)+'K':String(stats.creators_count||0),label:'Créateurs',delta:'▲ +8.4%',up:true,color:'var(--blue)'},
+    {icon:'🛒',num:String(stats.tracks_count||0),label:'Contenus',delta:'▲ +18%',up:true,color:'var(--purple)'},
+    {icon:'🎫',num:'1.2K',label:'Tickets vendus',delta:'▲ +32%',up:true,color:'var(--red)'},
+    {icon:'📢',num:'89K',label:'Impressions pub',delta:'▲ +5%',up:true,color:'var(--gold)'},
+  ]
 
-  const txFiltered=MOCK_TX.filter(t=>txFilter==="Tout"||t.label.toLowerCase().includes(txFilter.toLowerCase()))
-
-  return(<div style={{paddingBottom:40}}>
-    {/* HEADER */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
-      <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:800}}>📊 Analytics</div>
-      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",background:"var(--card)",border:"1px solid var(--border)",borderRadius:50,fontSize:12,color:"var(--text2)"}}>
-          <span style={{width:8,height:8,borderRadius:"50%",background:"#2dc653",display:"inline-block",animation:"pulse 2s infinite"}}/>En direct
-        </div>
-        <div style={{display:"flex",background:"var(--card)",border:"1px solid var(--border)",borderRadius:50,overflow:"hidden"}}>
-          {PERIODS.map(p=><button key={p.id} onClick={()=>setPeriod(p.id)} style={{padding:"6px 14px",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:period===p.id?"var(--gold)":"transparent",color:period===p.id?"#000":"var(--text2)"}}>{p.label}</button>)}
-        </div>
-      </div>
-    </div>
-
-    {/* KPI CARDS */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14,marginBottom:20}}>
-      {MOCK_KPI.map((k,i)=>{
-        const spark=Array.from({length:12},()=>Math.random()*100)
-        return(<div key={i} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:18,position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:k.color}}/>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <span style={{fontSize:22}}>{k.icon}</span>
-            <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:50,background:`${k.color}22`,color:k.color}}>{k.delta}</span>
+  return(
+    <div style={{paddingBottom:60}}>
+      {/* HEADER */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,flexWrap:'wrap',gap:10}}>
+        <div className="page-title" style={{marginBottom:0}}>📊 Analytics Temps Réel</div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--green)'}}>
+            <div style={{width:6,height:6,borderRadius:'50%',background:'var(--green)',animation:'live-pulse 2s infinite'}}/>Données en direct
           </div>
-          <div style={{fontFamily:"Space Mono,monospace",fontSize:24,fontWeight:700,color:k.color,marginBottom:4}}>{fmtK(k.value)}{k.suffix?` ${dc}`:""}</div>
-          <div style={{fontSize:12,color:"var(--text3)",marginBottom:10}}>{k.label}</div>
-          <Spark data={spark} color={k.color}/>
-        </div>)
-      })}
-    </div>
-
-    {/* CHART */}
-    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20,marginBottom:16}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
-        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14}}>📈 Écoutes & Revenus</div>
-        <div style={{display:"flex",gap:14,fontSize:11,color:"var(--text2)"}}>
-          <span><span style={{display:"inline-block",width:10,height:3,background:"#f5a623",borderRadius:2,marginRight:5,verticalAlign:"middle"}}/>Écoutes</span>
-          <span><span style={{display:"inline-block",width:10,height:3,background:"#2dc653",borderRadius:2,marginRight:5,verticalAlign:"middle"}}/>Revenus</span>
+          <div style={{display:'flex',gap:2,background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:3}}>
+            {PERIODS.map(p=><button key={p.id} className={`tab-btn${period===p.id?' active':''}`} style={{padding:'5px 12px',fontSize:11}} onClick={()=>setPeriod(p.id)}>{p.l}</button>)}
+          </div>
+          <button className="btn btn-secondary btn-sm">📥 Exporter</button>
         </div>
       </div>
-      <MainChart data={chart}/>
-    </div>
 
-    {/* GEO + TOP */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20}}>
-        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,marginBottom:14}}>🌍 Audience par pays</div>
-        {MOCK_GEO.map((g,i)=><div key={i} style={{marginBottom:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span>{g.pays}</span><strong style={{color:"#f5a623"}}>{g.pct}%</strong></div>
-          <div style={{height:6,background:"var(--card2)",borderRadius:3,overflow:"hidden"}}><div style={{width:`${g.pct}%`,height:"100%",background:"linear-gradient(90deg,#f5a623,#e8920a)",borderRadius:3}}/></div>
-        </div>)}
+      {/* KPI CARDS */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(155px,1fr))',gap:12,marginBottom:20}}>
+        {KPIs.map(k=>(
+          <div key={k.label} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'16px 18px',borderLeft:`3px solid ${k.color}`}}>
+            <div style={{fontSize:22,marginBottom:6}}>{k.icon}</div>
+            <div style={{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:800,lineHeight:1,marginBottom:3}}>{k.num}</div>
+            <div style={{fontSize:11,color:'var(--text2)',marginBottom:4}}>{k.label}</div>
+            <div style={{fontSize:10,fontFamily:'Space Mono,monospace',color:k.up?'var(--green)':'var(--red)'}}>{k.delta}</div>
+          </div>
+        ))}
       </div>
-      <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20}}>
-        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,marginBottom:14}}>🔥 Top 5 sons</div>
-        {MOCK_TOP.map((t,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<4?"1px solid var(--border)":"none"}}>
-          <div style={{width:24,height:24,borderRadius:6,background:i===0?"var(--gold)":i===1?"rgba(245,166,35,.4)":"var(--card2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:i<2?"#000":"var(--text3)",flexShrink:0}}>{t.rank}</div>
-          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div><div style={{fontSize:11,color:"var(--text3)"}}>{t.plays.toLocaleString()} écoutes</div></div>
-          <div style={{textAlign:"right",flexShrink:0}}><div style={{fontFamily:"Space Mono,monospace",fontSize:11,fontWeight:700,color:"#2dc653"}}>+{t.rev.toLocaleString()}</div><div style={{fontSize:12,color:t.trend==="↑"?"#2dc653":t.trend==="↓"?"#e63946":"var(--text3)"}}>{t.trend}</div></div>
-        </div>)}
+
+      {/* MAIN CHART */}
+      <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20,marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15}}>📈 Écoutes & Revenus — 30 derniers jours</div>
+          <div style={{display:'flex',gap:14,fontSize:11,color:'var(--text2)'}}>
+            <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:3,background:'var(--gold)',borderRadius:2,display:'inline-block'}}/>Écoutes</span>
+            <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:3,background:'var(--green)',borderRadius:2,display:'inline-block'}}/>Revenus</span>
+          </div>
+        </div>
+        <div style={{display:'flex',alignItems:'flex-end',gap:3,height:160}}>
+          {Array.from({length:30},(_,i)=>{const h=20+Math.random()*80;return(
+            <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+              <div style={{width:'100%',height:h+'%',background:`linear-gradient(180deg,var(--gold),rgba(245,166,35,.3))`,borderRadius:'2px 2px 0 0',minHeight:4}}/>
+            </div>
+          )})}
+        </div>
+        <div style={{display:'flex',justifyContent:'space-between',fontSize:9.5,color:'var(--text3)',fontFamily:'Space Mono,monospace',marginTop:6}}>
+          {['1','5','10','15','20','25','30'].map(d=><span key={d}>{d}</span>)}
+        </div>
+      </div>
+
+      {/* 2 COL: Geo + Top tracks */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>🌍 Audience par pays</div>
+          {GEO.map(g=>(
+            <div key={g.c} style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:12}}>
+              <span style={{width:100,flexShrink:0,color:'var(--text2)'}}>{g.c}</span>
+              <div style={{flex:1,height:6,background:'var(--border2)',borderRadius:4,overflow:'hidden'}}><div style={{height:'100%',width:g.pct+'%',background:'var(--gold)',borderRadius:4}}/></div>
+              <span style={{width:30,textAlign:'right',fontFamily:'Space Mono,monospace',color:'var(--text2)',fontSize:11}}>{g.pct}%</span>
+            </div>
+          ))}
+        </div>
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>🔥 Top sons cette période</div>
+          {TOP_TRACKS.map((t,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:i<TOP_TRACKS.length-1?'1px solid var(--border)':'none'}}>
+              <span style={{fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:14,color:i<3?'var(--gold)':'var(--text3)',width:20}}>{i+1}</span>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.t}</div><div style={{fontSize:11,color:'var(--text3)'}}>{t.a}</div></div>
+              <span style={{fontSize:11,fontFamily:'Space Mono,monospace',color:'var(--text2)'}}>{fmtK(t.p)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* HEATMAP */}
+      <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20,marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:16}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15}}>🕐 Heatmap — Écoutes par heure</div>
+          <div style={{fontSize:11,color:'var(--text2)'}}>Heure locale de vos auditeurs</div>
+        </div>
+        <div style={{overflowX:'auto'}}>
+          <div style={{display:'grid',gridTemplateColumns:`40px repeat(${HOURS.length},1fr)`,gap:2,fontSize:10}}>
+            <div/>
+            {HOURS.map(h=><div key={h} style={{textAlign:'center',color:'var(--text3)',fontFamily:'Space Mono,monospace',fontSize:8}}>{h}</div>)}
+            {DAYS.map(d=><>
+              <div key={d} style={{color:'var(--text3)',fontSize:10,display:'flex',alignItems:'center'}}>{d}</div>
+              {HOURS.map((_,h)=>{const v=Math.random();return<div key={d+h} style={{width:'100%',aspectRatio:'1',borderRadius:2,background:`rgba(245,166,35,${v<.2?0.05:v<.4?0.2:v<.6?0.4:v<.8?0.65:0.9})`}}/>})}
+            </>)}
+          </div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,fontSize:10,color:'var(--text3)'}}>
+          <span>Moins</span>
+          {[0.05,0.2,0.4,0.65,0.9].map(v=><div key={v} style={{width:12,height:12,borderRadius:2,background:`rgba(245,166,35,${v})`}}/>)}
+          <span>Plus</span>
+        </div>
+      </div>
+
+      {/* REVENUE + EXPENSES */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>💚 Sources de revenus</div>
+          {REV_SOURCES.map(r=>(
+            <div key={r.l} style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:12}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:r.c,flexShrink:0}}/>
+              <span style={{flex:1,color:'var(--text2)'}}>{r.l}</span>
+              <span style={{fontFamily:'Space Mono,monospace',fontWeight:700}}>{r.v}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>🔴 Dépenses par catégorie</div>
+          {EXPENSES.map(r=>(
+            <div key={r.l} style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:12}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:r.c,flexShrink:0}}/>
+              <span style={{flex:1,color:'var(--text2)'}}>{r.l}</span>
+              <span style={{fontFamily:'Space Mono,monospace',fontWeight:700}}>{r.v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* RECENT TX */}
+      <div className="section-hdr"><div className="section-title">📋 Transactions récentes</div></div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
+        {['Aujourd\'hui','Semaine','Mois'].map(p=><div key={p} className={`pill-tab${txFilter===p?' active':''}`} onClick={()=>setTxFilter(p)}>{p}</div>)}
+        <select className="select-styled"><option>Tout</option><option>Streaming</option><option>Billets</option><option>Boutique</option><option>Pub</option></select>
+      </div>
+      <div className="transactions-list">
+        {[{t:'Vente — Twarab ya Komori',s:'@wallyafro',a:'+2 500 KMF',pos:true,time:'14:32'},{t:'Location — Moroni by Night',s:'@fatima_k · 7j',a:'+800 KMF',pos:true,time:'11:20'},{t:'Ticket — Nuit Twarab',s:'3 billets vendus',a:'+15 000 KMF',pos:true,time:'Hier'},{t:'Commission Waiichia',s:'15% sur ventes',a:'-2 295 KMF',pos:false,time:'Hier'}].map((tx,i)=>(
+          <div key={i} className="transaction-item">
+            <div className="tx-icon" style={{background:tx.pos?'rgba(44,198,83,.12)':'rgba(230,57,70,.12)'}}>{tx.pos?'💰':'📤'}</div>
+            <div className="tx-info"><div className="tx-title">{tx.t}</div><div className="tx-sub">{tx.s} · {tx.time}</div></div>
+            <div className={`tx-amount ${tx.pos?'tx-positive':'tx-negative'}`}>{tx.a}</div>
+          </div>
+        ))}
       </div>
     </div>
-
-    {/* HEATMAP */}
-    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20,marginBottom:16}}>
-      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,marginBottom:14}}>🕐 Heatmap écoutes par heure</div>
-      <Heatmap data={heat}/>
-      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,fontSize:10,color:"var(--text3)"}}>
-        <span>Moins</span>{[0.08,0.3,0.55,0.8,1].map((a,i)=><div key={i} style={{width:12,height:12,borderRadius:2,background:`rgba(245,166,35,${a})`}}/>)}<span>Plus</span>
-      </div>
-    </div>
-
-    {/* SOURCES REVENUS */}
-    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:20,marginBottom:16}}>
-      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,marginBottom:14}}>💚 Sources de revenus</div>
-      {MOCK_REV.map((s,i)=><div key={i} style={{marginBottom:10}}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span>{s.label}</span><strong style={{color:s.color}}>{s.pct}%</strong></div>
-        <div style={{height:6,background:"var(--card2)",borderRadius:3,overflow:"hidden"}}><div style={{width:`${s.pct}%`,height:"100%",background:s.color,borderRadius:3}}/></div>
-      </div>)}
-    </div>
-
-    {/* TRANSACTIONS */}
-    <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,marginBottom:12}}>📋 Transactions récentes</div>
-    <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-      {["Tout","Streaming","Billets","Boutique","Pub"].map(f=><button key={f} onClick={()=>setTxFilter(f)} style={{padding:"6px 16px",borderRadius:50,border:txFilter===f?"none":"1px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:600,background:txFilter===f?"var(--gold)":"var(--card)",color:txFilter===f?"#000":"var(--text2)"}}>{f}</button>)}
-    </div>
-    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",overflow:"hidden"}}>
-      {txFiltered.map((t,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",borderBottom:i<txFiltered.length-1?"1px solid var(--border)":"none",transition:"background .15s"}} onMouseEnter={e=>e.currentTarget.style.background="var(--card2)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-        <div style={{width:36,height:36,borderRadius:10,background:t.type==="credit"?"rgba(44,198,83,.12)":"rgba(230,57,70,.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{t.icon}</div>
-        <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.label}</div><div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{t.date}</div></div>
-        <div style={{fontFamily:"Space Mono,monospace",fontSize:14,fontWeight:700,color:t.type==="credit"?"#2dc653":"#e63946",flexShrink:0}}>{t.amount} {dc}</div>
-      </div>)}
-    </div>
-  </div>)
+  )
 }

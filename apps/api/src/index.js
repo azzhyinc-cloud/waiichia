@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import rateLimit from '@fastify/rate-limit'
 import multipart from '@fastify/multipart'
 import jwt from '@fastify/jwt'
 import 'dotenv/config'
@@ -26,6 +27,7 @@ const app = Fastify({
 })
 
 await app.register(cors, { origin: config.corsOrigin, credentials: true })
+await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 await app.register(multipart, { limits: { fileSize: (parseInt(process.env.MAX_UPLOAD_SIZE_MB) || 200) * 1024 * 1024 } })
 await app.register(jwt, { secret: config.jwtSecret })
 

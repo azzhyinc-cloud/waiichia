@@ -1,3 +1,58 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════
+# CORRECTIF — Upload (location) + Karaoké (complet)
+# ═══════════════════════════════════════════════════
+
+echo "🛑 Arrêt des serveurs..."
+pkill -f "node.*index.js" 2>/dev/null
+pkill -f "vite" 2>/dev/null
+sleep 1
+
+# ═══════════════════════════════════════
+# 1. UPLOAD — Corriger la section Location
+# ═══════════════════════════════════════
+cd /workspaces/waiichia/apps/web/src/pages
+
+python3 << 'PYFIX'
+content = open('Upload.jsx').read()
+
+# Remplacer la section rental avec jour/semaine/mois/an
+old_rental = """          {form.access_type==='rental'&&(
+            <div className="form-row">
+              <div className="form-group"><label className="label">Prix / jour</label><input className="input-field" type="number" value={form.rent_price_day} onChange={e=>set('rent_price_day',e.target.value)} placeholder="200"/></div>
+              <div className="form-group"><label className="label">Prix / semaine</label><input className="input-field" type="number" value={form.rent_price_week} onChange={e=>set('rent_price_week',e.target.value)} placeholder="800"/></div>
+            </div>
+          )}"""
+
+new_rental = """          {form.access_type==='rental'&&(<>
+            <div className="form-row">
+              <div className="form-group"><label className="label">Prix / jour (KMF)</label><input className="input-field" type="number" value={form.rent_price_day} onChange={e=>set('rent_price_day',e.target.value)} placeholder="200"/></div>
+              <div className="form-group"><label className="label">Prix / semaine (KMF)</label><input className="input-field" type="number" value={form.rent_price_week} onChange={e=>set('rent_price_week',e.target.value)} placeholder="800"/></div>
+            </div>
+            <div className="form-row" style={{marginTop:4}}>
+              <div className="form-group"><label className="label">Prix / mois (KMF)</label><input className="input-field" type="number" value={form.rent_price_month} onChange={e=>set('rent_price_month',e.target.value)} placeholder="2 500"/></div>
+              <div className="form-group"><label className="label">Prix / an (KMF)</label><input className="input-field" type="number" value={form.rent_price_year} onChange={e=>set('rent_price_year',e.target.value)} placeholder="15 000"/></div>
+            </div>
+          </>)}"""
+
+content = content.replace(old_rental, new_rental)
+
+# Ajouter rent_price_month et rent_price_year dans le state initial si manquant
+if "rent_price_year" not in content.split("useState")[1] if "useState" in content else "":
+    content = content.replace(
+        "rent_price_week:'',",
+        "rent_price_week:'', rent_price_month:'', rent_price_year:'',"
+    )
+
+open('Upload.jsx', 'w').write(content)
+print("OK upload fixed")
+PYFIX
+echo "✅ Upload.jsx — Location jour/semaine/mois/an corrigée"
+
+# ═══════════════════════════════════════
+# 2. KARAOKÉ — Réécriture complète
+# ═══════════════════════════════════════
+cat > /workspaces/waiichia/apps/web/src/pages/Karaoke.jsx << 'KAREOF'
 import { useState, useEffect, useRef } from "react"
 import { useAuthStore } from "../stores/index.js"
 import api from "../services/api.js"
@@ -256,3 +311,168 @@ function StudioModal({track,onClose}){
 }
 
 function Skeleton(){return(<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14}}>{[...Array(6)].map((_,i)=><div key={i} style={{height:200,background:"var(--card)",borderRadius:"var(--radius)",border:"1px solid var(--border)",animation:"shimmer 1.5s infinite"}}/>)}</div>)}
+KAREOF
+echo "✅ Karaoke.jsx réécrit (cards avec badge/meta/actions, duets avec avatars, studio complet)"
+
+# ═══════════════════════════════════════
+# 3. CSS KARAOKÉ — Remplacer complètement
+# ═══════════════════════════════════════
+python3 << 'PYCSS'
+css = open('/workspaces/waiichia/apps/web/src/prototype-v7.css').read()
+
+# Supprimer l'ancien bloc karaoke s'il existe pour éviter les doublons
+import re
+css = re.sub(r'/\* ═══ KARAOKÉ STYLES ═══ \*/.*?(?=/\*|$)', '', css, flags=re.DOTALL)
+
+# Ajouter le CSS complet du prototype
+new_css = """
+/* ═══ KARAOKÉ v7.2 — STYLES COMPLETS ═══ */
+.karaoke-hero {
+  background:linear-gradient(135deg,#0d0020 0%,#1a0040 40%,#0a1a00 100%);
+  border:1px solid rgba(155,89,245,.25);border-radius:22px;
+  padding:36px;margin-bottom:28px;position:relative;overflow:hidden;
+}
+.karaoke-hero::before {
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 80% 50%,rgba(155,89,245,.18) 0%,transparent 55%),
+    radial-gradient(ellipse at 20% 80%,rgba(245,166,35,.10) 0%,transparent 45%);
+  pointer-events:none;
+}
+.karaoke-badge {
+  display:inline-flex;align-items:center;gap:7px;
+  background:rgba(155,89,245,.12);border:1px solid rgba(155,89,245,.35);
+  border-radius:50px;padding:6px 14px;font-size:10px;
+  font-family:'Space Mono',monospace;color:var(--purple);
+  letter-spacing:1.5px;margin-bottom:16px;position:relative;z-index:1;
+}
+.karaoke-title {
+  font-family:'Syne',sans-serif;font-size:38px;font-weight:800;
+  line-height:1.1;margin-bottom:12px;position:relative;z-index:1;
+}
+.karaoke-title span {
+  background:linear-gradient(135deg,var(--purple),var(--blue),var(--gold));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.karaoke-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:28px; }
+.karaoke-card {
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;cursor:pointer;transition:all 0.25s;
+}
+.karaoke-card:hover { transform:translateY(-4px);border-color:rgba(155,89,245,.4);box-shadow:0 12px 32px rgba(155,89,245,.15); }
+.karaoke-cover {
+  width:100%;aspect-ratio:16/7;display:flex;align-items:center;justify-content:center;
+  font-size:40px;position:relative;overflow:hidden;
+}
+.karaoke-cover-badge {
+  position:absolute;top:8px;right:8px;background:rgba(155,89,245,.9);color:#fff;
+  font-size:9px;font-family:'Space Mono',monospace;font-weight:700;
+  padding:3px 9px;border-radius:20px;letter-spacing:1px;
+}
+.karaoke-info { padding:12px 14px; }
+.karaoke-name { font-family:'Syne',sans-serif;font-weight:700;font-size:14px;margin-bottom:3px; }
+.karaoke-meta { font-size:11px;color:var(--text2);display:flex;gap:10px;margin-bottom:10px; }
+.karaoke-actions { display:flex;gap:8px; }
+.karaoke-duet-btn {
+  flex:1;padding:8px;border-radius:50px;border:1px solid rgba(155,89,245,.4);
+  background:rgba(155,89,245,.08);color:var(--purple);font-size:12px;font-weight:600;
+  cursor:pointer;transition:all 0.2s;font-family:'Plus Jakarta Sans',sans-serif;
+}
+.karaoke-duet-btn:hover { background:var(--purple);color:#fff; }
+.studio-modal { max-width:640px; }
+.studio-waveform {
+  height:80px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  display:flex;align-items:center;padding:0 12px;gap:1.5px;overflow:hidden;margin-bottom:16px;
+}
+.studio-bar {
+  flex:1;min-width:3px;max-width:5px;background:var(--purple);border-radius:2px;
+  transition:height 0.08s ease;
+}
+.studio-bar.recorded { background:var(--gold); }
+.studio-controls { display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:20px; }
+.studio-btn {
+  width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:20px;transition:all 0.2s;
+}
+.studio-btn-rec { background:var(--red);color:#fff;box-shadow:0 4px 16px rgba(230,57,70,.4); }
+.studio-btn-rec:hover { transform:scale(1.08); }
+.studio-btn-rec.recording { animation:pulse-glow 1.2s infinite; }
+.studio-btn-play { background:var(--card2);border:1px solid var(--border);color:var(--text); }
+.studio-btn-play:hover { border-color:var(--gold);color:var(--gold); }
+.studio-timer {
+  font-family:'Space Mono',monospace;font-size:28px;font-weight:700;text-align:center;
+  color:var(--text);margin-bottom:16px;letter-spacing:3px;
+}
+.studio-timer.recording { color:var(--red); }
+.studio-lyrics-display {
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:14px;margin-bottom:16px;min-height:70px;font-size:15px;
+  color:var(--text2);text-align:center;line-height:1.8;font-style:italic;
+}
+.studio-tracks-mix { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px; }
+.mix-track {
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:10px;display:flex;align-items:center;gap:8px;
+}
+.mix-track-icon { font-size:20px;flex-shrink:0; }
+.mix-track-info { flex:1; }
+.mix-track-name { font-size:12px;font-weight:600;margin-bottom:4px; }
+.mix-vol { width:100%;height:4px;background:var(--border);border-radius:4px;cursor:pointer;-webkit-appearance:none;appearance:none; }
+.mix-vol::-webkit-slider-thumb { -webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--gold);cursor:pointer; }
+.duet-list { display:flex;flex-direction:column;gap:10px; }
+.duet-item {
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all 0.2s;
+}
+.duet-item:hover { border-color:rgba(155,89,245,.35);background:var(--card2); }
+.duet-ava-stack { display:flex;margin-right:4px; }
+.duet-ava {
+  width:36px;height:36px;border-radius:50%;border:2px solid var(--bg);
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#000;
+  margin-left:-8px;flex-shrink:0;
+}
+.duet-ava:first-child { margin-left:0; }
+.duet-info { flex:1; }
+.duet-title { font-weight:600;font-size:13px;margin-bottom:2px; }
+.duet-meta { font-size:11px;color:var(--text2);display:flex;gap:8px; }
+.duet-plays { font-family:'Space Mono',monospace;font-size:11px;color:var(--text3);flex-shrink:0; }
+.sc-purple::before { background:var(--purple); }
+
+@media(max-width:600px) {
+  .karaoke-hero { padding:18px;border-radius:var(--radius); }
+  .karaoke-title { font-size:22px; }
+  .karaoke-grid { grid-template-columns:1fr;gap:10px; }
+  .studio-modal { max-width:100%;padding:16px; }
+  .studio-tracks-mix { grid-template-columns:1fr; }
+}
+@media(max-width:420px) {
+  .karaoke-title { font-size:19px; }
+  .karaoke-cover { font-size:28px; }
+  .studio-timer { font-size:22px; }
+  .studio-btn { width:44px;height:44px;font-size:17px; }
+}
+"""
+
+css += new_css
+open('/workspaces/waiichia/apps/web/src/prototype-v7.css', 'w').write(css)
+print("OK css fixed")
+PYCSS
+echo "✅ CSS Karaoké complet (cards, studio, duets, responsive)"
+
+# ═══════════════════════════════════════
+# 4. RELANCER
+# ═══════════════════════════════════════
+echo ""
+echo "🚀 Relancement..."
+cd /workspaces/waiichia
+pnpm --filter api run dev &
+sleep 3
+pnpm --filter web run dev
+
+echo ""
+echo "═══════════════════════════════════════"
+echo "  CORRECTIFS APPLIQUÉS !"
+echo "  ✅ Upload — Location : jour / semaine / mois / an"
+echo "  ✅ Karaoké — Cards avec badge difficulté + meta BPM + boutons Chanter/Duets"
+echo "  ✅ Karaoké — Duets avec double avatar empilé + likes + plays"
+echo "  ✅ Karaoké — Studio complet : paroles, waveform, timer, contrôles, mix, effets, publication"
+echo "═══════════════════════════════════════"

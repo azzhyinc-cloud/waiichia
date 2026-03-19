@@ -1,110 +1,86 @@
-import BuyModal from "../components/BuyModal.jsx"
 import { useState, useEffect } from "react"
-import { usePlayerStore } from "../stores/index.js"
-import { usePageStore, useDeviseStore } from "../stores/index.js"
+import { useAuthStore, usePageStore } from "../stores/index.js"
 import api from "../services/api.js"
 
-const TABS=["Tous","Musique","Podcast","Émission","Événements"]
-const BGS=["linear-gradient(135deg,#f5a623,#e63946)","linear-gradient(135deg,#2dc653,#0a9e4a)","linear-gradient(135deg,#4d9fff,#1a6fcc)","linear-gradient(135deg,#9b59f5,#6d3db5)","linear-gradient(135deg,#ff6b35,#cc4411)","linear-gradient(135deg,#f5a623,#cc7700)"]
-const AVAS=["KO","DJ","FK","NP","WB","OS","KM","EM"]
-const MOCK=Array.from({length:8},(_,i)=>({id:`f${i}`,title:["Twarab ya Komori","Moroni Flow","Afrika Rising","Pumzika Beat","Vibrate Afrika","Zanzibar Night","Kolo Sound","Comoros Pride"][i],profiles:{display_name:["Kolo Officiel","DJ Comoros","Fatima K","Nadjib Pro","Waiichia Beats","Omar Said","Studio KM","East Mix"][i],username:["kolo","djcomoros","fatimak","nadjib","wbeats","omar","studiokm","eastmix"][i]},genre:["Twarab","Afrobeats","Amapiano","Sebene","Gospel","RnB Afro","Afrotrap","Jazz Afro"][i],country:["KM","KM","MG","KM","NG","KM","CI","KM"][i],type:"music",cover_url:null,access_type:i%3===0?"premium":"free",sale_price:i%3===0?2500:0}))
-const rnd=(a,b)=>Math.floor(Math.random()*(b-a)+a)
-const fmtK=n=>n>=1000?(n/1000).toFixed(1)+"K":String(n)
-const FLAGS={"KM":"🇰🇲","MG":"🇲🇬","NG":"🇳🇬","CI":"🇨🇮","SN":"🇸🇳","TZ":"🇹🇿"}
+const FILTERS=['Tous','Musique','Podcast','Événements']
+const MOCK_POSTS=[
+  {id:'f1',user:'Kolo Officiel',handle:'@kolo_komori',ava:'KO',bg:'linear-gradient(135deg,#f5a623,#e63946)',event_type:'upload',content:'a publié un nouveau son',ref_title:'Twarab ya Komori',ref_type:'track',time:'Il y a 2h',reactions:342,comments:28},
+  {id:'f2',user:'DJ Chami',handle:'@djchami',ava:'DC',bg:'linear-gradient(135deg,#9b59f5,#6c3483)',event_type:'album_release',content:'a sorti un nouvel album',ref_title:'Moroni Groove Vol.2',ref_type:'album',time:'Il y a 5h',reactions:891,comments:64},
+  {id:'f3',user:'Coach Amina',handle:'@amina_mindset',ava:'CA',bg:'linear-gradient(135deg,#2dc653,#00bfa5)',event_type:'upload',content:'a publié un nouveau podcast',ref_title:'Mindset Afrique Ep.15',ref_type:'podcast',time:'Hier',reactions:214,comments:18},
+  {id:'f4',user:'Waiichia',handle:'@waiichia',ava:'WA',bg:'linear-gradient(135deg,#f5a623,#e63946)',event_type:'event_created',content:'a créé un événement',ref_title:'Nuit Twarab Moroni — 22 Mars',ref_type:'event',time:'Hier',reactions:567,comments:42},
+  {id:'f5',user:'Wally Afro',handle:'@wallyafro',ava:'WL',bg:'linear-gradient(135deg,#4d9fff,#9b59f5)',event_type:'achievement',content:'a atteint 25 000 fans !',ref_title:'🏆 Milestone : 25K fans',ref_type:'achievement',time:'Il y a 2j',reactions:1200,comments:89},
+  {id:'f6',user:'Nassim B.',handle:'@nassimb_km',ava:'NB',bg:'linear-gradient(135deg,#ff6b35,#cc4411)',event_type:'follow',content:'suit maintenant',ref_title:'Radio Komori FM',ref_type:'follow',time:'Il y a 3j',reactions:45,comments:3},
+]
+const fmtK=n=>n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
+const EVENT_ICONS={upload:'🎵',album_release:'💿',event_created:'🎪',achievement:'🏆',follow:'👥',purchase:'🛒',live_start:'🔴'}
 
-export default function Feed() {
-  const { toggle, currentTrack, isPlaying } = usePlayerStore()
-  const { setPage } = usePageStore()
-  // devise depuis store
-  const [buyModal,setBuyModal]=useState(null)
-  const [tab,setTab]=useState("Tous")
+export default function Feed(){
+  const {user}=useAuthStore()
+  const {setPage}=usePageStore()
+  const [filter,setFilter]=useState('Tous')
   const [posts,setPosts]=useState([])
   const [loading,setLoading]=useState(true)
-  const [reacts,setReacts]=useState({})
 
   useEffect(()=>{
-    api.tracks.list("?limit=20")
-      .then(d=>setPosts(d.tracks?.length?d.tracks:MOCK))
-      .catch(()=>setPosts(MOCK))
+    api.social.feed()
+      .then(d=>setPosts(d.feed?.length?d.feed:MOCK_POSTS))
+      .catch(()=>setPosts(MOCK_POSTS))
       .finally(()=>setLoading(false))
   },[])
 
-  const react=(id,r)=>setReacts(p=>({...p,[id]:{...p[id],[r]:((p[id]?.[r]||rnd(10,500))+1)}}))
+  if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>⚡</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous pour voir votre activité</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
 
   return(
     <div style={{paddingBottom:40}}>
-      <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:800,marginBottom:18}}>📡 Fil d&apos;actualité</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:22}}>
-        {TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"7px 16px",borderRadius:50,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .18s",fontFamily:"Plus Jakarta Sans,sans-serif",borderColor:tab===t?"var(--gold)":"var(--border)",background:tab===t?"var(--gold)":"var(--card)",color:tab===t?"#000":"var(--text2)"}}>{t}</button>)}
-      </div>
-      {loading
-        ?[...Array(3)].map((_,i)=><div key={i} style={{height:180,background:"var(--card)",borderRadius:"var(--radius)",border:"1px solid var(--border)",marginBottom:14,animation:"shimmer 1.5s infinite"}}/>)
-        :posts.map((t,i)=><FeedPost key={t.id} post={t} idx={i} bg={BGS[i%BGS.length]} ava={AVAS[i%AVAS.length]} flag={FLAGS[t.profiles?.country||t.country]||"🌍"} isPlaying={isPlaying&&currentTrack?.id===t.id} onPlay={()=>toggle(t)} reacts={reacts[t.id]||{}} onReact={r=>react(t.id,r)} onProfile={()=>setPage("profile",{profileUsername:t.profiles?.username})} fmtK={fmtK} rnd={rnd}/>)
-      }
-    </div>
-  )
-}
+      <div className="page-title">⚡ Mon Activité</div>
 
-function FeedPost({post:t,idx,bg,ava,flag,isPlaying,onPlay,reacts,onReact,onProfile,fmtK,rnd}){
-  const WF=32
-  const isPremium=t.access_type==="premium"||t.access_type==="paid"
-  const rights=idx%2===0?{label:"© ALL",color:"var(--red)"}:{label:"CC BY",color:"var(--blue)"}
-  return(
-    <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:18,marginBottom:14,transition:"border-color .2s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(245,166,35,.2)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:14}}>
-        <div onClick={onProfile} style={{width:38,height:38,borderRadius:"50%",background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:"#000",flexShrink:0,cursor:"pointer",fontSize:13,overflow:"hidden"}}>
-          {t.profiles?.avatar_url?<img src={t.profiles.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:ava}
-        </div>
-        <div style={{flex:1}}>
-          <div style={{fontWeight:600,fontSize:14,display:"flex",alignItems:"center",gap:6}}>
-            <span onClick={onProfile} style={{cursor:"pointer"}} onMouseEnter={e=>e.target.style.color="var(--gold)"} onMouseLeave={e=>e.target.style.color="var(--text)"}>{t.profiles?.display_name||"Artiste"}</span>
-            <span style={{fontSize:9,padding:"2px 7px",borderRadius:20,fontFamily:"Space Mono,monospace",fontWeight:700,letterSpacing:.5,border:`1px solid ${rights.color}`,color:rights.color,background:`${rights.color}18`}}>{rights.label}</span>
-          </div>
-          <div style={{fontSize:11.5,color:"var(--text2)",marginTop:1}}>{t.genre||"Artiste"} · {flag}</div>
-        </div>
-        <div style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace",flexShrink:0}}>{idx+1}h</div>
+      <div className="filter-bar">
+        {FILTERS.map(f=><div key={f} className={`pill-tab${filter===f?' active':''}`} onClick={()=>setFilter(f)}>{f}</div>)}
       </div>
-      {/* Player */}
-      <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
-        <button onClick={onPlay} style={{width:34,height:34,background:"var(--gold)",borderRadius:"50%",border:"none",display:"flex",alignItems:"center",justifyContent:"center",color:"#000",fontSize:13,cursor:"pointer",transition:"all .2s",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-          {isPlaying?"⏸":"▶"}
-        </button>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:600,fontSize:12.5,marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
-          <div style={{display:"flex",alignItems:"center",gap:1,height:32,cursor:"pointer"}} onClick={onPlay}>
-            {Array.from({length:WF},(_,i)=>{
-              const h=Math.floor(Math.random()*70+30)
-              const played=i<Math.floor(WF*0.3)
-              return<div key={i} style={{flex:1,height:`${h}%`,background:played||isPlaying?"var(--gold)":"var(--border)",borderRadius:2,transition:"background .18s"}}/>
-            })}
-          </div>
+
+      {loading
+        ?<div style={{display:'flex',flexDirection:'column',gap:12}}>{[...Array(4)].map((_,i)=><div key={i} style={{height:120,background:'var(--card)',borderRadius:'var(--radius)',border:'1px solid var(--border)',animation:'shimmer 1.5s infinite'}}/>)}</div>
+        :<div style={{display:'flex',flexDirection:'column',gap:12}}>
+          {posts.map(p=>(
+            <div key={p.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:16,transition:'border-color .2s'}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor='rgba(245,166,35,.3)'}
+              onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
+              {/* HEADER */}
+              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
+                <div style={{width:42,height:42,borderRadius:'50%',background:p.bg,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:15,color:'#000',flexShrink:0}}>{p.ava||p.user?.[0]}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600}}><span style={{cursor:'pointer'}}>{p.user}</span> <span style={{color:'var(--text2)',fontWeight:400}}>{p.content}</span></div>
+                  <div style={{fontSize:11,color:'var(--text3)',fontFamily:'Space Mono,monospace',marginTop:2}}>{p.time}</div>
+                </div>
+                <span style={{fontSize:20}}>{EVENT_ICONS[p.event_type]||'📌'}</span>
+              </div>
+
+              {/* RÉFÉRENCE */}
+              {p.ref_title&&(
+                <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'12px 14px',display:'flex',alignItems:'center',gap:12,cursor:'pointer',marginBottom:12}}>
+                  <div style={{width:40,height:40,borderRadius:8,background:'linear-gradient(135deg,var(--gold),#e8920a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{EVENT_ICONS[p.event_type]||'🎵'}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.ref_title}</div>
+                    <div style={{fontSize:11,color:'var(--text3)',textTransform:'uppercase',fontFamily:'Space Mono,monospace'}}>{p.ref_type}</div>
+                  </div>
+                  {p.ref_type==='track'&&<button className="btn btn-xs btn-primary">▶</button>}
+                </div>
+              )}
+
+              {/* REACTIONS */}
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                {['❤️','🔥','👏','💬'].map(e=>(
+                  <button key={e} style={{display:'flex',alignItems:'center',gap:4,padding:'5px 10px',borderRadius:20,border:'1px solid var(--border)',background:'var(--card2)',fontSize:12,cursor:'pointer',color:'var(--text2)',transition:'all .18s'}}
+                    onMouseEnter={ev=>ev.currentTarget.style.borderColor='var(--gold)'} onMouseLeave={ev=>ev.currentTarget.style.borderColor='var(--border)'}>
+                    {e}<span style={{fontSize:11,fontFamily:'Space Mono,monospace'}}>{e==='💬'?(p.comments||0):Math.floor(Math.random()*200+10)}</span>
+                  </button>
+                ))}
+                <span style={{marginLeft:'auto',fontSize:11,color:'var(--text3)',fontFamily:'Space Mono,monospace'}}>{fmtK(p.reactions)} réactions</span>
+              </div>
+            </div>
+          ))}
         </div>
-        <span style={{fontFamily:"Space Mono,monospace",fontSize:10.5,color:"var(--text2)",flexShrink:0}}>3:{String(idx%60).padStart(2,"0")}</span>
-      </div>
-      {/* Achat */}
-      {isPremium&&<div style={{display:"flex",gap:8,marginBottom:12}}>
-        <button style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
-          🛒 Acheter <span style={{background:"rgba(0,0,0,.15)",borderRadius:20,padding:"1px 7px",fontSize:11}}>{t.sale_price||2500} KMF</span>
-        </button>
-        <button style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:50,border:"1px solid var(--border)",background:"transparent",color:"var(--text2)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-          ⏳ Louer <span style={{fontSize:11,color:"var(--text3)"}}>dès 200 KMF/j</span>
-        </button>
-      </div>}
-      {/* Réactions */}
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        {[["❤️","like"],["🔥","fire"],["🫶","love"],["👏","clap"]].map(([emoji,key])=>(
-          <button key={key} onClick={()=>onReact(key)} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:50,border:"1px solid var(--border)",background:"var(--card2)",fontSize:12,cursor:"pointer",color:"var(--text2)",fontFamily:"Plus Jakarta Sans,sans-serif",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text2)"}}>
-            {emoji}<span>{reacts[key]||fmtK(rnd(10,5000))}</span>
-          </button>
-        ))}
-        <button style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:50,border:"1px solid var(--border)",background:"var(--card2)",fontSize:12,cursor:"pointer",color:"var(--text2)",fontFamily:"Plus Jakarta Sans,sans-serif",marginLeft:"auto"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-          💬 {fmtK(rnd(5,200))}
-        </button>
-        <button style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:50,border:"1px solid var(--border)",background:"var(--card2)",fontSize:12,cursor:"pointer",color:"var(--text2)",fontFamily:"Plus Jakarta Sans,sans-serif"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-          📤 Partager
-        </button>
-      </div>
+      }
     </div>
   )
 }

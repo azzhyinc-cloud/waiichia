@@ -1,395 +1,166 @@
 import { useState } from 'react'
 import { useAuthStore, usePageStore } from '../stores/index.js'
-
 const API = import.meta.env.VITE_API_URL
+const GENRES_MUSIC = ['Twarab','Sebene / Soukous','Afrobeats','Amapiano','Afrotrap / Rap','Coupé Décalé','Slam','Gospel / Religion','Traditionnel','Mindset / Motivation','Toirab','Sambé','Qasida']
+const PODCAST_CATS = ['💡 Mindset','💼 Business','📚 Éducation','🎵 Musique','🗣️ Société','🏥 Santé','🔬 Tech','🌍 Actualités','⚽ Sport','🕌 Spiritualité']
+const EMISSION_CATS = ['🎭 Culture','🗣️ Société','⚽ Sport','🎵 Musique','💼 Économie','🕌 Religion','🌱 Jeunesse','🔬 Tech','🌍 Actualités']
+const COUNTRIES = [['KM','🇰🇲 Comores'],['MG','🇲🇬 Madagascar'],['TZ','🇹🇿 Tanzanie'],['RW','🇷🇼 Rwanda'],['CI',"🇨🇮 Côte d'Ivoire"],['NG','🇳🇬 Nigeria'],['CD','🇨🇩 RD Congo'],['SN','🇸🇳 Sénégal'],['GH','🇬🇭 Ghana'],['CM','🇨🇲 Cameroun']]
+const LANGS = [['fr','Français'],['km','Shikomori'],['sw','Swahili'],['en','Anglais'],['ar','Arabe'],['mg','Malagasy']]
+const CUR = ['KMF','USD','EUR','XOF','NGN']
 
-const MUSIC_GENRES = ['Twarab','Afrobeats','Sebene','Amapiano','Hip-Hop','RnB','Jazz','Gospel','Classique','Autre']
-const PODCAST_CATS = ['Business','Mindset','Education','Culture','Politique','Religion','Tech','Sante','Sport','Autre']
-const COUNTRIES = [['KM','Comores'],['FR','France'],['NG','Nigeria'],['SN','Senegal'],['CI','Cote Ivoire'],['MA','Maroc'],['TZ','Tanzanie']]
-const ACCESS = [['free','Gratuit'],['purchase','Achat'],['rental','Location']]
+function MonetBlock({ok,mode,setMode,form,set,preview=true,pvSec=10,setPvSec=null,showBoth=true}){
+  const PM=[['free','🎁','Gratuit'],['buy','🛒','Vente'],['rent','⏳','Location']];if(showBoth)PM.push(['both','🔀','Vente+Location'])
+  if(!ok)return(<div className="upload-section-box" style={{borderColor:'rgba(245,166,35,.25)',background:'rgba(245,166,35,.04)'}}><div className="upload-section-title">💰 Monétisation</div><div style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'rgba(245,166,35,.06)',border:'1px solid rgba(245,166,35,.2)',borderRadius:'var(--radius-sm)'}}><span style={{fontSize:24}}>🔒</span><div><div style={{fontSize:13,fontWeight:700,color:'var(--gold)',marginBottom:3}}>Compte non vérifié</div><div style={{fontSize:12,color:'var(--text2)',lineHeight:1.6}}>Seuls les vérifiés peuvent monétiser. Publication en <strong>gratuit uniquement</strong>. Demandez la vérification dans Paramètres.</div></div></div></div>)
+  return(<div className="upload-section-box"><div className="upload-section-title">💰 Monétisation & Accès</div>
+    <div className="pricing-modes">{PM.map(([id,ic,lb])=>(<div key={id} className={`pricing-mode${mode===id?' sel':''}`} onClick={()=>setMode(id)}><div className="pricing-mode-icon">{ic}</div><div className="pricing-mode-label">{lb}</div></div>))}</div>
+    {(mode==='buy'||mode==='both')&&<div style={{marginBottom:14}}><label className="label">Prix de vente</label><div style={{display:'flex',gap:8}}><input className="input-field" type="number" value={form.sp||''} onChange={e=>set('sp',e.target.value)} placeholder="Ex: 2500" style={{flex:1}}/><select className="select-styled" value={form.sc||'KMF'} onChange={e=>set('sc',e.target.value)}>{CUR.map(c=><option key={c}>{c}</option>)}</select></div></div>}
+    {(mode==='rent'||mode==='both')&&<div><label className="label" style={{marginBottom:10}}>Tarifs de location</label><div className="rental-grid">{[['rd','📅 Journalier','150'],['rw','📅 Hebdomadaire','600'],['rm','📅 Mensuel','1800']].map(([k,lb,ph])=>(<div key={k} className="rental-period-input"><div className="rental-period-label">{lb}</div><div style={{display:'flex',gap:6}}><input className="input-field" type="number" value={form[k]||''} onChange={e=>set(k,e.target.value)} placeholder={ph} style={{flex:1,fontSize:13}}/><select className="select-styled" style={{fontSize:12}}><option>KMF</option><option>USD</option></select></div></div>))}</div></div>}
+    {preview&&mode!=='free'&&setPvSec&&<div style={{marginTop:16,padding:14,background:'rgba(245,166,35,.04)',border:'1px solid rgba(245,166,35,.15)',borderRadius:'var(--radius-sm)'}}><div style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:8}}>🎧 Extrait gratuit</div><div style={{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}><input type="range" min="5" max="30" value={pvSec} onChange={e=>setPvSec(+e.target.value)} style={{width:120,accentColor:'var(--gold)'}}/><span style={{fontFamily:'Space Mono,monospace',fontSize:14,fontWeight:700,color:'var(--gold)'}}>{pvSec}s</span></div></div>}
+  </div>)
+}
+function MonetFlux({ok,mode,setMode,form,set,pvSec,setPvSec}){
+  if(!ok)return(<div className="upload-section-box" style={{borderColor:'rgba(245,166,35,.25)',background:'rgba(245,166,35,.04)'}}><div className="upload-section-title">💰 Accès au flux</div><div style={{display:'flex',alignItems:'center',gap:12,padding:14,background:'rgba(245,166,35,.06)',border:'1px solid rgba(245,166,35,.2)',borderRadius:'var(--radius-sm)'}}><span style={{fontSize:24}}>🔒</span><div><div style={{fontSize:13,fontWeight:700,color:'var(--gold)'}}>Non vérifié — gratuit uniquement</div></div></div></div>)
+  const M=[['free','🎁','Gratuit','Accès libre'],['sub','💎','Abonnés','Réservé abonnés'],['paid','💳','Payant','Jour/semaine/mois/an']]
+  return(<div className="upload-section-box"><div className="upload-section-title">💰 Accès au flux</div>
+    <div className="pricing-modes">{M.map(([id,ic,lb,ds])=>(<div key={id} className={`pricing-mode${mode===id?' sel':''}`} onClick={()=>setMode(id)}><div className="pricing-mode-icon">{ic}</div><div className="pricing-mode-label">{lb}</div><div style={{fontSize:9,color:'var(--text3)',marginTop:2}}>{ds}</div></div>))}</div>
+    {mode==='paid'&&<div style={{marginTop:14}}><label className="label" style={{marginBottom:10}}>Tarifs</label><div className="rental-grid" style={{gridTemplateColumns:'1fr 1fr'}}>{[['fd','📅 Jour','100'],['fw','📅 Semaine','500'],['fm','📅 Mois','1500'],['fy','📅 An','12000']].map(([k,lb,ph])=>(<div key={k} className="rental-period-input"><div className="rental-period-label">{lb}</div><div style={{display:'flex',gap:6}}><input className="input-field" type="number" value={form[k]||''} onChange={e=>set(k,e.target.value)} placeholder={ph} style={{flex:1,fontSize:13}}/><select className="select-styled" style={{fontSize:12}}><option>KMF</option><option>USD</option></select></div></div>))}</div></div>}
+    {mode!=='free'&&<div style={{marginTop:16,padding:14,background:'rgba(245,166,35,.04)',border:'1px solid rgba(245,166,35,.15)',borderRadius:'var(--radius-sm)'}}><div style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:8}}>🎧 Extrait gratuit</div><div style={{display:'flex',alignItems:'center',gap:14}}><input type="range" min="10" max="120" value={pvSec} onChange={e=>setPvSec(+e.target.value)} style={{width:140,accentColor:'var(--gold)'}}/><span style={{fontFamily:'Space Mono,monospace',fontSize:14,fontWeight:700,color:'var(--gold)'}}>{pvSec>=60?Math.floor(pvSec/60)+'min'+(pvSec%60>0?pvSec%60+'s':''):pvSec+'s'}</span></div></div>}
+  </div>)
+}
 
-const TYPES = [
-  { id:'music',    icon:'🎵', label:'Musique',          desc:'Single, morceau, remix' },
-  { id:'album',    icon:'💿', label:'Album',             desc:'Collection de morceaux' },
-  { id:'podcast',  icon:'🎙️', label:'Podcast / Emission', desc:'Episode, interview, debat' },
-  { id:'radio_live', icon:'📻', label:'Radio Live',      desc:'Stream audio en direct' },
-]
-
-export default function Upload() {
-  const { user } = useAuthStore()
-  const { setPage } = usePageStore()
-  const [type, setType] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [msg, setMsg] = useState('')
-  const [error, setError] = useState('')
-  const [audioFile, setAudioFile] = useState(null)
-  const [coverFile, setCoverFile] = useState(null)
-  const [coverPreview, setCoverPreview] = useState('')
-  const [tracks, setTracks] = useState([{ title:'', file:null, duration:'' }])
-
-  const addTrack = () => setTracks(t => [...t, { title:'', file:null, duration:'' }])
-  const removeTrack = (i) => setTracks(t => t.filter((_,idx)=>idx!==i))
-  const updateTrack = (i, key, val) => setTracks(t => t.map((tr,idx)=>idx===i?{...tr,[key]:val}:tr))
-  const [form, setForm] = useState({
-    title:'', genre:'', category:'', description:'', country:'KM', language:'fr',
-    access_type:'free', sale_price:'', preview_end_sec:30,
-    episode_num:'', series_name:'', stream_url:'', featuring:''
-  })
-
-  const set = (k,v) => setForm(f => ({...f, [k]:v}))
-
-  const token = localStorage.getItem('waiichia_token')
-  const headers = { Authorization: 'Bearer ' + token }
-
-  const uploadFile = async (file, endpoint) => {
-    return new Promise((resolve, reject) => {
-      const fd = new FormData(); fd.append('file', file)
-      const xhr = new XMLHttpRequest()
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          setProgress(Math.round(e.loaded/e.total*100))
-          setMsg('Upload ' + Math.round(e.loaded/e.total*100) + '%...')
-        }
-      }
-      xhr.onload = () => {
-        const d = JSON.parse(xhr.responseText)
-        if (xhr.status >= 400) reject(new Error(d.error))
-        else resolve(d.url)
-      }
-      xhr.onerror = () => reject(new Error('Erreur reseau'))
-      xhr.open('POST', API + endpoint)
-      xhr.setRequestHeader('Authorization', 'Bearer ' + token)
-      xhr.send(fd)
-    })
-  }
-
-  const handleSubmit = async () => {
-    if (!form.title) return setError('Le titre est requis')
-    if (type !== 'radio_live' && !audioFile) return setError('Un fichier audio est requis')
-    if (type === 'radio_live' && !form.stream_url) return setError("L URL du stream est requise")
-    setLoading(true); setError(''); setMsg(''); setProgress(0)
-    try {
-      let audio_url = form.stream_url || ''
-      let cover_url = ''
-      if (audioFile) audio_url = await uploadFile(audioFile, '/api/upload/audio')
-      // Upload pistes supplementaires album/podcast
-      if ((type==='album'||type==='podcast') && tracks.some(t=>t.file)) {
-        setMsg('Upload des pistes...')
-        for (let i=0; i<tracks.length; i++) {
-          const tr = tracks[i]
-          if (!tr.file) continue
-          const trUrl = await uploadFile(tr.file, '/api/upload/audio')
-          // Creer une track separee pour chaque piste
-          await fetch(API + '/api/tracks/', {
-            method:'POST',
-            headers: {'Content-Type':'application/json', Authorization:'Bearer '+token},
-            body: JSON.stringify({
-              title: tr.title || (type==='album'?'Piste '+(i+1):'Episode '+(i+1)),
-              type: type,
-              genre: form.genre || form.category,
-              country: form.country || 'KM',
-              audio_url_128: trUrl,
-              cover_url: cover_url||null,
-              access_type: form.access_type || 'free',
-              sale_price: form.sale_price ? parseInt(form.sale_price) : 0,
-              is_published: true,
-            })
-          })
-        }
-      }
-      if (coverFile) { setMsg('Upload cover...'); cover_url = await uploadFile(coverFile, '/api/upload/cover') }
-      setMsg('Publication...')
-      const payload = {
-        title: form.title,
-        description: form.description,
-        content_type: type,
-        genre: form.genre || form.category,
-        country: form.country,
-        language: form.language,
-        access_type: form.access_type,
-        sale_price: form.access_type !== 'free' ? parseInt(form.sale_price)||0 : null,
-        preview_end_sec: parseInt(form.preview_end_sec)||30,
-        audio_url_128: audio_url,
-        cover_url: cover_url || null,
-        is_published: true,
-      }
-      const res = await fetch(API + '/api/tracks/', {
-        method:'POST',
-        headers: {'Content-Type':'application/json', ...headers},
-        body: JSON.stringify(payload)
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setMsg('Publie avec succes !')
-      setTimeout(() => setPage('profile'), 2000)
-    } catch(e) { setError(e.message) }
-    setLoading(false)
-  }
-
-  const inp = {background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px',color:'var(--text)',width:'100%',fontSize:14,boxSizing:'border-box'}
-  const lbl = {display:'block',marginBottom:6,fontSize:13,color:'var(--text2)',fontWeight:600}
-
-  if (!user) return (
-    <div style={{textAlign:'center',padding:60}}>
-      <div style={{fontSize:48,marginBottom:16}}>🔒</div>
-      <h2>Connectez-vous pour publier</h2>
-      <button onClick={()=>setPage('login')} style={{marginTop:16,background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer'}}>Se connecter</button>
+export default function Upload(){
+  const{user}=useAuthStore();const{setPage}=usePageStore()
+  const[tab,setTab]=useState('son'),[loading,setLoading]=useState(false),[progress,setProgress]=useState(0),[msg,setMsg]=useState(''),[error,setError]=useState(''),[success,setSuccess]=useState(false)
+  const token=localStorage.getItem('waiichia_token'),ok=!!user?.is_verified
+  const uf=async(file,ep)=>new Promise((res,rej)=>{const fd=new FormData();fd.append('file',file);const x=new XMLHttpRequest();x.upload.onprogress=e=>{if(e.lengthComputable)setProgress(Math.round(e.loaded/e.total*100))};x.onload=()=>{const d=JSON.parse(x.responseText);x.status>=400?rej(new Error(d.error)):res(d.url)};x.onerror=()=>rej(new Error('Erreur réseau'));x.open('POST',API+ep);x.setRequestHeader('Authorization','Bearer '+token);x.send(fd)})
+  if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>🔒</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous pour publier</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
+  if(success)return(<div style={{textAlign:'center',padding:80}}><div style={{fontSize:64,marginBottom:16}}>✅</div><div style={{fontFamily:'Syne,sans-serif',fontSize:24,fontWeight:800}}>Contenu publié !</div></div>)
+  const T=[{id:'son',ic:'🎵',lb:'Son'},{id:'album',ic:'💿',lb:'Album'},{id:'podcast',ic:'🎙️',lb:'Podcast'},{id:'emission',ic:'📺',lb:'Émission'},{id:'media',ic:'📻',lb:'Flux Média'}]
+  return(<div style={{maxWidth:720,paddingBottom:80}}><div className="page-title">📤 Publier du Contenu</div>
+    <div className="tabs-bar" style={{marginBottom:24}}>{T.map(t=><button key={t.id} className={`tab-btn${tab===t.id?' active':''}`} onClick={()=>{setTab(t.id);setError('')}}>{t.ic} {t.lb}</button>)}</div>
+    {error&&<div style={{background:'rgba(230,57,70,.1)',border:'1px solid rgba(230,57,70,.3)',borderRadius:'var(--radius-sm)',padding:'12px 16px',marginBottom:16,fontSize:13,color:'var(--red)'}}>⚠️ {error}</div>}
+    {loading&&progress>0&&<div style={{marginBottom:16}}><div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--text2)',marginBottom:6}}><span>{msg}</span><span style={{fontWeight:700,color:'var(--gold)'}}>{progress}%</span></div><div style={{background:'var(--border)',borderRadius:99,height:6,overflow:'hidden'}}><div style={{height:'100%',background:'linear-gradient(90deg,var(--gold),#e8920a)',width:progress+'%',transition:'width .3s'}}/></div></div>}
+    {tab==='son'&&<FSon ok={ok} uf={uf} sL={setLoading} sE={setError} sM={setMsg} sP={setProgress} sS={setSuccess} sPage={setPage} tk={token}/>}
+    {tab==='album'&&<FAlbum ok={ok}/>}
+    {tab==='podcast'&&<FPodcast ok={ok}/>}
+    {tab==='emission'&&<FEmission ok={ok}/>}
+    {tab==='media'&&<FMedia ok={ok}/>}
+  </div>)
+}
+function FSon({ok,uf,sL,sE,sM,sP,sS,sPage,tk}){
+  const[af,setAf]=useState(null),[cf,setCf]=useState(null),[cp,setCp]=useState(''),[pm,setPm]=useState('free'),[lic,setLic]=useState('all'),[pvS,setPvS]=useState(10),[tags,setTags]=useState(['#twarab','#komori']),[ti,setTi]=useState('')
+  const[f,sF]=useState({title:'',genre:'Twarab',country:'KM',language:'fr',bpm:'',key:'',mood:'',desc:'',feat:'',sp:'',sc:'KMF',rd:'',rw:'',rm:''})
+  const s=(k,v)=>sF(p=>({...p,[k]:v}))
+  const addTag=e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();const t=ti.trim().replace(',','');if(t&&!tags.includes(t))setTags(p=>[...p,t.startsWith('#')?t:'#'+t]);setTi('')}}
+  const submit=async()=>{if(!f.title)return sE('Titre requis');if(!af)return sE('Fichier audio requis');sL(true);sE('');sM('Upload audio...');sP(0);try{let au=await uf(af,'/api/upload/audio'),cu='';if(cf){sM('Upload pochette...');cu=await uf(cf,'/api/upload/cover')}sM('Publication...');const r=await fetch(API+'/api/tracks/',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tk},body:JSON.stringify({title:f.title,description:f.desc,type:'music',genre:f.genre,country:f.country,language:f.language,access_type:pm==='free'?'free':'paid',sale_price:['buy','both'].includes(pm)?parseInt(f.sp)||0:0,rent_price_day:['rent','both'].includes(pm)?parseInt(f.rd)||0:0,preview_end_sec:pvS,audio_url_128:au,cover_url:cu||null,is_published:true,tags})});const d=await r.json();if(!r.ok)throw new Error(d.error);sS(true)}catch(e){sE(e.message)}sL(false)}
+  const R=[['all','© Tous droits réservés','Utilisation interdite sans autorisation'],['cc','CC BY — Creative Commons','Libre avec attribution'],['nc','CC BY-NC','Pas d\'usage commercial']]
+  return(<div className="upload-form-panel">
+    <div className="upload-form-header"><div style={{fontSize:32}}>🎵</div><div><div style={{fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:18}}>Publier un Son</div><div style={{fontSize:12,color:'var(--text2)'}}>Single, instrumental ou remix</div></div></div>
+    <div className="upload-drop-zone" onClick={()=>document.getElementById('iS').click()}><input type="file" id="iS" accept=".mp3,.wav,.flac,.ogg,.aac" style={{display:'none'}} onChange={e=>{const x=e.target.files[0];if(x)setAf(x)}}/>{af?<div><div style={{fontSize:36,marginBottom:8}}>✅</div><div className="upload-drop-title">{af.name}</div><div className="upload-drop-sub">({(af.size/1048576).toFixed(1)} MB)</div></div>:<div><div className="upload-drop-icon">🎵</div><div className="upload-drop-title">Glissez votre fichier audio ici</div><div className="upload-drop-sub">MP3 · WAV · FLAC — Max 200 MB</div><button className="btn btn-primary btn-sm" style={{marginTop:14}}>Parcourir</button></div>}</div>
+    <div className="form-group"><label className="label">🖼️ Pochette *</label><div className="cover-upload-row"><div className="cover-preview" onClick={()=>document.getElementById('cS').click()}><input type="file" id="cS" accept="image/*" style={{display:'none'}} onChange={e=>{const x=e.target.files[0];if(x){setCf(x);setCp(URL.createObjectURL(x))}}}/>{cp?<img src={cp} alt=""/>:<><span>+</span><div style={{fontSize:10,marginTop:4}}>Ajouter</div></>}</div><div style={{fontSize:12,color:'var(--text2)',lineHeight:1.7}}>Carré · 800×800px min · JPG/PNG</div></div></div>
+    <div className="form-group"><label className="label">Titre *</label><input className="input-field" value={f.title} onChange={e=>s('title',e.target.value)} placeholder="Titre du son..."/></div>
+    <div className="form-row"><div className="form-group"><label className="label">Genre</label><select className="select-styled" style={{width:'100%'}} value={f.genre} onChange={e=>s('genre',e.target.value)}>{GENRES_MUSIC.map(g=><option key={g}>{g}</option>)}</select></div><div className="form-group"><label className="label">Pays</label><select className="select-styled" style={{width:'100%'}} value={f.country} onChange={e=>s('country',e.target.value)}>{COUNTRIES.map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></div></div>
+    <div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}><div className="form-group"><label className="label">BPM</label><input className="input-field" type="number" value={f.bpm} onChange={e=>s('bpm',e.target.value)} placeholder="120"/></div><div className="form-group"><label className="label">Tonalité</label><select className="select-styled" style={{width:'100%'}} value={f.key} onChange={e=>s('key',e.target.value)}><option value="">--</option><option>Do (C)</option><option>Ré (D)</option><option>Mi (E)</option><option>Fa (F)</option><option>Sol (G)</option><option>La (A)</option><option>Si (B)</option></select></div><div className="form-group"><label className="label">Humeur</label><select className="select-styled" style={{width:'100%'}} value={f.mood} onChange={e=>s('mood',e.target.value)}><option value="">--</option><option>Joyeux</option><option>Mélancolique</option><option>Énergique</option><option>Spirituel</option><option>Romantique</option></select></div></div>
+    <div className="form-group"><label className="label">Tags</label><div className="tag-input-wrap">{tags.map(t=><div key={t} className="tag-pill">{t} <span className="remove" onClick={()=>setTags(p=>p.filter(x=>x!==t))}>✕</span></div>)}<input className="tag-input" value={ti} onChange={e=>setTi(e.target.value)} onKeyDown={addTag} placeholder="Ajouter un tag..."/></div></div>
+    <div className="form-group"><label className="label">🎤 Featuring</label><input className="input-field" value={f.feat} onChange={e=>s('feat',e.target.value)} placeholder="Rechercher un artiste..."/></div>
+    <div className="form-group"><label className="label">Description / Paroles</label><textarea className="textarea-field" value={f.desc} onChange={e=>s('desc',e.target.value)} placeholder="Décrivez votre son..."/></div>
+    <div className="upload-section-box" style={{borderColor:'rgba(245,166,35,.25)',background:'rgba(245,166,35,.04)'}}><div className="upload-section-title">🎧 Extrait gratuit</div><div style={{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}><span className="label" style={{margin:0}}>Durée</span><input type="range" min="5" max="20" value={pvS} onChange={e=>setPvS(+e.target.value)} style={{width:120,accentColor:'var(--gold)'}}/><span style={{fontFamily:'Space Mono,monospace',fontSize:14,fontWeight:700,color:'var(--gold)'}}>{pvS}s</span><span style={{fontSize:11,color:'var(--text3)'}}>Min 5s · Max 20s</span></div></div>
+    <MonetBlock ok={ok} mode={pm} setMode={setPm} form={f} set={s} preview={false}/>
+    <div className="upload-section-box"><div className="upload-section-title">⚖️ Droits & Licence</div><div style={{display:'flex',flexDirection:'column',gap:10}}>{R.map(([id,t,d])=><label key={id} style={{display:'flex',alignItems:'flex-start',gap:10,cursor:'pointer'}}><input type="radio" name="lic" checked={lic===id} onChange={()=>setLic(id)} style={{accentColor:'var(--gold)',marginTop:3}}/><div><div style={{fontSize:13,fontWeight:600}}>{t}</div><div style={{fontSize:11,color:'var(--text2)'}}>{d}</div></div></label>)}</div></div>
+    <div className="upload-form-actions"><button className="btn btn-secondary" style={{padding:'13px 20px'}}>💾 Brouillon</button><button className="btn btn-primary" style={{flex:1,padding:13,fontSize:15}} onClick={submit}>🚀 Publier</button></div>
+  </div>)
+}
+function FAlbum({ok}){
+  const[cp,setCp]=useState(''),[pm,setPm]=useState('free'),[pvS,setPvS]=useState(15),[f,sF]=useState({sp:'',sc:'KMF',rd:'',rw:'',rm:''}),[tks,setTks]=useState([{t:''},{t:''}])
+  const s=(k,v)=>sF(p=>({...p,[k]:v}))
+  return(<div className="upload-form-panel">
+    <div className="upload-form-header"><div style={{fontSize:32}}>💿</div><div><div style={{fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:18}}>Créer un Album</div><div style={{fontSize:12,color:'var(--text2)'}}>Album, EP, mixtape ou compilation</div></div></div>
+    <div className="form-group"><label className="label">🖼️ Pochette *</label><div className="cover-upload-row"><div className="cover-preview" onClick={()=>document.getElementById('cA').click()}><input type="file" id="cA" accept="image/*" style={{display:'none'}} onChange={e=>{const x=e.target.files[0];if(x)setCp(URL.createObjectURL(x))}}/>{cp?<img src={cp} alt=""/>:<><span>+</span><div style={{fontSize:10,marginTop:4}}>Ajouter</div></>}</div><div style={{fontSize:12,color:'var(--text2)'}}>Carré · 1000×1000px min</div></div></div>
+    <div className="form-row"><div className="form-group" style={{flex:2}}><label className="label">Titre *</label><input className="input-field" placeholder="Titre album..."/></div><div className="form-group"><label className="label">Type</label><select className="select-styled" style={{width:'100%'}}><option>Album</option><option>EP</option><option>Mixtape</option><option>Compilation</option></select></div></div>
+    <div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}><div className="form-group"><label className="label">Genre</label><select className="select-styled" style={{width:'100%'}}>{GENRES_MUSIC.slice(0,9).map(g=><option key={g}>{g}</option>)}</select></div><div className="form-group"><label className="label">Pays</label><select className="select-styled" style={{width:'100%'}}>{COUNTRIES.slice(0,6).map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></div><div className="form-group"><label className="label">Année</label><input className="input-field" type="number" defaultValue="2026"/></div></div>
+    <div className="form-group"><label className="label">Description</label><textarea className="textarea-field" placeholder="Parlez de cet album..."/></div>
+    <div className="upload-section-box"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><div><div className="upload-section-title" style={{marginBottom:2}}>🎵 Pistes</div></div><button className="btn btn-outline btn-sm" onClick={()=>setTks(p=>[...p,{t:''}])}>+ Ajouter</button></div>
+      {tks.map((_,i)=><div key={i} className="album-track-row"><div className="track-row-num">{i+1}</div><div className="track-row-body"><input className="input-field" placeholder="Titre piste *" style={{marginBottom:8}}/><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><label className="upload-mini-btn" style={{cursor:'pointer'}}>🎵 Audio<input type="file" accept="audio/*" style={{display:'none'}}/></label><input className="input-field" placeholder="Feat." style={{flex:1,minWidth:100}}/></div></div>{tks.length>1&&<button className="track-row-remove" onClick={()=>setTks(p=>p.filter((_,j)=>j!==i))}>✕</button>}</div>)}
+      <div style={{marginTop:10,fontSize:11,color:'var(--text3)'}}>💡 Ajoutez des pistes plus tard depuis Mon Contenu.</div></div>
+    <MonetBlock ok={ok} mode={pm} setMode={setPm} form={f} set={s} showBoth={true} preview={true} pvSec={pvS} setPvSec={setPvS}/>
+    <div className="upload-section-box"><div className="upload-section-title">⚖️ Droits</div><div style={{display:'flex',flexDirection:'column',gap:10}}>{[['© Tous droits réservés','Interdite sans autorisation'],['CC BY — Creative Commons','Libre avec attribution']].map(([t,d],i)=><label key={i} style={{display:'flex',alignItems:'flex-start',gap:10,cursor:'pointer'}}><input type="radio" name="ra" defaultChecked={i===0} style={{accentColor:'var(--gold)',marginTop:3}}/><div><div style={{fontSize:13,fontWeight:600}}>{t}</div><div style={{fontSize:11,color:'var(--text2)'}}>{d}</div></div></label>)}</div></div>
+    <div className="upload-form-actions"><button className="btn btn-secondary">💾 Brouillon</button><button className="btn btn-outline">📋 Sans pistes</button><button className="btn btn-primary" style={{flex:1,padding:13,fontSize:15}}>🚀 Publier</button></div>
+  </div>)
+}
+function FPodcast({ok}){
+  const[step,setStep]=useState(1),[cp,setCp]=useState(''),[eps,setEps]=useState([{}]),[pm,setPm]=useState('free'),[pvS,setPvS]=useState(15),[f,sF]=useState({sp:'',rd:'',rw:'',rm:''})
+  const s=(k,v)=>sF(p=>({...p,[k]:v}))
+  const Steps=()=><div className="upload-steps-bar">{[{n:1,l:'Série'},{n:2,l:'Épisodes'},{n:3,l:'Diffusion'}].map((x,i)=><div key={x.n} style={{display:'contents'}}>{i>0&&<div className="upload-step-sep"/>}<div className={`upload-step${step===x.n?' active':''}${step>x.n?' done':''}`} onClick={()=>setStep(x.n)}><span className="step-num">{step>x.n?'✓':x.n}</span><span>{x.l}</span></div></div>)}</div>
+  return(<div className="upload-form-panel">
+    <div className="upload-form-header"><div style={{fontSize:32}}>🎙️</div><div><div style={{fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:18}}>Créer un Podcast</div><div style={{fontSize:12,color:'var(--text2)'}}>Série avec épisodes</div></div></div>
+    <Steps/>
+    {step===1&&<div>
+      <div className="form-group"><label className="label">🖼️ Visuel *</label><div className="cover-upload-row"><div className="cover-preview" onClick={()=>document.getElementById('cP').click()}><input type="file" id="cP" accept="image/*" style={{display:'none'}} onChange={e=>{const x=e.target.files[0];if(x)setCp(URL.createObjectURL(x))}}/>{cp?<img src={cp} alt=""/>:<><span>+</span><div style={{fontSize:10,marginTop:4}}>Ajouter</div></>}</div><div style={{fontSize:12,color:'var(--text2)'}}>Carré · 1400×1400px</div></div></div>
+      <div className="form-group"><label className="label">Nom *</label><input className="input-field" placeholder="Ex: Business Afrika..."/></div>
+      <div className="form-row"><div className="form-group"><label className="label">Catégorie</label><select className="select-styled" style={{width:'100%'}}>{PODCAST_CATS.map(c=><option key={c}>{c}</option>)}</select></div><div className="form-group"><label className="label">Langue</label><select className="select-styled" style={{width:'100%'}}>{LANGS.map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></div></div>
+      <div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}><div className="form-group"><label className="label">Pays</label><select className="select-styled" style={{width:'100%'}}>{COUNTRIES.slice(0,6).map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></div><div className="form-group"><label className="label">Fréquence</label><select className="select-styled" style={{width:'100%'}}><option>Hebdomadaire</option><option>Bi-hebdo</option><option>Mensuel</option><option>Irrégulier</option></select></div><div className="form-group"><label className="label">Accès</label><select className="select-styled" style={{width:'100%'}}><option>🔓 Public</option><option>🔒 Abonnés</option><option>🔀 Mixte</option></select></div></div>
+      <div className="form-group"><label className="label">Description *</label><textarea className="textarea-field" rows="4" placeholder="Décrivez votre podcast..."/></div>
+      <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="btn btn-primary" onClick={()=>setStep(2)}>Suivant →</button></div>
+    </div>}
+    {step===2&&<div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><div><div style={{fontWeight:700,fontSize:15}}>Épisodes</div></div><button className="btn btn-outline btn-sm" onClick={()=>setEps(p=>[...p,{}])}>+ Épisode</button></div>
+      {eps.map((_,i)=><div key={i} className="episode-block"><div className="episode-block-header"><div className="episode-num-badge">Ép. {i+1}</div><input className="input-field" placeholder="Titre *" style={{flex:1}}/>{eps.length>1&&<button className="episode-remove-btn" onClick={()=>setEps(p=>p.filter((_,j)=>j!==i))}>✕</button>}</div><div className="episode-block-body"><div className="upload-drop-zone" style={{padding:18,marginBottom:12}}><div style={{fontSize:20}}>🎙️</div><div style={{fontSize:13,fontWeight:600,marginTop:6}}>Fichier audio</div></div><div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}><div className="form-group"><label className="label" style={{fontSize:11}}>N°</label><input className="input-field" type="number" defaultValue={i+1}/></div><div className="form-group"><label className="label" style={{fontSize:11}}>Saison</label><input className="input-field" type="number" defaultValue="1"/></div><div className="form-group"><label className="label" style={{fontSize:11}}>Accès</label><select className="select-styled" style={{width:'100%'}}><option>🔓 Public</option><option>🔒 Abonnés</option></select></div></div></div></div>)}
+      <div style={{background:'rgba(77,159,255,.06)',border:'1px solid rgba(77,159,255,.2)',borderRadius:'var(--radius-sm)',padding:14,marginTop:12,fontSize:12,color:'var(--text2)',display:'flex',gap:10}}><span style={{fontSize:18}}>💡</span><div>Publiez avec 0 épisode et ajoutez plus tard.</div></div>
+      <div style={{display:'flex',justifyContent:'space-between',marginTop:18}}><button className="btn btn-outline" onClick={()=>setStep(1)}>← Retour</button><button className="btn btn-primary" onClick={()=>setStep(3)}>Suivant →</button></div>
+    </div>}
+    {step===3&&<div>
+      <div className="upload-section-box"><div className="upload-section-title">📡 Diffusion</div><div style={{display:'flex',flexDirection:'column',gap:10}}>{[['Waiichia Podcast','Sur la plateforme',true],['Flux RSS','Spotify, Apple...',false]].map(([t,d,c])=><label key={t} style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',padding:10,background:'var(--bg2)',borderRadius:'var(--radius-sm)'}}><input type="checkbox" defaultChecked={c} style={{accentColor:'var(--gold)'}}/><div><div style={{fontSize:13,fontWeight:600}}>{t}</div><div style={{fontSize:11,color:'var(--text2)'}}>{d}</div></div></label>)}</div></div>
+      <MonetBlock ok={ok} mode={pm} setMode={setPm} form={f} set={s} showBoth={true} preview={true} pvSec={pvS} setPvSec={setPvS}/>
+      <div className="upload-section-box"><div className="upload-section-title">📡 Revenus complémentaires</div><div style={{display:'flex',flexDirection:'column',gap:8}}>{['💰 Pub (auto)','🎁 Tips'].map((t,i)=><label key={t} style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}><input type="checkbox" defaultChecked={i===0} style={{accentColor:'var(--gold)'}}/><div style={{fontSize:13}}>{t}</div></label>)}</div></div>
+      <div style={{display:'flex',justifyContent:'space-between',gap:10,marginTop:8}}><button className="btn btn-outline" onClick={()=>setStep(2)}>← Retour</button><button className="btn btn-secondary">💾 Brouillon</button><button className="btn btn-primary" style={{flex:1,padding:13,fontSize:15}}>🚀 Publier</button></div>
+    </div>}
+  </div>)
+}
+function FEmission({ok}){
+  const[step,setStep]=useState(1),[cp,setCp]=useState(''),[eps,setEps]=useState([{}]),[pm,setPm]=useState('free'),[pvS,setPvS]=useState(20),[f,sF]=useState({sp:'',rd:'',rw:'',rm:''})
+  const s=(k,v)=>sF(p=>({...p,[k]:v}))
+  const Steps=()=><div className="upload-steps-bar">{[{n:1,l:'Émission'},{n:2,l:'Épisodes'},{n:3,l:'Diffusion'}].map((x,i)=><div key={x.n} style={{display:'contents'}}>{i>0&&<div className="upload-step-sep"/>}<div className={`upload-step${step===x.n?' active':''}${step>x.n?' done':''}`} onClick={()=>setStep(x.n)}><span className="step-num">{step>x.n?'✓':x.n}</span><span>{x.l}</span></div></div>)}</div>
+  return(<div className="upload-form-panel">
+    <div className="upload-form-header"><div style={{fontSize:32}}>📺</div><div><div style={{fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:18}}>Créer une Émission</div><div style={{fontSize:12,color:'var(--text2)'}}>Émission régulière ou série thématique</div></div></div>
+    <Steps/>
+    {step===1&&<div>
+      <div className="form-group"><label className="label">🖼️ Visuel *</label><div className="cover-upload-row"><div className="cover-preview" onClick={()=>document.getElementById('cE').click()}><input type="file" id="cE" accept="image/*" style={{display:'none'}} onChange={e=>{const x=e.target.files[0];if(x)setCp(URL.createObjectURL(x))}}/>{cp?<img src={cp} alt=""/>:<><span>+</span><div style={{fontSize:10,marginTop:4}}>Ajouter</div></>}</div><div style={{fontSize:12,color:'var(--text2)'}}>1400×1400px</div></div></div>
+      <div className="form-group"><label className="label">Nom *</label><input className="input-field" placeholder="Ex: Le Talk Africain..."/></div>
+      <div className="form-row"><div className="form-group"><label className="label">Chaîne</label><input className="input-field" placeholder="Radio Komori FM"/></div><div className="form-group"><label className="label">Présentateur</label><input className="input-field" placeholder="Nom"/></div></div>
+      <div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}><div className="form-group"><label className="label">Catégorie</label><select className="select-styled" style={{width:'100%'}}>{EMISSION_CATS.map(c=><option key={c}>{c}</option>)}</select></div><div className="form-group"><label className="label">Format</label><select className="select-styled" style={{width:'100%'}}><option>🎙️ Audio</option><option>🔴 Live</option><option>📻 RSS</option></select></div><div className="form-group"><label className="label">Langue</label><select className="select-styled" style={{width:'100%'}}>{LANGS.map(([c,l])=><option key={c}>{l}</option>)}</select></div></div>
+      <div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}><div className="form-group"><label className="label">Pays</label><select className="select-styled" style={{width:'100%'}}>{COUNTRIES.slice(0,6).map(([c,l])=><option key={c}>{l}</option>)}</select></div><div className="form-group"><label className="label">Durée</label><select className="select-styled" style={{width:'100%'}}><option>~30 min</option><option>~45 min</option><option>~60 min</option><option>Variable</option></select></div><div className="form-group"><label className="label">Fréquence</label><select className="select-styled" style={{width:'100%'}}><option>Hebdomadaire</option><option>Mensuel</option><option>Quotidien</option></select></div></div>
+      <div className="form-group"><label className="label">Description *</label><textarea className="textarea-field" rows="4" placeholder="Présentez votre émission..."/></div>
+      <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}><button className="btn btn-primary" onClick={()=>setStep(2)}>Suivant →</button></div>
+    </div>}
+    {step===2&&<div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><div style={{fontWeight:700,fontSize:15}}>Épisodes</div><button className="btn btn-outline btn-sm" onClick={()=>setEps(p=>[...p,{}])}>+ Épisode</button></div>
+      {eps.map((_,i)=><div key={i} className="episode-block"><div className="episode-block-header"><div className="episode-num-badge" style={{background:'rgba(230,57,70,.15)',color:'var(--red)'}}>Ép. {i+1}</div><input className="input-field" placeholder="Titre *" style={{flex:1}}/>{eps.length>1&&<button className="episode-remove-btn" onClick={()=>setEps(p=>p.filter((_,j)=>j!==i))}>✕</button>}</div><div className="episode-block-body"><div className="upload-drop-zone" style={{padding:18,marginBottom:12}}><div style={{fontSize:20}}>🎙️</div><div style={{fontSize:13,fontWeight:600,marginTop:6}}>Fichier audio</div></div><div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr 1fr'}}><div className="form-group"><label className="label" style={{fontSize:11}}>Saison</label><input className="input-field" type="number" defaultValue="1"/></div><div className="form-group"><label className="label" style={{fontSize:11}}>N°</label><input className="input-field" type="number" defaultValue={i+1}/></div><div className="form-group"><label className="label" style={{fontSize:11}}>Date</label><input className="input-field" type="date"/></div><div className="form-group"><label className="label" style={{fontSize:11}}>Heure</label><input className="input-field" type="time" defaultValue="20:00"/></div></div><div className="form-group"><label className="label" style={{fontSize:11}}>Invités</label><input className="input-field" placeholder="Noms..."/></div></div></div>)}
+      <div style={{display:'flex',justifyContent:'space-between',marginTop:18}}><button className="btn btn-outline" onClick={()=>setStep(1)}>← Retour</button><button className="btn btn-primary" onClick={()=>setStep(3)}>Suivant →</button></div>
+    </div>}
+    {step===3&&<div>
+      <div className="upload-section-box"><div className="upload-section-title">📡 Diffusion</div><div style={{display:'flex',flexDirection:'column',gap:10}}>{[['📺 Waiichia Émissions','Section Émissions',true],['🔴 Radio Live','Station partenaire',false],['📻 RSS','Externe',false]].map(([t,d,c])=><label key={t} style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',padding:10,background:'var(--bg2)',borderRadius:'var(--radius-sm)'}}><input type="checkbox" defaultChecked={c} style={{accentColor:'var(--gold)'}}/><div><div style={{fontSize:13,fontWeight:600}}>{t}</div><div style={{fontSize:11,color:'var(--text2)'}}>{d}</div></div></label>)}</div></div>
+      <MonetBlock ok={ok} mode={pm} setMode={setPm} form={f} set={s} showBoth={true} preview={true} pvSec={pvS} setPvSec={setPvS}/>
+      <div style={{display:'flex',justifyContent:'space-between',gap:10,marginTop:8}}><button className="btn btn-outline" onClick={()=>setStep(2)}>← Retour</button><button className="btn btn-secondary">💾 Brouillon</button><button className="btn btn-primary" style={{flex:1,padding:13,fontSize:15}}>🚀 Publier</button></div>
+    </div>}
+  </div>)
+}
+function FMedia({ok}){
+  const[cp,setCp]=useState(''),[am,setAm]=useState('free'),[pvS,setPvS]=useState(30),[f,sF]=useState({fd:'',fw:'',fm:'',fy:''})
+  const s=(k,v)=>sF(p=>({...p,[k]:v}))
+  return(<div className="upload-form-panel">
+    <div className="upload-form-header"><div style={{fontSize:32}}>📻</div><div><div style={{fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:18}}>Soumettre un Flux Média</div><div style={{fontSize:12,color:'var(--text2)'}}>Radio FM, Web Radio, TV audio</div></div></div>
+    <div style={{background:'rgba(245,166,35,.06)',border:'1px solid rgba(245,166,35,.25)',borderRadius:'var(--radius-sm)',padding:14,marginBottom:18,fontSize:12,color:'var(--text2)',display:'flex',gap:10}}><span style={{fontSize:18}}>🛡️</span><div>Flux média <strong>soumis à validation</strong> par Waiichia.</div></div>
+    <div className="form-group"><label className="label">🖼️ Logo *</label><div className="cover-upload-row"><div className="cover-preview" onClick={()=>document.getElementById('cM').click()}><input type="file" id="cM" accept="image/*" style={{display:'none'}} onChange={e=>{const x=e.target.files[0];if(x)setCp(URL.createObjectURL(x))}}/>{cp?<img src={cp} alt=""/>:<><span>+</span><div style={{fontSize:10,marginTop:4}}>Logo</div></>}</div><div style={{fontSize:12,color:'var(--text2)'}}>Carré · 800×800 min</div></div></div>
+    <div className="form-group"><label className="label">Nom station *</label><input className="input-field" placeholder="Radio Komori FM..."/></div>
+    <div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}><div className="form-group"><label className="label">Type</label><select className="select-styled" style={{width:'100%'}}><option>📻 Radio FM</option><option>🌐 Web Radio</option><option>📺 TV Audio</option></select></div><div className="form-group"><label className="label">Genre</label><select className="select-styled" style={{width:'100%'}}><option>Varié</option><option>Twarab</option><option>Afrobeats</option><option>Info</option><option>Religieux</option></select></div><div className="form-group"><label className="label">Pays</label><select className="select-styled" style={{width:'100%'}}>{COUNTRIES.slice(0,8).map(([c,l])=><option key={c}>{l}</option>)}</select></div></div>
+    <div className="form-group"><label className="label">Description</label><textarea className="textarea-field" rows="3" placeholder="Présentez votre station..."/></div>
+    <div className="upload-section-box"><div className="upload-section-title">📡 Flux audio</div>
+      <div className="form-group"><label className="label">URL stream *</label><input className="input-field" placeholder="https://stream.radio.com/live"/></div>
+      <div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}><div className="form-group"><label className="label">Bitrate</label><select className="select-styled" style={{width:'100%'}}><option>128 kbps</option><option>192 kbps</option><option>256 kbps</option></select></div><div className="form-group"><label className="label">Codec</label><select className="select-styled" style={{width:'100%'}}><option>MP3</option><option>AAC</option><option>Opus</option></select></div><div className="form-group"><label className="label">Diffusion</label><select className="select-styled" style={{width:'100%'}}><option>🔴 24h/24</option><option>📅 Horaires</option></select></div></div>
     </div>
-  )
-
-  return (
-    <div style={{maxWidth:640,margin:'0 auto',padding:'24px 20px 100px'}}>
-      <h1 style={{fontSize:24,fontWeight:800,marginBottom:4}}>Publier du contenu</h1>
-      <p style={{color:'var(--text2)',fontSize:14,marginBottom:24}}>Partage ta creation avec le monde</p>
-
-      {/* STEP 1 - CHOIX DU TYPE */}
-      {!type ? (
-        <div>
-          <h2 style={{fontSize:16,fontWeight:700,marginBottom:16}}>Quel type de contenu veux-tu publier ?</h2>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-            {TYPES.map(t => (
-              <div key={t.id} onClick={() => setType(t.id)}
-                style={{background:'var(--card)',borderRadius:14,padding:24,cursor:'pointer',border:'2px solid var(--border)',textAlign:'center',transition:'all 0.2s'}}>
-                <div style={{fontSize:40,marginBottom:10}}>{t.icon}</div>
-                <div style={{fontWeight:800,fontSize:16,marginBottom:4}}>{t.label}</div>
-                <div style={{fontSize:12,color:'var(--text2)'}}>{t.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div>
-          {/* HEADER TYPE */}
-          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:24,padding:'12px 16px',background:'var(--card)',borderRadius:10,border:'1px solid var(--border)'}}>
-            <span style={{fontSize:24}}>{TYPES.find(t=>t.id===type)?.icon}</span>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:700}}>{TYPES.find(t=>t.id===type)?.label}</div>
-              <div style={{fontSize:12,color:'var(--text2)'}}>{TYPES.find(t=>t.id===type)?.desc}</div>
-            </div>
-            <button onClick={()=>{setType('');setError('');setMsg('')}}
-              style={{background:'var(--card2)',border:'none',color:'var(--text2)',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:12}}>
-              Changer
-            </button>
-          </div>
-
-          {error && <div style={{background:'#2d0000',border:'1px solid #e74c3c',borderRadius:8,padding:'10px 14px',marginBottom:16,color:'#e74c3c',fontSize:13}}>{error}</div>}
-          {msg && <div style={{background:'#002d00',border:'1px solid #2dc653',borderRadius:8,padding:'10px 14px',marginBottom:16,color:'#2dc653',fontSize:13}}>{msg}</div>}
-
-          {/* INFOS COMMUNES */}
-          <div style={{background:'var(--card)',borderRadius:12,padding:24,marginBottom:16,border:'1px solid var(--border)'}}>
-            <h3 style={{margin:'0 0 16px',fontSize:15}}>
-              {type==='music' && 'Infos du morceau'}
-              {type==='album' && "Infos de l album"}
-              {type==='podcast' && "Infos de l episode"}
-              {type==='radio_live' && 'Infos de la radio'}
-            </h3>
-
-            <div style={{marginBottom:14}}>
-              <label style={lbl}>
-                {type==='music'&&'Titre du morceau *'}
-                {type==='album'&&"Titre de l album *"}
-                {type==='podcast'&&"Titre de l episode *"}
-                {type==='radio_live'&&'Nom de la radio *'}
-              </label>
-              <input style={inp} value={form.title} onChange={e=>set('title',e.target.value)}
-                placeholder={type==='music'?'ex: Twarab ya Moroni':type==='album'?"ex: Album Komori 2026":type==='podcast'?"ex: Episode 12 - Business en Afrique":'ex: Radio Komori FM'}/>
-            </div>
-
-            {/* GENRE selon type */}
-            {(type==='music'||type==='album') && (
-              <div style={{marginBottom:14}}>
-                <label style={lbl}>Genre musical</label>
-                <select style={inp} value={form.genre} onChange={e=>set('genre',e.target.value)}>
-                  <option value="">Choisir un genre</option>
-                  {MUSIC_GENRES.map(g=><option key={g}>{g}</option>)}
-                </select>
-              </div>
-            )}
-
-            {(type==='podcast') && (
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
-                <div>
-                  <label style={lbl}>Categorie</label>
-                  <select style={inp} value={form.category} onChange={e=>set('category',e.target.value)}>
-                    <option value="">Choisir</option>
-                    {PODCAST_CATS.map(g=><option key={g}>{g}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={lbl}>Numero episode</label>
-                  <input style={inp} type="number" value={form.episode_num} onChange={e=>set('episode_num',e.target.value)} placeholder="ex: 12"/>
-                </div>
-              </div>
-            )}
-
-            {type==='podcast' && (
-              <div style={{marginBottom:14}}>
-                <label style={lbl}>Nom de la serie / emission</label>
-                <input style={inp} value={form.series_name} onChange={e=>set('series_name',e.target.value)} placeholder="ex: Business Africa Podcast"/>
-              </div>
-            )}
-
-            <div style={{marginBottom:14}}>
-              <label style={lbl}>Description</label>
-              <textarea style={{...inp,height:type==='podcast'?100:70,resize:'vertical'}}
-                value={form.description} onChange={e=>set('description',e.target.value)}
-                placeholder={type==='podcast'?"Decris le sujet de cet episode...":'Decris ton contenu...'}/>
-            </div>
-
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div>
-                <label style={lbl}>Pays</label>
-                <select style={inp} value={form.country} onChange={e=>set('country',e.target.value)}>
-                  {COUNTRIES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Langue</label>
-                <select style={inp} value={form.language} onChange={e=>set('language',e.target.value)}>
-                  <option value="fr">Francais</option>
-                  <option value="ar">Arabe</option>
-                  <option value="sw">Swahili</option>
-                  <option value="en">Anglais</option>
-                  <option value="km">Comorien</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* FICHIER AUDIO */}
-          {type !== 'radio_live' ? (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,marginBottom:16,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 16px',fontSize:15}}>
-                {type==='album' ? 'Fichier audio principal *' : 'Fichier audio *'}
-              </h3>
-              <label style={{display:'block',border:'2px dashed var(--border)',borderRadius:8,padding:24,textAlign:'center',cursor:'pointer',color:'var(--text2)'}}>
-                <input type="file" accept="audio/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f)setAudioFile(f)}}/>
-                {audioFile ? (
-                  <div><div style={{fontSize:32,marginBottom:8}}>✅</div><strong>{audioFile.name}</strong><br/><span style={{fontSize:12}}>({(audioFile.size/1024/1024).toFixed(1)} MB)</span></div>
-                ) : (
-                  <div>
-                    <div style={{fontSize:32,marginBottom:8}}>{type==='podcast'?'🎙️':'🎵'}</div>
-                    <strong>Clique pour choisir un fichier</strong><br/>
-                    <span style={{fontSize:12}}>MP3, WAV, FLAC, AAC (max 200MB)</span>
-                  </div>
-                )}
-              </label>
-            </div>
-          ) : (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,marginBottom:16,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 16px',fontSize:15}}>URL du Stream *</h3>
-              <input style={inp} value={form.stream_url} onChange={e=>set('stream_url',e.target.value)} placeholder="ex: https://stream.radiokomori.com/live"/>
-              <p style={{fontSize:12,color:'var(--text2)',marginTop:8}}>URL HLS, Icecast, ou SHOUTcast de votre flux audio en direct</p>
-            </div>
-          )}
-
-          {/* TRACKLIST - Album et Podcast */}
-          {(type==='album'||type==='podcast') && (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,marginBottom:16,border:'1px solid var(--border)'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-                <h3 style={{margin:0,fontSize:15}}>
-                  {type==='album' ? 'Pistes de l album' : 'Episodes / Parties'}
-                </h3>
-                <button onClick={addTrack}
-                  style={{background:'var(--primary)',border:'none',color:'#fff',borderRadius:6,padding:'6px 14px',cursor:'pointer',fontSize:13,fontWeight:600}}>
-                  + Ajouter
-                </button>
-              </div>
-              <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                {tracks.map((tr,i) => (
-                  <div key={i} style={{background:'var(--card2)',borderRadius:10,padding:14,border:'1px solid var(--border)'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-                      <div style={{width:28,height:28,borderRadius:'50%',background:'var(--primary)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,flexShrink:0}}>
-                        {i+1}
-                      </div>
-                      <input
-                        value={tr.title}
-                        onChange={e=>updateTrack(i,'title',e.target.value)}
-                        placeholder={type==='album'?'Titre de la piste...':'Titre de l episode...'}
-                        style={{flex:1,background:'var(--card)',border:'1px solid var(--border)',borderRadius:6,padding:'7px 10px',color:'var(--text)',fontSize:13}}/>
-                      {tracks.length > 1 && (
-                        <button onClick={()=>removeTrack(i)}
-                          style={{background:'#2d0000',border:'1px solid #e74c3c',color:'#e74c3c',borderRadius:6,padding:'4px 10px',cursor:'pointer',fontSize:12,flexShrink:0}}>
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                    <label style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',padding:'8px 10px',background:'var(--card)',borderRadius:6,border:'1px dashed var(--border)'}}>
-                      <input type="file" accept="audio/*" style={{display:'none'}}
-                        onChange={e=>{const f=e.target.files[0];if(f)updateTrack(i,'file',f)}}/>
-                      <span style={{fontSize:16}}>{tr.file?'✅':'🎵'}</span>
-                      <span style={{fontSize:12,color:tr.file?'var(--text)':'var(--text3)'}}>
-                        {tr.file ? tr.file.name : 'Choisir un fichier audio...'}
-                      </span>
-                      {tr.file && <span style={{fontSize:11,color:'var(--text3)',marginLeft:'auto'}}>({(tr.file.size/1024/1024).toFixed(1)}MB)</span>}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* COVER */}
-          <div style={{background:'var(--card)',borderRadius:12,padding:24,marginBottom:16,border:'1px solid var(--border)'}}>
-            <h3 style={{margin:'0 0 16px',fontSize:15}}>
-              {type==='album'?"Pochette de l album":type==='podcast'?'Visuel du podcast':'Image de couverture'}
-              <span style={{fontSize:12,color:'var(--text3)',fontWeight:400,marginLeft:8}}>(optionnel)</span>
-            </h3>
-            <label style={{display:'block',border:'2px dashed var(--border)',borderRadius:8,padding:24,textAlign:'center',cursor:'pointer',color:'var(--text2)'}}>
-              <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){setCoverFile(f);setCoverPreview(URL.createObjectURL(f))}}}/>
-              {coverPreview ? (
-                <img src={coverPreview} style={{width:120,height:120,objectFit:'cover',borderRadius:8}}/>
-              ) : (
-                <div><div style={{fontSize:32,marginBottom:8}}>🖼️</div><strong>Ajouter une image</strong><br/><span style={{fontSize:12}}>JPG, PNG, WEBP - carre recommande</span></div>
-              )}
-            </label>
-          </div>
-
-          {/* MONETISATION - pas pour radio_live */}
-          {type !== 'radio_live' && (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,marginBottom:24,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 16px',fontSize:15}}>Monetisation</h3>
-              <div style={{display:'flex',gap:8,marginBottom:16}}>
-                {ACCESS.map(([v,l])=>(
-                  <button key={v} onClick={()=>set('access_type',v)}
-                    style={{flex:1,padding:'10px',borderRadius:8,border:'2px solid',borderColor:form.access_type===v?'var(--primary)':'var(--border)',background:form.access_type===v?'var(--primary)':'var(--card)',color:'var(--text)',cursor:'pointer',fontSize:13,fontWeight:600}}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-              {form.access_type !== 'free' && (
-                <div style={{marginBottom:14}}>
-                  <label style={lbl}>Prix (KMF)</label>
-                  <input style={inp} type="number" value={form.sale_price} onChange={e=>set('sale_price',e.target.value)} placeholder="ex: 1500"/>
-                </div>
-              )}
-              <div>
-                <label style={lbl}>Preview gratuit jusqu a (secondes)</label>
-                <input style={inp} type="number" value={form.preview_end_sec} onChange={e=>set('preview_end_sec',e.target.value)} placeholder="30"/>
-              </div>
-            </div>
-          )}
-
-          {/* BOUTON PUBLIER */}
-          <button onClick={handleSubmit} disabled={loading}
-            style={{width:'100%',padding:'14px',background:loading?'var(--border)':'var(--primary)',border:'none',borderRadius:10,color:'#fff',fontSize:16,fontWeight:700,cursor:loading?'not-allowed':'pointer'}}>
-            {loading ? 'Publication en cours...' : 'Publier ' + (TYPES.find(t=>t.id===type)?.label||'')}
-          </button>
-
-          {loading && progress > 0 && (
-            <div style={{marginTop:16}}>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--text2)',marginBottom:6}}>
-                <span>{msg}</span>
-                <span style={{fontWeight:700,color:'var(--primary)'}}>{progress}%</span>
-              </div>
-              <div style={{background:'var(--border)',borderRadius:99,height:8,overflow:'hidden'}}>
-                <div style={{height:'100%',background:'linear-gradient(90deg,var(--primary),var(--gold))',borderRadius:99,width:progress+'%',transition:'width 0.3s'}}/>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
+    <MonetFlux ok={ok} mode={am} setMode={setAm} form={f} set={s} pvSec={pvS} setPvSec={setPvS}/>
+    <div className="upload-section-box" style={{borderColor:'rgba(230,57,70,.2)',background:'rgba(230,57,70,.03)'}}><div className="upload-section-title" style={{color:'var(--red)'}}>📋 Documents requis</div><div style={{display:'flex',flexDirection:'column',gap:12}}>{[['📄','Autorisation émission *'],['🏢','Registre commerce *'],['🪪','Pièce identité *'],['📑','Droits musicaux']].map(([ic,t])=><div key={t} className="doc-upload-row"><div className="doc-upload-label"><span style={{fontSize:16}}>{ic}</span><div style={{fontWeight:600,fontSize:13}}>{t}</div></div><label className="upload-mini-btn" style={{cursor:'pointer'}}>📎 PDF<input type="file" accept=".pdf,.jpg,.png" style={{display:'none'}}/></label></div>)}</div></div>
+    <div className="upload-section-box"><div className="upload-section-title">✅ Conditions</div><div style={{display:'flex',flexDirection:'column',gap:10}}>{['Je certifie que les informations sont exactes.','Je respecte les CGU de Waiichia.','J\'accepte la modération.'].map(t=><label key={t} style={{display:'flex',alignItems:'flex-start',gap:10,cursor:'pointer'}}><input type="checkbox" style={{accentColor:'var(--gold)',marginTop:3}}/><div style={{fontSize:12,color:'var(--text2)',lineHeight:1.6}}>{t}</div></label>)}</div></div>
+    <div className="upload-form-actions"><button className="btn btn-secondary">💾 Brouillon</button><button className="btn btn-primary" style={{flex:1,padding:13,fontSize:15}}>📤 Soumettre</button></div>
+  </div>)
 }

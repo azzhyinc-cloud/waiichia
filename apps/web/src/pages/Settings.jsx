@@ -1,386 +1,173 @@
-import { useState } from 'react'
-import { useAuthStore, usePageStore, useDeviseStore, useThemeStore } from '../stores/index.js'
-import api from '../services/api.js'
+import { useState } from "react"
+import { useAuthStore, usePageStore } from "../stores/index.js"
 
-const LANGS = ['Français','English','Shikomori','Swahili','Malagasy']
-const PAYS = [['KM','🇰🇲 Comores'],['FR','🇫🇷 France'],['NG','🇳🇬 Nigeria'],['SN','🇸🇳 Sénégal'],['MG','🇲🇬 Madagascar'],['CI','🇨🇮 Cote d Ivoire'],['TZ','🇹🇿 Tanzanie']]
-const TYPES = ['Artiste','Media','Label','Influenceur','Entrepreneur','Pro','Consommateur']
-const DEVISES = ['KMF - Franc Comorien','USD - Dollar','EUR - Euro','MGA - Ariary','XOF - Franc CFA']
+const MENU=[
+  {id:'profile',icon:'👤',label:'Profil'},
+  {id:'security',icon:'🔒',label:'Sécurité'},
+  {id:'notifications',icon:'🔔',label:'Notifications'},
+  {id:'language',icon:'🌍',label:'Langue & Région'},
+  {id:'billing',icon:'💳',label:'Facturation'},
+  {id:'rights',icon:'⚖️',label:"Droits d'auteur"},
+  {id:'privacy',icon:'🛡️',label:'Confidentialité'},
+  {id:'logout',icon:'🚪',label:'Déconnexion',red:true},
+]
+const COUNTRIES=[['KM','🇰🇲 Comores'],['MG','🇲🇬 Madagascar'],['TZ','🇹🇿 Tanzanie'],['RW','🇷🇼 Rwanda'],['CI',"🇨🇮 Côte d'Ivoire"],['NG','🇳🇬 Nigeria'],['SN','🇸🇳 Sénégal']]
+const PROFILE_TYPES=['Artiste','Media','Label','Influenceur','Entrepreneur','Pro','Consommateur']
 
-export default function Settings() {
-  const { user, logout } = useAuthStore()
-  const { devise, setDevise } = useDeviseStore()
-  const { theme, toggle: toggleTheme } = useThemeStore()
-  const dc = devise?.code || 'KMF'
-  const { setPage } = usePageStore()
-  const [tab, setTab] = useState('profil')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [form, setForm] = useState({
-    display_name: user?.display_name || '',
-    username: user?.username || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    bio: user?.bio || '',
-    profile_type: user?.profile_type || 'Artiste',
-    country: user?.country || 'KM',
-    langue: 'Français',
-    devise: 'KMF - Franc Comorien',
-    notif_follow: true,
-    notif_comment: true,
-    notif_reaction: true,
-    notif_purchase: true,
-    notif_email: false,
-    notif_sms: false,
-    old_password: '',
-    new_password: '',
-    confirm_password: '',
-  })
-  const set = (k,v) => setForm(f=>({...f,[k]:v}))
-  const inp = {background:'var(--card)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px',color:'var(--text)',width:'100%',fontSize:14,boxSizing:'border-box'}
-  const lbl = {display:'block',fontSize:11,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:6}
+export default function Settings(){
+  const {user,logout}=useAuthStore()
+  const {setPage}=usePageStore()
+  const [section,setSection]=useState('profile')
+  const [saved,setSaved]=useState(false)
 
-  const TABS = [
-    ['profil','👤 Profil'],
-    ['securite','🔒 Sécurité'],
-    ['notifications','🔔 Notifications'],
-    ['langue','🌍 Langue & Région'],
-    ['facturation','💳 Facturation'],
-    ['notifs','🔔 Notifications'],
-    ['droits',"⚖️ Droits d'auteur"],
-    ['confidentialite','🛡️ Confidentialité'],
-  ]
+  const save=()=>{setSaved(true);setTimeout(()=>setSaved(false),2000)}
+  const handleLogout=()=>{logout();setPage('home')}
 
-  const [error, setError] = useState('')
+  if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>⚙️</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
 
-  const handleSave = async () => {
-    setSaving(true)
-    setError('')
-    setSaved(false)
-    try {
-      const res = await api.profiles.update({
-        display_name: form.display_name,
-        bio: form.bio,
-        phone: form.phone,
-        country: form.country,
-        profile_type: form.profile_type.toLowerCase(),
-      })
-      if (res.profile) {
-        setSaved(true)
-        setTimeout(()=>setSaved(false), 3000)
-      }
-    } catch(e) {
-      setError(e.message || 'Erreur lors de la sauvegarde')
-    }
-    setSaving(false)
-  }
+  return(
+    <div style={{paddingBottom:60}}>
+      <div className="page-title">⚙️ Paramètres & Compte</div>
+      {saved&&<div style={{position:'fixed',top:20,right:20,background:'var(--green)',color:'#000',padding:'10px 20px',borderRadius:'var(--radius-sm)',fontWeight:700,fontSize:13,zIndex:999,animation:'slideIn .3s'}}>✅ Sauvegardé !</div>}
 
-  const handleLogout = () => {
-    logout()
-    setPage('home')
-  }
-
-  if(!user) return (
-    <div style={{textAlign:'center',padding:80}}>
-      <button onClick={()=>setPage('login')} style={{background:'var(--primary)',border:'none',color:'#fff',padding:'10px 24px',borderRadius:8,cursor:'pointer'}}>Se connecter</button>
-    </div>
-  )
-
-  return (
-    <div style={{padding:'24px 20px 100px',maxWidth:900,margin:'0 auto'}}>
-      <h1 style={{fontSize:24,fontWeight:900,margin:'0 0 24px'}}>⚙️ Paramètres & Compte</h1>
-
-      <div style={{display:'grid',gridTemplateColumns:'200px 1fr',gap:20,alignItems:'start'}}>
-        {/* MENU LATERAL */}
-        <div style={{background:'var(--card)',borderRadius:12,padding:8,border:'1px solid var(--border)',position:'sticky',top:20}}>
-          {TABS.map(([v,l]) => (
-            <button key={v} onClick={()=>setTab(v)}
-              style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',borderRadius:8,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,marginBottom:2,
-                background:tab===v?'var(--primary)':'transparent',color:tab===v?'#fff':'var(--text2)'}}>
-              {l}
-            </button>
-          ))}
-          <div style={{borderTop:'1px solid var(--border)',marginTop:8,paddingTop:8}}>
-            <button onClick={handleLogout}
-              style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',borderRadius:8,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,
-                background:'transparent',color:'#e74c3c'}}>
-              🚪 Déconnexion
-            </button>
+      <div style={{display:'grid',gridTemplateColumns:'200px 1fr',gap:22}}>
+        {/* MENU GAUCHE */}
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:12,height:'fit-content',position:'sticky',top:80}}>
+          <div style={{display:'flex',flexDirection:'column',gap:2}}>
+            {MENU.map(m=>(
+              <div key={m.id} onClick={()=>m.id==='logout'?handleLogout():setSection(m.id)}
+                style={{padding:'10px 12px',borderRadius:'var(--radius-sm)',cursor:'pointer',fontSize:13,
+                  background:section===m.id?'var(--bg2)':'transparent',
+                  color:m.red?'var(--red)':section===m.id?'var(--text)':'var(--text2)',
+                  fontWeight:section===m.id?600:400,transition:'all .15s'}}
+                onMouseEnter={e=>{if(section!==m.id)e.currentTarget.style.background='var(--bg2)'}}
+                onMouseLeave={e=>{if(section!==m.id)e.currentTarget.style.background='transparent'}}>
+                {m.icon} {m.label}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* CONTENU */}
+        {/* CONTENU DROITE */}
         <div>
-          {error && (
-            <div style={{background:'rgba(230,57,70,0.1)',border:'1px solid #e74c3c',borderRadius:10,padding:'10px 16px',marginBottom:16,color:'#e74c3c',fontWeight:600,fontSize:14}}>
-              ❌ {error}
-            </div>
-          )}
-          {saved && (
-            <div style={{background:'rgba(44,198,83,0.1)',border:'1px solid #2cc653',borderRadius:10,padding:'10px 16px',marginBottom:16,color:'#2cc653',fontWeight:600,fontSize:14}}>
-              ✅ Modifications sauvegardées !
-            </div>
-          )}
+          {section==='profile'&&<div>
+            <Card title="👤 Informations du profil">
+              <div className="form-group"><label className="label">Nom complet</label><input className="input-field" defaultValue={user.display_name||'Kolo Officiel'}/></div>
+              <div className="form-group"><label className="label">Nom d'utilisateur</label><input className="input-field" defaultValue={user.username?'@'+user.username:'@kolo_komori'}/></div>
+              <div className="form-row">
+                <div className="form-group"><label className="label">Email</label><input className="input-field" type="email" defaultValue={user.email||'kolo@waiichia.com'}/></div>
+                <div className="form-group"><label className="label">Téléphone</label><input className="input-field" type="tel" defaultValue="+269 321 0000"/></div>
+              </div>
+              <div className="form-group"><label className="label">Bio</label><textarea className="textarea-field" defaultValue={user.bio||'Artiste comorien 🇰🇲 · Twarab & Afrobeats · Moroni'}/></div>
+              <div className="form-row">
+                <div className="form-group"><label className="label">Type de profil</label><select className="select-styled" style={{width:'100%'}} defaultValue={user.profile_type||'Artiste'}>{PROFILE_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                <div className="form-group"><label className="label">Pays principal</label><select className="select-styled" style={{width:'100%'}}>{COUNTRIES.map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></div>
+              </div>
+              <button className="btn btn-primary" onClick={save}>💾 Sauvegarder</button>
+            </Card>
 
-          {/* PROFIL */}
-          {tab === 'profil' && (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:800}}>👤 Informations du profil</h3>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
-                <div>
-                  <label style={lbl}>NOM COMPLET</label>
-                  <input style={inp} value={form.display_name} onChange={e=>set('display_name',e.target.value)} placeholder="Votre nom"/>
+            <Card title="🖼️ Photo de profil & Couverture">
+              <div style={{display:'flex',gap:20,alignItems:'flex-start',flexWrap:'wrap'}}>
+                <div style={{textAlign:'center'}}>
+                  <div style={{width:90,height:90,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),var(--kente2))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,margin:'0 auto 8px',border:'3px solid var(--border)',cursor:'pointer'}}>{user.display_name?.[0]||'K'}</div>
+                  <button className="btn btn-outline btn-sm">Changer avatar</button>
                 </div>
-                <div>
-                  <label style={lbl}>NOM D'UTILISATEUR</label>
-                  <input style={{...inp,color:'var(--text3)'}} value={'@'+form.username} disabled/>
+                <div style={{textAlign:'center'}}>
+                  <div style={{width:200,height:70,borderRadius:'var(--radius-sm)',background:'linear-gradient(135deg,#0a1e2e,#1060a0)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'var(--text3)',margin:'0 auto 8px',border:'1px solid var(--border)'}}>Cover 1500×400</div>
+                  <button className="btn btn-outline btn-sm">Changer couverture</button>
                 </div>
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
-                <div>
-                  <label style={lbl}>EMAIL</label>
-                  <input style={{...inp,color:'var(--text3)'}} value={form.email} disabled/>
-                </div>
-                <div>
-                  <label style={lbl}>TÉLÉPHONE</label>
-                  <input style={inp} value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="+269 ..."/>
-                </div>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={lbl}>BIO</label>
-                <textarea style={{...inp,height:80,resize:'vertical'}} value={form.bio} onChange={e=>set('bio',e.target.value)} placeholder="Décrivez-vous..."/>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:20}}>
-                <div>
-                  <label style={lbl}>TYPE DE PROFIL</label>
-                  <select style={inp} value={form.profile_type} onChange={e=>set('profile_type',e.target.value)}>
-                    {TYPES.map(t=><option key={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={lbl}>PAYS PRINCIPAL</label>
-                  <select style={inp} value={form.country} onChange={e=>set('country',e.target.value)}>
-                    {PAYS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-                  </select>
-                </div>
-              </div>
-              <button onClick={handleSave} disabled={saving}
-                style={{background:saving?'var(--border)':'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'10px 24px',cursor:saving?'not-allowed':'pointer',fontWeight:700,fontSize:14}}>
-                {saving?'Sauvegarde...':'💾 Sauvegarder'}
-              </button>
-            </div>
-          )}
+            </Card>
+          </div>}
 
-          {/* SECURITE */}
-          {tab === 'securite' && (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:800}}>🔒 Sécurité du compte</h3>
-              <div style={{marginBottom:14}}>
-                <label style={lbl}>MOT DE PASSE ACTUEL</label>
-                <input style={inp} type="password" value={form.old_password} onChange={e=>set('old_password',e.target.value)} placeholder="••••••••"/>
+          {section==='security'&&<div>
+            <Card title="🔒 Mot de passe">
+              <div className="form-group"><label className="label">Mot de passe actuel</label><input className="input-field" type="password" placeholder="••••••••"/></div>
+              <div className="form-row">
+                <div className="form-group"><label className="label">Nouveau mot de passe</label><input className="input-field" type="password" placeholder="Min. 8 caractères"/></div>
+                <div className="form-group"><label className="label">Confirmer</label><input className="input-field" type="password" placeholder="Répéter le mot de passe"/></div>
               </div>
-              <div style={{marginBottom:14}}>
-                <label style={lbl}>NOUVEAU MOT DE PASSE</label>
-                <input style={inp} type="password" value={form.new_password} onChange={e=>set('new_password',e.target.value)} placeholder="••••••••"/>
+              <button className="btn btn-primary" onClick={save}>🔒 Modifier le mot de passe</button>
+            </Card>
+            <Card title="🔐 Authentification à deux facteurs">
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div><div style={{fontWeight:600,fontSize:13}}>2FA par SMS</div><div style={{fontSize:12,color:'var(--text2)'}}>Recevez un code par SMS à chaque connexion</div></div>
+                <div className="toggle-switch" onClick={e=>e.currentTarget.classList.toggle('off')}/>
               </div>
-              <div style={{marginBottom:20}}>
-                <label style={lbl}>CONFIRMER LE MOT DE PASSE</label>
-                <input style={inp} type="password" value={form.confirm_password} onChange={e=>set('confirm_password',e.target.value)} placeholder="••••••••"/>
+            </Card>
+            <Card title="✅ Vérification du compte">
+              <div style={{background:user.is_verified?'rgba(44,198,83,.08)':'rgba(245,166,35,.06)',border:`1px solid ${user.is_verified?'rgba(44,198,83,.2)':'rgba(245,166,35,.2)'}`,borderRadius:'var(--radius-sm)',padding:16,display:'flex',alignItems:'center',gap:12}}>
+                <span style={{fontSize:28}}>{user.is_verified?'✅':'🔒'}</span>
+                <div>
+                  <div style={{fontWeight:700,fontSize:13,color:user.is_verified?'var(--green)':'var(--gold)'}}>{user.is_verified?'Compte vérifié':'Compte non vérifié'}</div>
+                  <div style={{fontSize:12,color:'var(--text2)'}}>{user.is_verified?'Vous pouvez monétiser votre contenu':'Faites vérifier pour vendre, louer et recevoir des paiements'}</div>
+                </div>
+                {!user.is_verified&&<button className="btn btn-primary btn-sm" style={{marginLeft:'auto'}}>Demander la vérification</button>}
               </div>
-              <button style={{background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'10px 24px',cursor:'pointer',fontWeight:700,fontSize:14}}>
-                🔒 Changer le mot de passe
-              </button>
-              <div style={{marginTop:24,padding:16,background:'rgba(230,57,70,0.08)',border:'1px solid rgba(230,57,70,0.2)',borderRadius:10}}>
-                <div style={{fontWeight:700,fontSize:14,color:'#e74c3c',marginBottom:8}}>⚠️ Zone dangereuse</div>
-                <p style={{fontSize:13,color:'var(--text2)',margin:'0 0 12px'}}>La suppression de votre compte est irréversible.</p>
-                <button style={{background:'rgba(230,57,70,0.15)',border:'1px solid rgba(230,57,70,0.4)',color:'#e74c3c',borderRadius:8,padding:'8px 16px',cursor:'pointer',fontWeight:600,fontSize:13}}>
-                  Supprimer mon compte
-                </button>
-              </div>
-            </div>
-          )}
+            </Card>
+          </div>}
 
-          {/* NOTIFICATIONS */}
-          {tab === 'notifications' && (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:800}}>🔔 Préférences de notifications</h3>
-              {[
-                ['notif_follow','👥 Nouveaux abonnés','Quand quelquun vous suit'],
-                ['notif_comment','💬 Commentaires','Sur vos sons et événements'],
-                ['notif_reaction','❤️ Réactions','Sur votre contenu'],
-                ['notif_purchase','💰 Achats & Paiements','Transactions sur votre compte'],
-                ['notif_email','📧 Notifications par email','Résumé hebdomadaire'],
-              ].map(([key,label,desc]) => (
-                <div key={key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 0',borderBottom:'1px solid var(--border)'}}>
-                  <div>
-                    <div style={{fontWeight:600,fontSize:14}}>{label}</div>
-                    <div style={{fontSize:12,color:'var(--text2)'}}>{desc}</div>
-                  </div>
-                  <div onClick={()=>set(key,!form[key])}
-                    style={{width:44,height:24,borderRadius:12,cursor:'pointer',position:'relative',transition:'background 0.2s',
-                      background:form[key]?'var(--primary)':'var(--border)'}}>
-                    <div style={{position:'absolute',top:3,left:form[key]?22:3,width:18,height:18,borderRadius:'50%',background:'#fff',transition:'left 0.2s'}}/>
-                  </div>
+          {section==='notifications'&&<Card title="🔔 Préférences de notifications">
+            <div style={{display:'flex',flexDirection:'column',gap:14}}>
+              {[['Nouveaux fans','Quand quelqu\'un vous suit',true],['Ventes & Revenus','Chaque vente ou location de contenu',true],['Messages privés','Nouveaux messages reçus',true],['Commentaires','Sur vos publications',false],['Événements','Rappels et mises à jour',true],['Marketing','Offres et nouveautés Waiichia',false]].map(([t,d,on])=>(
+                <div key={t} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+                  <div><div style={{fontWeight:600,fontSize:13}}>{t}</div><div style={{fontSize:12,color:'var(--text2)'}}>  {d}</div></div>
+                  <div className={`toggle-switch${on?'':' off'}`} onClick={e=>e.currentTarget.classList.toggle('off')}/>
                 </div>
               ))}
-              <button onClick={handleSave} style={{marginTop:20,background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'10px 24px',cursor:'pointer',fontWeight:700,fontSize:14}}>
-                💾 Sauvegarder
-              </button>
             </div>
-          )}
+          </Card>}
 
-          {/* LANGUE */}
-          {tab === 'langue' && (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:800}}>🌍 Langue & Région</h3>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:20}}>
-                <div>
-                  <label style={lbl}>LANGUE DE L'INTERFACE</label>
-                  <select style={inp} value={form.langue} onChange={e=>set('langue',e.target.value)}>
-                    {LANGS.map(l=><option key={l}>{l}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={lbl}>DEVISE D'AFFICHAGE</label>
-                  <select style={inp} value={form.devise} onChange={e=>set('devise',e.target.value)}>
-                    {DEVISES.map(d=><option key={d}>{d}</option>)}
-                  </select>
-                </div>
-              </div>
-              <button onClick={handleSave} style={{background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'10px 24px',cursor:'pointer',fontWeight:700,fontSize:14}}>
-                💾 Sauvegarder
-              </button>
+          {section==='language'&&<Card title="🌍 Langue & Région">
+            <div className="form-row">
+              <div className="form-group"><label className="label">Langue de l'interface</label><select className="select-styled" style={{width:'100%'}}><option>Français</option><option>English</option><option>Shikomori</option><option>Swahili</option><option>Malagasy</option></select></div>
+              <div className="form-group"><label className="label">Devise d'affichage</label><select className="select-styled" style={{width:'100%'}}><option>KMF - Franc Comorien</option><option>USD</option><option>EUR</option><option>MGA</option><option>XOF</option></select></div>
             </div>
-          )}
+            <button className="btn btn-primary" onClick={save}>💾 Sauvegarder</button>
+          </Card>}
 
-          {/* FACTURATION */}
-          {tab === 'facturation' && (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:800}}>💳 Facturation</h3>
-              <div style={{display:'flex',gap:12,marginBottom:20}}>
-                <button onClick={()=>setPage('wallet')}
-                  style={{flex:1,background:'linear-gradient(135deg,var(--primary),#2563eb)',border:'none',color:'#fff',borderRadius:10,padding:14,cursor:'pointer',fontWeight:700,fontSize:14}}>
-                  💰 Mon Portefeuille
-                </button>
-                <button onClick={()=>setPage('wallet')}
-                  style={{flex:1,background:'var(--card2)',border:'1px solid var(--border)',color:'var(--text)',borderRadius:10,padding:14,cursor:'pointer',fontWeight:600,fontSize:14}}>
-                  📋 Historique
-                </button>
-              </div>
-              <div style={{background:'var(--card2)',borderRadius:10,padding:16,border:'1px solid var(--border)'}}>
-                <div style={{fontSize:12,color:'var(--text3)',fontWeight:700,marginBottom:8}}>MOYENS DE PAIEMENT ACCEPTÉS</div>
-                {[
-                  { icon:'📱', name:'Huri Money', code:'#126#' },
-                  { icon:'📲', name:'Telecom Comores', code:'M-Pesa' },
-                  { icon:'🟠', name:'Orange Money', code:'#144#' },
-                ].map((g,i) => (
-                  <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 0',borderBottom:i<2?'1px solid var(--border)':'none'}}>
-                    <span style={{fontSize:20}}>{g.icon}</span>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:600,fontSize:13}}>{g.name}</div>
-                      <div style={{fontSize:11,color:'var(--text3)'}}>{g.code}</div>
-                    </div>
-                    <span style={{fontSize:11,color:'#2cc653',fontWeight:700,background:'rgba(44,198,83,0.1)',padding:'2px 8px',borderRadius:6}}>ACTIF</span>
-                  </div>
-                ))}
-              </div>
+          {section==='billing'&&<Card title="💳 Facturation & Abonnement">
+            <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:16,marginBottom:16}}>
+              <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,marginBottom:4}}>Plan actuel : Gratuit</div>
+              <div style={{fontSize:12,color:'var(--text2)'}}>Vous utilisez le plan gratuit de Waiichia. Passez à Premium pour débloquer plus de fonctionnalités.</div>
             </div>
-          )}
+            <button className="btn btn-primary">⭐ Passer à Premium</button>
+          </Card>}
 
-          {/* CONFIDENTIALITE */}
-          
-          {tab === 'notifs' && (
-            <div>
-              <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:24,marginBottom:16}}>
-                <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,marginBottom:18}}>🔔 Préférences de notifications</div>
-                {[
-                  {label:"Ventes & revenus",sub:"Quand un titre est acheté ou loué",key:"notif_purchase"},
-                  {label:"Nouveaux fans",sub:"Quand quelqu'un vous suit",key:"notif_follow"},
-                  {label:"Commentaires",sub:"Réactions sur vos publications",key:"notif_comment"},
-                  {label:"Événements Live",sub:"Émissions et concerts en direct",key:"notif_reaction"},
-                ].map(n=>(
-                  <div key={n.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:"1px solid var(--border)"}}>
-                    <div>
-                      <div style={{fontWeight:600,fontSize:13}}>{n.label}</div>
-                      <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{n.sub}</div>
-                    </div>
-                    <button onClick={()=>setForm(f=>({...f,[n.key]:!f[n.key]}))}
-                      style={{width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",position:"relative",background:form[n.key]?"var(--gold)":"var(--card2)",transition:"background .3s",flexShrink:0}}>
-                      <div style={{position:"absolute",top:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .3s",left:form[n.key]?24:3,boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/>
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:24}}>
-                <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,marginBottom:18}}>📬 Canaux</div>
-                {[{label:"Email",key:"notif_email"},{label:"SMS",key:"notif_sms"}].map(n=>(
-                  <div key={n.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:"1px solid var(--border)"}}>
-                    <div style={{fontWeight:600,fontSize:13}}>{n.label}</div>
-                    <button onClick={()=>setForm(f=>({...f,[n.key]:!f[n.key]}))}
-                      style={{width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",position:"relative",background:form[n.key]?"var(--gold)":"var(--card2)",transition:"background .3s",flexShrink:0}}>
-                      <div style={{position:"absolute",top:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .3s",left:form[n.key]?24:3,boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/>
-                    </button>
-                  </div>
-                ))}
-              </div>
+          {section==='rights'&&<Card title="⚖️ Droits d'auteur">
+            <div style={{fontSize:13,color:'var(--text2)',lineHeight:1.8}}>
+              <p>Waiichia respecte les droits d'auteur et la propriété intellectuelle. Tout contenu publié sur la plateforme reste la propriété de son créateur.</p>
+              <p style={{marginTop:12}}>Si vous êtes affilié à une société de droits (SACEM, OROLM, etc.), vous pouvez lier votre compte pour faciliter la gestion de vos revenus.</p>
             </div>
-          )}
+            <div className="form-group" style={{marginTop:16}}><label className="label">Société de droits</label><input className="input-field" placeholder="Ex: SACEM, OROLM..."/></div>
+            <div className="form-group"><label className="label">Numéro d'affiliation</label><input className="input-field" placeholder="Votre numéro d'artiste"/></div>
+            <button className="btn btn-primary" onClick={save}>💾 Enregistrer</button>
+          </Card>}
 
-          {tab === 'droits' && (
-            <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:24}}>
-              <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,marginBottom:18}}>⚖️ Droits d'auteur & Licences</div>
-              <div style={{fontSize:13,color:"var(--text2)",lineHeight:1.8,marginBottom:16}}>
-                Choisissez comment vos œuvres peuvent être utilisées par d'autres utilisateurs.
-              </div>
-              {[
-                {label:"Partage commercial autorisé",sub:"Votre contenu peut être utilisé dans des projets commerciaux",val:false},
-                {label:"Remix & dérivés autorisés",sub:"Les autres peuvent créer des versions dérivées",val:false},
-                {label:"Attribution obligatoire",sub:"Votre nom doit apparaître sur toute réutilisation",val:true},
-              ].map((d,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:"1px solid var(--border)"}}>
-                  <div>
-                    <div style={{fontWeight:600,fontSize:13}}>{d.label}</div>
-                    <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{d.sub}</div>
-                  </div>
-                  <button style={{width:48,height:26,borderRadius:13,border:"none",cursor:"pointer",position:"relative",background:d.val?"var(--gold)":"var(--card2)",transition:"background .3s",flexShrink:0}}>
-                    <div style={{position:"absolute",top:3,width:20,height:20,borderRadius:"50%",background:"#fff",left:d.val?24:3,boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/>
-                  </button>
+          {section==='privacy'&&<Card title="🛡️ Confidentialité">
+            <div style={{display:'flex',flexDirection:'column',gap:14}}>
+              {[['Profil public','Votre profil est visible par tout le monde',true],['Historique d\'écoute','Afficher vos écoutes récentes sur votre profil',false],['Apparaître dans les suggestions','Être recommandé aux autres utilisateurs',true],['Partage de données anonymes','Aider Waiichia à améliorer la plateforme',true]].map(([t,d,on])=>(
+                <div key={t} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+                  <div><div style={{fontWeight:600,fontSize:13}}>{t}</div><div style={{fontSize:12,color:'var(--text2)'}}>{d}</div></div>
+                  <div className={`toggle-switch${on?'':' off'}`} onClick={e=>e.currentTarget.classList.toggle('off')}/>
                 </div>
               ))}
-              <div style={{marginTop:20}}>
-                <button style={{padding:"9px 22px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif"}}>
-                  💾 Sauvegarder
-                </button>
-              </div>
             </div>
-          )}
-
-          {tab === 'confidentialite' && (
-            <div style={{background:'var(--card)',borderRadius:12,padding:24,border:'1px solid var(--border)'}}>
-              <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:800}}>🛡️ Confidentialité</h3>
-              {[
-                ['Profil public','Visible par tous les utilisateurs'],
-                ['Afficher mes écoutes','Montrer mon historique d ecoute'],
-                ['Afficher mes abonnements','Visible sur mon profil'],
-                ['Indexation moteurs de recherche','Apparaître dans les résultats Google'],
-              ].map(([ label, desc ],i) => (
-                <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 0',borderBottom:'1px solid var(--border)'}}>
-                  <div>
-                    <div style={{fontWeight:600,fontSize:14}}>{label}</div>
-                    <div style={{fontSize:12,color:'var(--text2)'}}>{desc}</div>
-                  </div>
-                  <div style={{width:44,height:24,borderRadius:12,cursor:'pointer',background:'var(--primary)',position:'relative'}}>
-                    <div style={{position:'absolute',top:3,right:3,width:18,height:18,borderRadius:'50%',background:'#fff'}}/>
-                  </div>
-                </div>
-              ))}
-              <button onClick={handleSave} style={{marginTop:20,background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'10px 24px',cursor:'pointer',fontWeight:700,fontSize:14}}>
-                💾 Sauvegarder
-              </button>
+            <div style={{marginTop:20,padding:14,background:'rgba(230,57,70,.05)',border:'1px solid rgba(230,57,70,.2)',borderRadius:'var(--radius-sm)'}}>
+              <div style={{fontWeight:700,fontSize:13,color:'var(--red)',marginBottom:6}}>⚠️ Zone dangereuse</div>
+              <div style={{fontSize:12,color:'var(--text2)',marginBottom:12}}>Supprimer votre compte est irréversible. Toutes vos données seront perdues.</div>
+              <button className="btn btn-sm" style={{background:'rgba(230,57,70,.1)',color:'var(--red)',border:'1px solid rgba(230,57,70,.3)',borderRadius:'var(--radius-sm)',padding:'8px 16px',cursor:'pointer',fontSize:12}}>Supprimer mon compte</button>
             </div>
-          )}
+          </Card>}
         </div>
       </div>
     </div>
   )
+}
+
+function Card({title,children}){
+  return(<div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:24,marginBottom:16}}>
+    <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:16,marginBottom:18}}>{title}</div>
+    {children}
+  </div>)
 }

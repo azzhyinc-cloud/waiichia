@@ -26,16 +26,7 @@ import Regie from './pages/Regie.jsx'
 import Admin from './pages/Admin.jsx'
 import Messagerie from './pages/Messagerie.jsx'
 import Emission from './pages/Emission.jsx'
-import Karaoke  from './pages/Karaoke.jsx'
-
-const Placeholder = ({ title, icon }) => (
-  <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-    height:'60vh',gap:16,color:'var(--text2)'}}>
-    <div style={{fontSize:64}}>{icon}</div>
-    <h2 style={{fontFamily:'Syne,sans-serif',fontSize:24,color:'var(--text)'}}>{title}</h2>
-    <p style={{fontSize:14}}>Cette section arrive bientot</p>
-  </div>
-)
+import Karaoke from './pages/Karaoke.jsx'
 
 const PAGES = {
   home:         <Home />,
@@ -44,23 +35,23 @@ const PAGES = {
   feed:         <Feed />,
   music:        <Music />,
   podcast:      <Podcasts />,
+  emission:     <Emission />,
   albums:       <Albums />,
   events:       <Events />,
   create_event: <CreateEvent />,
+  karaoke:      <Karaoke />,
+  shop:         <Shop />,
+  creators:     <Creators />,
   wallet:       <Wallet />,
   dashboard:    <Dashboard />,
   my_events:    <MyEvents />,
   my_content:   <MyContent />,
   settings:     <Settings />,
   regie:        <Regie />,
-  shop:         <Shop />,
   shop_mine:    <MyShop />,
-  creators:     <Creators />,
   upload:       <Upload />,
   admin:        <Admin />,
   messages:     <Messagerie />,
-  karaoke:      <Karaoke />,
-  emission:     <Emission />,
 }
 
 export default function App() {
