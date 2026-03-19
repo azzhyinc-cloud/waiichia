@@ -30,13 +30,11 @@ const NAV = [
   ]},
 ]
 
-function NavItem({ item, currentPage, setPage, user }) {
+function NavItem({ item, currentPage, setPage, user, onClose }) {
   if (item.adminOnly && (!user || (user.role !== 'superadmin' && user.role !== 'admin'))) return null
   return (
-    <button
-      className={`nav-item ${currentPage === item.id ? 'active' : ''}`}
-      onClick={() => setPage(item.id)}
-    >
+    <button className={`nav-item ${currentPage === item.id ? 'active' : ''}`}
+      onClick={() => { setPage(item.id); onClose?.() }}>
       <div className="nav-icon">{item.icon}</div>
       {item.label}
       {item.badge && <span className={`badge-nav badge-${item.badgeColor}`}>{item.badge}</span>}
@@ -45,13 +43,16 @@ function NavItem({ item, currentPage, setPage, user }) {
   )
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const { currentPage, setPage } = usePageStore()
   const { user, logout } = useAuthStore()
   return (
     <aside className="sidebar">
-      <div className="logo-wrap" onClick={() => setPage('home')} style={{cursor:'pointer'}}>
-        <img src="/logo-waiichia.png" alt="Waiichia" className="logo-img" />
+      {/* Bouton fermer visible uniquement sur mobile */}
+      <button className="sidebar-close-btn" onClick={onClose}>✕</button>
+
+      <div className="logo-wrap" onClick={() => { setPage('home'); onClose?.() }} style={{cursor:'pointer'}}>
+        <img src="/logo-waiichia.png" alt="Waiichia" style={{height:38,width:'auto',objectFit:'contain',display:'block'}} />
         <div className="logo-country">🇰🇲 Comores · La plateforme africaine</div>
         <div className="kente-stripe" />
       </div>
@@ -60,7 +61,7 @@ export default function Sidebar() {
           <div className="nav-section" key={section}>
             <div className="nav-label">{section}</div>
             {items.map(item => (
-              <NavItem key={item.id} item={item} currentPage={currentPage} setPage={setPage} user={user} />
+              <NavItem key={item.id} item={item} currentPage={currentPage} setPage={setPage} user={user} onClose={onClose} />
             ))}
           </div>
         ))}
@@ -76,7 +77,7 @@ export default function Sidebar() {
               <div style={{fontSize:11,color:'var(--text3)'}}>@{user.username}</div>
             </div>
           </div>
-          <button onClick={()=>{logout();setPage('home')}} style={{width:'100%',padding:'8px',borderRadius:'var(--radius-sm)',border:'1px solid rgba(230,57,70,.3)',background:'rgba(230,57,70,.08)',color:'var(--red)',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'Plus Jakarta Sans,sans-serif'}}>🚪 Déconnexion</button>
+          <button onClick={()=>{logout();setPage('home');onClose?.()}} style={{width:'100%',padding:'8px',borderRadius:'var(--radius-sm)',border:'1px solid rgba(230,57,70,.3)',background:'rgba(230,57,70,.08)',color:'var(--red)',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'Plus Jakarta Sans,sans-serif'}}>🚪 Déconnexion</button>
         </div>
       )}
     </aside>

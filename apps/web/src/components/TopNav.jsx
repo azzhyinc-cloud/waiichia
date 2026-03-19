@@ -16,7 +16,7 @@ const SEARCH_MOCK = [
   {type:"artist",title:"Studio KM",sub:"Label · Comores",icon:"🏷️"},
 ]
 
-export default function TopNav() {
+export default function TopNav({ onMenuToggle }) {
   const { theme, toggle: toggleTheme } = useThemeStore()
   const { user } = useAuthStore()
   const { setPage } = usePageStore()
@@ -58,7 +58,7 @@ export default function TopNav() {
       <div style={{position:"sticky",top:0,height:"var(--topnav-h,65px)",background:theme==="dark"?"rgba(7,10,15,0.88)":"rgba(240,242,248,0.92)",backdropFilter:"blur(28px)",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",padding:"0 24px",gap:16,zIndex:150,transition:"background var(--transition)",boxShadow:theme==="dark"?"0 1px 0 rgba(245,166,35,.04),0 4px 24px rgba(0,0,0,.3)":"none"}}>
 
         {/* Hamburger mobile */}
-        <div style={{display:"none",flexDirection:"column",gap:5,cursor:"pointer",padding:8,flexShrink:0}} id="hamburger">
+        <div style={{display:"none",flexDirection:"column",gap:5,cursor:"pointer",padding:8,flexShrink:0}} id="hamburger" onClick={onMenuToggle}>
           <span style={{width:22,height:2,background:"var(--text)",borderRadius:2,display:"block"}}/>
           <span style={{width:22,height:2,background:"var(--text)",borderRadius:2,display:"block"}}/>
           <span style={{width:22,height:2,background:"var(--text)",borderRadius:2,display:"block"}}/>
