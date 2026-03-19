@@ -12,7 +12,7 @@ const ITEMS = [
 export default function BottomNav() {
   const { currentPage, setPage } = usePageStore()
   const { currentTrack }         = usePlayerStore()
-  const bottom = currentTrack ? "var(--player-h,70px)" : "0px"
+  const bottom = "0px"
 
   return (
     <>

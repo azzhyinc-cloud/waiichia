@@ -24,9 +24,20 @@ export default function PlayerBar() {
   const pct = duration > 0 ? (progress / duration) * 100 : 0
 
   const handleProgress = e => {
-    if (!progRef.current || !duration) return
-    const rect = progRef.current.getBoundingClientRect()
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    e.preventDefault()
+    e.stopPropagation()
+    const bar = e.currentTarget
+    const rect = bar.getBoundingClientRect()
+    let clientX
+    if (e.type === 'touchend' || e.type === 'touchstart') {
+      const touch = e.changedTouches?.[0] || e.touches?.[0]
+      if (!touch) return
+      clientX = touch.clientX
+    } else {
+      clientX = e.clientX
+    }
+    if (!duration || !rect.width) return
+    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
     seek(x * duration)
   }
 
@@ -95,9 +106,9 @@ export default function PlayerBar() {
         zIndex:200,display:"flex",alignItems:"center",
         padding:"0 16px",gap:14,userSelect:"none",
       }}>
-        {/* Progress line top */}
-        <div onClick={handleProgress}
-          style={{position:"absolute",top:0,left:0,right:0,height:3,
+        {/* Progress line top - desktop only */}
+        <div onClick={handleProgress} onTouchEnd={handleProgress}
+          className="progress-top-bar" style={{position:"absolute",top:0,left:0,right:0,height:3,
             background:"var(--border2)",cursor:"pointer",zIndex:1}}>
           <div style={{height:"100%",width:`${pct}%`,
             background:"linear-gradient(90deg,var(--gold),#e8920a)",
@@ -105,7 +116,7 @@ export default function PlayerBar() {
         </div>
 
         {/* LEFT */}
-        <div style={{display:"flex",alignItems:"center",gap:11,width:240,flexShrink:0,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:11,width:180,flexShrink:0,minWidth:0}}>
           <div style={{width:46,height:46,borderRadius:9,flexShrink:0,overflow:"hidden",
             background:"linear-gradient(135deg,var(--gold),var(--red))",
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
@@ -151,7 +162,7 @@ export default function PlayerBar() {
             <span style={{fontSize:10,fontFamily:"Space Mono,monospace",color:"var(--text3)",width:32,flexShrink:0}}>
               {fmt(progress)}
             </span>
-            <div ref={progRef} onClick={handleProgress}
+            <div ref={progRef} onClick={handleProgress} onTouchEnd={handleProgress}
               style={{flex:1,height:4,background:"var(--border2)",borderRadius:4,
                 cursor:"pointer",position:"relative",transition:"height .15s"}}
               onMouseEnter={e=>e.currentTarget.style.height="6px"}
@@ -191,8 +202,8 @@ export default function PlayerBar() {
           </div>
         </div>
 
-        {/* MOBILE controls */}
-        <div className="player-mobile" style={{display:"none",alignItems:"center",gap:8,marginLeft:"auto"}}>
+        {/* MOBILE controls - with progress */}
+        <div className="player-mobile" style={{display:"none",alignItems:"center",gap:6,flex:1}}>
           <Ctrl onClick={playPrev}>⏮</Ctrl>
           <button onClick={isPlaying?pause:resume}
             style={{width:38,height:38,borderRadius:"50%",background:"var(--gold)",border:"none",
@@ -201,7 +212,13 @@ export default function PlayerBar() {
             {isPlaying?"⏸":"▶"}
           </button>
           <Ctrl onClick={playNext}>⏭</Ctrl>
-        </div>
+          <Ctrl onClick={()=>setShowQ(!showQ)}>☰</Ctrl>
+          </div>
+          <div className="player-mobile-progress" style={{display:"none",position:"fixed",bottom:72,left:0,right:0,height:16,padding:"0 8px",zIndex:201,alignItems:"center",gap:4}}>
+            <span style={{fontSize:8,fontFamily:"Space Mono,monospace",color:"var(--text3)"}}>{fmt(progress)}</span>
+            <div onClick={handleProgress} onTouchEnd={handleProgress} style={{flex:1,height:3,background:"var(--border2)",borderRadius:3,cursor:"pointer"}}><div style={{height:"100%",width:pct+"%",background:"var(--gold)",borderRadius:3,pointerEvents:"none"}}/></div>
+            <span style={{fontSize:8,fontFamily:"Space Mono,monospace",color:"var(--text3)"}}>{fmt(duration)}</span>
+          </div>
 
         <style>{`
           @media(max-width:640px){

@@ -1,37 +1,13 @@
 /* ═══════════════════════════════════════
-   RESPONSIVE MOBILE — Waiichia
-   ═══════════════════════════════════════ */
+   RESPONSIVE — Waiichia
+═══════════════════════════════════════ */
 
-/* Bouton fermer sidebar (visible uniquement mobile) */
-.sidebar-close-btn {
-  display: none;
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
-  font-size: 16px;
-  cursor: pointer;
-  z-index: 10;
-  align-items: center;
-  justify-content: center;
-}
+/* ═══ Desktop : sidebar drawer invisible ═══ */
+.sidebar-drawer { display: none; }
+.drawer-overlay { display: none; }
+.sidebar-desktop { display: contents; }
 
-/* Mobile overlay */
-.mobile-overlay {
-  display: none;
-}
-
-/* Sidebar wrapper pour mobile */
-.sidebar-mobile-wrap {
-  display: contents;
-}
-
-/* ═══ TABLETTE (max 1024px) ═══ */
+/* ═══ TABLETTE ═══ */
 @media (max-width: 1024px) {
   .right-panel { display: none !important; }
   .app-layout { margin-right: 0 !important; }
@@ -40,245 +16,303 @@
 /* ═══ MOBILE (max 768px) ═══ */
 @media (max-width: 768px) {
 
-  /* ── Layout ── */
-  .sidebar-mobile-wrap {
-    display: block;
+  /* ── Sidebar desktop cachée ── */
+  .sidebar-desktop { display: none !important; }
+
+  /* ── Sidebar drawer mobile ── */
+  .sidebar-drawer {
+    display: block !important;
     position: fixed;
-    left: 0;
     top: 0;
+    left: 0;
     bottom: 0;
     width: 280px;
-    z-index: 999;
+    z-index: 1000;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
+    background: var(--bg2);
+    overflow-y: auto;
   }
-  .sidebar-mobile-wrap.open {
+  .sidebar-drawer.open {
     transform: translateX(0);
   }
-  .sidebar-mobile-wrap .sidebar {
-    width: 100% !important;
+  .sidebar-drawer .sidebar {
     position: relative !important;
+    width: 100% !important;
     height: 100% !important;
+    top: auto !important;
+    left: auto !important;
     bottom: auto !important;
+    border-right: none !important;
   }
-  .sidebar-close-btn {
-    display: flex !important;
-  }
-  .mobile-overlay {
+
+  /* Overlay sombre */
+  .drawer-overlay {
     display: block !important;
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.6);
-    z-index: 998;
+    z-index: 999;
     backdrop-filter: blur(4px);
   }
-  .right-panel {
-    display: none !important;
-  }
+
+  /* ── Layout pleine largeur ── */
+  .right-panel { display: none !important; }
   .app-layout {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
   .page-content {
-    padding: 16px 12px !important;
+    padding: 14px 10px !important;
+    padding-bottom: 140px !important;
   }
 
-  /* ── TopNav ── */
-  .topnav, [style*="height:var(--topnav-h"] {
-    padding: 0 12px !important;
-    gap: 8px !important;
-    height: 56px !important;
+  /* ── TopNav compact ── */
+  #hamburger { display: flex !important; }
+
+  /* ── BottomNav : taille fixe, toujours visible ── */
+  #waiichia-bottom-nav {
+    display: flex !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 52px !important;
+    z-index: 190 !important;
+    background: rgba(7,10,15,.97) !important;
+    border-top: 1px solid var(--border) !important;
   }
-  /* Cacher boutons superflus sur mobile */
-  .topnav-hide-mobile,
-  [style*="EN LIGNE"],
-  [style*="Publier"] {
-    display: none !important;
+  #waiichia-bottom-nav button {
+    font-size: 9px !important;
+  }
+  #waiichia-bottom-nav span[style*="fontSize:20"] {
+    font-size: 18px !important;
   }
 
-  /* ── Textes ── */
-  body {
-    font-size: 15px;
+  /* ── Player au dessus du BottomNav ── */
+  /* Le player se positionne au dessus de la barre du bas (52px) */
+  .player-bar,
+  div[style*="position:\"fixed\""][style*="bottom:0"][style*="height:\"var(--player-h"] {
+    bottom: 52px !important;
+    height: 60px !important;
+    padding: 0 10px !important;
   }
-  .page-title {
-    font-size: 20px !important;
-    margin-bottom: 14px !important;
+
+  /* Track info dans le player : plus compact */
+  .player-bar div[style*="width:240"],
+  div[style*="width:240"] {
+    width: auto !important;
+    min-width: 0 !important;
+    flex: 1 !important;
+    max-width: 180px !important;
   }
-  .section-title {
-    font-size: 16px !important;
+  /* Cover plus petite */
+  .player-bar div[style*="width:46"],
+  div[style*="width:46"][style*="height:46"] {
+    width: 38px !important;
+    height: 38px !important;
   }
+
+  /* ── Textes lisibles ── */
+  body { font-size: 15px; }
+  .page-title { font-size: 20px !important; }
+  .section-title { font-size: 16px !important; }
 
   /* ── Hero ── */
-  .hero-banner {
-    padding: 24px 16px !important;
-    min-height: auto !important;
-  }
-  .hero-title {
-    font-size: 26px !important;
-    line-height: 1.15 !important;
-  }
-  .hero-sub {
-    font-size: 13px !important;
-    line-height: 1.6 !important;
-  }
-  .hero-actions {
-    flex-wrap: wrap !important;
-    gap: 8px !important;
-  }
-  .hero-actions .btn {
-    padding: 10px 14px !important;
-    font-size: 13px !important;
-  }
-  .hero-badge {
-    font-size: 11px !important;
-  }
+  .hero-banner { padding: 24px 14px !important; min-height: auto !important; }
+  .hero-title { font-size: 26px !important; line-height: 1.15 !important; }
+  .hero-sub { font-size: 13px !important; }
+  .hero-actions { flex-wrap: wrap !important; gap: 8px !important; }
+  .hero-actions .btn { padding: 10px 14px !important; font-size: 13px !important; }
+  .hero-badge { font-size: 11px !important; }
 
-  /* ── Stats ── */
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-    padding: 0 4px !important;
-  }
-  .stat-card {
-    padding: 12px 10px !important;
-  }
-  .stat-num {
-    font-size: 20px !important;
-  }
-  .stat-label {
-    font-size: 10px !important;
-  }
+  /* ── Stats 2 colonnes ── */
+  .stats-row { grid-template-columns: repeat(2,1fr) !important; gap: 8px !important; }
+  .stat-num { font-size: 20px !important; }
+  .stat-label { font-size: 10px !important; }
 
-  /* ── Genres scrollables ── */
-  .genre-chips {
-    flex-wrap: nowrap !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding: 0 4px !important;
-  }
+  /* ── Genres : scroll horizontal ── */
+  .genre-chips { flex-wrap: nowrap !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .genre-chips::-webkit-scrollbar { display: none; }
-  .genre-chip {
-    white-space: nowrap !important;
-    flex-shrink: 0 !important;
-    font-size: 12px !important;
-    padding: 8px 14px !important;
-  }
+  .genre-chip { white-space: nowrap !important; flex-shrink: 0 !important; font-size: 12px !important; }
 
-  /* ── Tracks en 1 colonne ── */
-  .tracks-grid {
-    grid-template-columns: 1fr !important;
-    gap: 12px !important;
-    padding: 0 4px !important;
-  }
+  /* ── Tracks 1 colonne ── */
+  .tracks-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
   .track-cover { height: 180px !important; }
   .track-title { font-size: 14px !important; }
-  .track-artist { font-size: 12px !important; }
-  .buy-chip { padding: 8px 12px !important; font-size: 12px !important; }
 
   /* ── Radio ── */
-  .live-streams-grid {
-    grid-template-columns: 1fr !important;
-  }
+  .live-streams-grid { grid-template-columns: 1fr !important; }
 
   /* ── Créateurs ── */
-  .creator-scroll {
-    gap: 10px !important;
-  }
-  .creator-card {
-    min-width: 130px !important;
-    padding: 14px 10px !important;
-  }
+  .creator-scroll { gap: 10px !important; }
+  .creator-card { min-width: 130px !important; }
   .creator-ava { width: 50px !important; height: 50px !important; }
 
   /* ── Events ── */
-  .event-card { padding: 12px !important; gap: 10px !important; }
+  .event-card { padding: 12px !important; }
   .event-date-box { width: 48px !important; height: 48px !important; }
-  .event-day { font-size: 16px !important; }
 
   /* ── Modals plein écran ── */
-  .modal-overlay { padding: 8px !important; }
-  .modal { max-width: 100% !important; border-radius: 14px !important; padding: 18px !important; max-height: 90vh !important; overflow-y: auto !important; }
+  .modal-overlay { padding: 6px !important; }
+  .modal { max-width: 100% !important; border-radius: 14px !important; padding: 18px !important; max-height: 92vh !important; overflow-y: auto !important; }
 
   /* ── Wallet ── */
   .wallet-card { padding: 18px 14px !important; }
   .wallet-balance { font-size: 24px !important; }
-  .wallet-actions { grid-template-columns: repeat(2, 1fr) !important; }
+  .wallet-actions { grid-template-columns: repeat(2,1fr) !important; }
 
-  /* ── Messagerie ── */
+  /* ── Messagerie 1 colonne ── */
   .messages-layout { grid-template-columns: 1fr !important; }
   .conv-list { max-height: 200px !important; }
 
-  /* ── Player ── */
-  .player-bar { padding: 6px 10px !important; }
-  .player-volume { display: none !important; }
-
   /* ── Settings/Admin 1 colonne ── */
-  [style*="grid-template-columns: 200px"],
   [style*="gridTemplateColumns:'200px"],
-  [style*="grid-template-columns:200px"] {
-    grid-template-columns: 1fr !important;
+  [style*="gridTemplateColumns:'220px"] {
+    display: block !important;
   }
-  [style*="grid-template-columns: 220px"],
-  [style*="gridTemplateColumns:'220px"],
-  [style*="grid-template-columns:220px"] {
-    grid-template-columns: 1fr !important;
-  }
-  [style*="gridTemplateColumns:'220px"] > aside,
-  [style*="grid-template-columns: 220px"] > aside {
+  [style*="gridTemplateColumns:'220px"] > aside {
     display: none !important;
   }
 
-  /* ── Boutons ── */
-  .btn { font-size: 13px !important; }
-  .btn-sm { font-size: 12px !important; }
-
-  /* ── Tables ── */
-  table { font-size: 11px !important; }
-  th, td { padding: 8px 6px !important; }
+  /* ── Inputs plus gros (évite le zoom iOS) ── */
+  .input-field, .textarea-field, .select-styled, input, textarea, select {
+    font-size: 16px !important;
+  }
 
   /* ── Tabs scrollables ── */
-  .tabs-bar {
-    overflow-x: auto !important;
-    flex-wrap: nowrap !important;
-    scrollbar-width: none;
-  }
+  .tabs-bar { overflow-x: auto !important; flex-wrap: nowrap !important; scrollbar-width: none; }
   .tabs-bar::-webkit-scrollbar { display: none; }
-  .tab-btn { white-space: nowrap !important; flex-shrink: 0 !important; }
-  .pill-tab { white-space: nowrap !important; flex-shrink: 0 !important; }
+  .tab-btn, .pill-tab { white-space: nowrap !important; flex-shrink: 0 !important; }
 
   /* ── Upload steps ── */
   .upload-steps-bar { overflow-x: auto !important; flex-wrap: nowrap !important; }
-  .upload-step { font-size: 11px !important; white-space: nowrap !important; }
+}
 
-  /* ── Section headers ── */
-  .section-hdr { padding: 0 4px !important; }
+/* ═══ PETIT MOBILE ═══ */
+@media (max-width: 400px) {
+  .hero-title { font-size: 22px !important; }
+  .hero-actions { flex-direction: column !important; }
+  .hero-actions .btn { width: 100% !important; }
+  .wallet-balance { font-size: 20px !important; }
+}
 
-  /* ── KPI grids ── */
-  [style*="repeat(auto-fit"] {
-    grid-template-columns: repeat(2, 1fr) !important;
+/* FIX MOBILE CRITICAL */
+@media (max-width: 768px) {
+  body { overflow-x: hidden !important; max-width: 100vw !important; }
+  .app-layout { margin-left: 0 !important; margin-right: 0 !important; overflow-x: hidden !important; }
+  div[style*="position:\"fixed\""][style*="bottom:0"][style*="height:56"] { bottom: 0 !important; height: 52px !important; display: flex !important; }
+  div[style*="position:\"fixed\""][style*="height:\"var(--player-h"] { bottom: 52px !important; height: 56px !important; }
+  div[style*="width:240"] { width: 120px !important; flex: none !important; }
+}
+
+/* ═══ FIX MOBILE FINAL ═══ */
+@media (max-width: 768px) {
+  /* 1. TOPNAV - ne dépasse plus l'écran */
+  body, html { overflow-x: hidden !important; max-width: 100vw !important; }
+  .app-layout { overflow-x: hidden !important; }
+  div[style*="padding:\"0 24px\""], div[style*="padding: 0 24px"] {
+    padding: 0 8px !important;
+  }
+  /* Cacher les éléments superflus du TopNav sur mobile */
+  div[style*="EN LIGNE"], div[style*="HORS LIGNE"],
+  div[style*="Co · KMF"], div[style*="Publier"],
+  button[style*="Publier"] { display: none !important; }
+  /* Réduire la barre de recherche */
+  div[style*="maxWidth:460"] { max-width: 100% !important; flex: 1 !important; }
+
+  /* 2. SIDEBAR DRAWER - afficher le contenu */
+  .sidebar-drawer .sidebar {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    top: auto !important;
+    left: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    border-right: none !important;
   }
 
-  /* ── BottomNav position fix ── */
+  /* 3. BOTTOM NAV + PLAYER - coexistence */
   #waiichia-bottom-nav {
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
+    height: 52px !important;
+    z-index: 195 !important;
+    display: flex !important;
+    background: rgba(7,10,15,.97) !important;
+    border-top: 1px solid var(--border) !important;
   }
-
-  /* ── Inputs plus gros ── */
-  .input-field, .textarea-field, .select-styled {
-    font-size: 16px !important;
-    padding: 12px 14px !important;
+  /* Player AU-DESSUS du bottom nav, toujours */
+  div[style*="height:\"var(--player-h"],
+  div[style*="height:var(--player-h"] {
+    bottom: 52px !important;
+    height: 56px !important;
+    padding: 0 8px !important;
+    z-index: 200 !important;
+  }
+  /* Empêcher le BottomNav de remonter quand track joue */
+  #waiichia-bottom-nav[style] {
+    bottom: 0px !important;
   }
 }
 
-/* ═══ PETIT MOBILE (max 400px) ═══ */
-@media (max-width: 400px) {
-  .hero-title { font-size: 22px !important; }
-  .hero-actions { flex-direction: column !important; }
-  .hero-actions .btn { width: 100% !important; }
-  .stat-num { font-size: 18px !important; }
-  .wallet-balance { font-size: 20px !important; }
+/* PLAYER + BOTTOMNAV MOBILE FIX */
+@media (max-width: 768px) {
+  #waiichia-bottom-nav {
+    bottom: 0px !important;
+    height: 52px !important;
+    z-index: 195 !important;
+  }
+  .player-mobile { display: flex !important; }
+  .player-desktop { display: none !important; }
+}
+
+/* HIDE TOPNAV ELEMENTS ON MOBILE */
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+}
+
+/* PLAYER BAR MOBILE */
+@media (max-width: 768px) {
+  div[style*="position:\"fixed\""][style*="bottom:0"][style*="zIndex:200"],
+  div[style*="position:\"fixed\""][style*="z-index:200"] {
+    bottom: 52px !important;
+    height: 56px !important;
+    padding: 0 8px !important;
+    gap: 8px !important;
+  }
+  div[style*="width:180"] {
+    width: 120px !important;
+  }
+  div[style*="width:46"][style*="height:46"],
+  div[style*="width:46,height:46"] {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+  }
+  .page-content {
+    padding-bottom: 120px !important;
+  }
+}
+
+/* MOBILE PROGRESS BAR */
+@media (max-width: 768px) {
+  .player-mobile-progress { display: flex !important; }
+}
+
+/* HIDE OLD PROGRESS BAR ON MOBILE, KEEP NEW ONE */
+@media (max-width: 768px) {
+  div[style*="position:\"absolute\""][style*="top:0"][style*="height:3"] {
+    display: none !important;
+  }
+}
+
+/* HIDE OLD TOP PROGRESS BAR ON MOBILE */
+@media (max-width: 768px) {
+  .progress-top-bar { display: none !important; }
 }

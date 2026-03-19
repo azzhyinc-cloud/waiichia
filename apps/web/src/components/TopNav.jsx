@@ -55,7 +55,7 @@ export default function TopNav({ onMenuToggle }) {
 
   return (
     <>
-      <div style={{position:"sticky",top:0,height:"var(--topnav-h,65px)",background:theme==="dark"?"rgba(7,10,15,0.88)":"rgba(240,242,248,0.92)",backdropFilter:"blur(28px)",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",padding:"0 24px",gap:16,zIndex:150,transition:"background var(--transition)",boxShadow:theme==="dark"?"0 1px 0 rgba(245,166,35,.04),0 4px 24px rgba(0,0,0,.3)":"none"}}>
+      <div style={{position:"sticky",top:0,height:"var(--topnav-h,65px)",background:theme==="dark"?"rgba(7,10,15,0.88)":"rgba(240,242,248,0.92)",backdropFilter:"blur(28px)",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",padding:"0 12px",gap:16,zIndex:150,transition:"background var(--transition)",boxShadow:theme==="dark"?"0 1px 0 rgba(245,166,35,.04),0 4px 24px rgba(0,0,0,.3)":"none"}}>
 
         {/* Hamburger mobile */}
         <div style={{display:"none",flexDirection:"column",gap:5,cursor:"pointer",padding:8,flexShrink:0}} id="hamburger" onClick={onMenuToggle}>
@@ -100,13 +100,13 @@ export default function TopNav({ onMenuToggle }) {
         <div style={{display:"flex",alignItems:"center",gap:10,marginLeft:"auto",flexShrink:0}}>
           <Btn onClick={toggleTheme}>{theme==="dark"?"🌙":"☀️"}</Btn>
 
-          <div style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontFamily:"Space Mono,monospace",padding:"3px 9px",borderRadius:20,background:online?"rgba(44,198,83,.12)":"rgba(230,57,70,.15)",border:`1px solid ${online?"var(--green)":"var(--red)"}`,color:online?"var(--green)":"var(--red)"}}>
+          <div className="hide-mobile" style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontFamily:"Space Mono,monospace",padding:"3px 9px",borderRadius:20,background:online?"rgba(44,198,83,.12)":"rgba(230,57,70,.15)",border:`1px solid ${online?"var(--green)":"var(--red)"}`,color:online?"var(--green)":"var(--red)"}}>
             <div style={{width:6,height:6,borderRadius:"50%",background:online?"var(--green)":"var(--red)",animation:online?"live-pulse 2s infinite":"none"}}/>
             {online?"EN LIGNE":"HORS LIGNE"}
           </div>
 
           {/* Devise — ouvre modal */}
-          <div onClick={()=>setDeviseOpen(true)}
+          <div className="hide-mobile" onClick={()=>setDeviseOpen(true)}
             style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",background:"var(--card)",border:"1px solid var(--border)",borderRadius:50,cursor:"pointer",fontSize:12,fontFamily:"Plus Jakarta Sans,sans-serif",transition:"all .2s",color:"var(--text2)"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.color="var(--text)"}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text2)"}}>
@@ -132,7 +132,7 @@ export default function TopNav({ onMenuToggle }) {
             </div>
           </div>
 
-          <button onClick={()=>setPage("upload")}
+          <button className="hide-mobile" onClick={()=>setPage("upload")}
             style={{padding:"8px 16px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"Plus Jakarta Sans,sans-serif",whiteSpace:"nowrap",boxShadow:"0 3px 12px rgba(245,166,35,.3)",transition:"all .2s"}}
             onMouseEnter={e=>e.currentTarget.style.boxShadow="0 5px 18px rgba(245,166,35,.5)"}
             onMouseLeave={e=>e.currentTarget.style.boxShadow="0 3px 12px rgba(245,166,35,.3)"}>

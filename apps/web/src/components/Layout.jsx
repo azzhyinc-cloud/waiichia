@@ -10,13 +10,16 @@ export default function Layout({ children }) {
 
   return (
     <>
-      {/* Overlay sombre quand menu ouvert sur mobile */}
-      {menuOpen && <div className="mobile-overlay" onClick={() => setMenuOpen(false)} />}
+      {/* Desktop sidebar - visible > 768px */}
+      <div className="sidebar-desktop">
+        <Sidebar />
+      </div>
 
-      {/* Sidebar — glisse depuis la gauche sur mobile */}
-      <div className={`sidebar-mobile-wrap ${menuOpen ? 'open' : ''}`}>
+      {/* Mobile sidebar drawer */}
+      <div className={`sidebar-drawer ${menuOpen ? 'open' : ''}`}>
         <Sidebar onClose={() => setMenuOpen(false)} />
       </div>
+      {menuOpen && <div className="drawer-overlay" onClick={() => setMenuOpen(false)} />}
 
       <div className="app-layout">
         <TopNav onMenuToggle={() => setMenuOpen(o => !o)} />
