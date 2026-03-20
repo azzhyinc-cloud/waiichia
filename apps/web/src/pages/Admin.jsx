@@ -12,7 +12,7 @@ const adminApi={
 const fmtS=n=>{if(!n||n===0)return'0';if(n>=1000000)return(n/1000000).toFixed(1)+'M';if(n>=1000)return(n/1000).toFixed(1)+'K';return String(n)}
 const NAV=[
   {g:'PRINCIPAL',items:[{id:'dashboard',icon:'📊',label:'Dashboard'}]},
-  {g:'GESTION',items:[{id:'users',icon:'👥',label:'Utilisateurs'},{id:'content',icon:'🎵',label:'Contenu'},{id:'verifications',icon:'✅',label:'Vérifications'},{id:'deposits',icon:'💰',label:'Dépôts / Recharges'}]},
+  {g:'GESTION',items:[{id:'users',icon:'👥',label:'Utilisateurs'},{id:'content',icon:'🎵',label:'Contenu'},{id:'verifications',icon:'✅',label:'Vérifications'},{id:'deposits',icon:'💰',label:'Dépôts / Recharges'},{id:'profile_requests',icon:'🔄',label:'Demandes Profil'}]},
   {g:'REVENUS',items:[{id:'payment_config',icon:'💳',label:'Paiements'},{id:'finance',icon:'📊',label:'Finances'}]},
   {g:'SYSTÈME',items:[{id:'settings',icon:'⚙️',label:'Paramètres'},{id:'logs',icon:'📋',label:'Journaux'}]},
 ]
@@ -26,6 +26,7 @@ export default function Admin(){
   const [content,setContent]=useState([])
   const [verifs,setVerifs]=useState([])
   const [deposits,setDeposits]=useState([])
+  const [profileReqs,setProfileReqs]=useState([])
   const [payConfig,setPayConfig]=useState({})
   const [loading,setLoading]=useState(false)
   const [toast,setToast]=useState('')
@@ -41,6 +42,7 @@ export default function Admin(){
     if(tab==='content') adminApi.get('/api/admin/content?limit=50').then(d=>setContent(d.content||[])).catch(()=>{})
     if(tab==='verifications') adminApi.get('/api/admin/verifications').then(d=>setVerifs(d.verifications||[])).catch(()=>{})
     if(tab==='deposits') adminApi.get('/api/admin/deposits').then(d=>setDeposits(d.deposits||[])).catch(()=>{})
+    if(tab==='profile_requests') adminApi.get('/api/admin/profile-requests').then(d=>setProfileReqs(d.requests||[])).catch(()=>{})
     if(tab==='payment_config') adminApi.get('/api/admin/payment-config').then(d=>setPayConfig(d.config||{})).catch(()=>{})
     setLoading(false)
   },[tab])
@@ -66,6 +68,16 @@ export default function Admin(){
     const r=await adminApi.patch('/api/admin/deposits/'+id,{action})
     showToast(r.message||'✅ Fait')
     setDeposits(d=>d.filter(x=>x.id!==id))
+  }
+  const changeRole=async(id,newType)=>{
+    const r=await adminApi.patch('/api/admin/users/'+id+'/role',{profile_type:newType})
+    showToast(r.user?'Profil changé en '+newType:'Erreur')
+    setUsers(u=>u.map(x=>x.id===id?{...x,profile_type:newType}:x))
+  }
+  const profileReqAction=async(id,action,newType)=>{
+    const r=await adminApi.patch('/api/admin/profile-requests/'+id,{action,new_profile_type:newType})
+    showToast(r.user?'Profil mis à jour':'Erreur')
+    setProfileReqs(p=>p.filter(x=>x.id!==id))
   }
   const savePayConfig=async()=>{
     await adminApi.put('/api/admin/payment-config',{config:payConfig})
@@ -140,6 +152,7 @@ export default function Admin(){
                       {!u.is_verified&&<Btn onClick={()=>userAction(u.id,'verify')} title="Vérifier">✅</Btn>}
                       {u.is_verified&&<Btn onClick={()=>userAction(u.id,'unverify')} title="Retirer vérification">❌</Btn>}
                       {!u.is_suspended&&<Btn red onClick={()=>userAction(u.id,'suspend')} title="Suspendre">🔒</Btn>}
+                      <select style={{padding:'2px 4px',borderRadius:4,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text)',fontSize:10,cursor:'pointer'}} value={u.profile_type||'listener'} onChange={e=>changeRole(u.id,e.target.value)}><option value="listener">listener</option><option value="artist">artist</option><option value="media">media</option><option value="label">label</option><option value="pro">pro</option></select>
                       {u.is_suspended&&<Btn onClick={()=>userAction(u.id,'activate')} title="Réactiver">🔓</Btn>}
                     </div></td>
                   </tr>
@@ -214,6 +227,26 @@ export default function Admin(){
               </div>
             </div>
           )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>✅</div>Aucun dépôt en attente</div>}
+        </div>}
+
+        
+        {/* ═══ DEMANDES DE PROFIL ═══ */}
+        {tab==='profile_requests'&&<div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>🔄 Demandes de changement de profil ({profileReqs.length})</h2>
+          {profileReqs.length?profileReqs.map(r=>(
+            <div key={r.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:18,marginBottom:12,display:'flex',alignItems:'center',gap:16}}>
+              <div style={{width:48,height:48,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),#e63946)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:18}}>{(r.display_name||'?')[0]}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:14}}>{r.display_name} <span style={{fontSize:11,color:'var(--text3)'}}>@{r.username}</span></div>
+                <div style={{fontSize:12,color:'var(--text2)'}}>Profil actuel : <strong>{r.profile_type}</strong> → Demandé : <strong style={{color:'var(--gold)'}}>{r.requested_profile_type}</strong></div>
+                {r.profile_request_reason&&<div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>Raison : {r.profile_request_reason}</div>}
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn btn-primary btn-sm" onClick={()=>profileReqAction(r.id,'approve',r.requested_profile_type)}>✅ Approuver</button>
+                <button className="btn btn-outline btn-sm" style={{color:'var(--red)',borderColor:'var(--red)'}} onClick={()=>profileReqAction(r.id,'reject')}>❌ Rejeter</button>
+              </div>
+            </div>
+          )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>✅</div>Aucune demande en attente</div>}
         </div>}
 
         {/* ═══ CONFIG PAIEMENT ═══ */}

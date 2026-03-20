@@ -32,7 +32,7 @@ export default async function authRoutes(app) {
       email,
       country: country || 'KM',
       currency: 'KMF',
-      profile_type: 'artist',
+      profile_type: 'listener',
       role: 'user',
       is_verified: false,
       fans_count: 0,
@@ -84,7 +84,7 @@ export default async function authRoutes(app) {
         id: data.user.id, email,
         username: data.user.user_metadata?.username || email.split('@')[0],
         display_name: data.user.user_metadata?.display_name || email.split('@')[0],
-        country: 'KM', currency: 'KMF', profile_type: 'artist', role: 'user'
+        country: 'KM', currency: 'KMF', profile_type: 'listener', role: 'user'
       })
       const { data: p2 } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
       profile = p2
@@ -111,6 +111,8 @@ export default async function authRoutes(app) {
         cover_url: profile.cover_url,
         profile_type: profile.profile_type,
         country: profile.country,
+        bio: profile.bio,
+        phone: profile.phone,
         currency: profile.currency,
         role: profile.role || 'user',
         is_verified: profile.is_verified,
@@ -126,6 +128,33 @@ export default async function authRoutes(app) {
     if (!profile) return reply.status(404).send({ error: 'Profil introuvable' })
     const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', request.user.id).single()
     return reply.send({ profile: { ...profile, wallet_balance: wallet?.balance || 0 } })
+  })
+
+  /* ══ REQUEST PROFILE CHANGE ══ */
+  app.post('/request-profile', { preHandler: app.authenticate }, async (request, reply) => {
+    const { requested_profile_type, reason } = request.body
+    if (!requested_profile_type) return reply.status(400).send({ error: 'Type de profil requis' })
+    const { error } = await supabase.from('profiles').update({
+      profile_change_requested: true,
+      requested_profile_type,
+      profile_request_reason: reason || '',
+      updated_at: new Date().toISOString()
+    }).eq('id', request.user.id)
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.send({ message: 'Demande envoyee! L admin va examiner votre demande.' })
+  })
+
+  /* ══ UPDATE PROFILE ══ */
+  app.patch('/profile', { preHandler: app.authenticate }, async (request, reply) => {
+    const allowed = ['display_name','username','bio','phone','avatar_url','cover_url','country','profile_type']
+    const updates = {}
+    for (const key of allowed) {
+      if (request.body[key] !== undefined) updates[key] = request.body[key]
+    }
+    updates.updated_at = new Date().toISOString()
+    const { data, error } = await supabase.from('profiles').update(updates).eq('id', request.user.id).select().single()
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.send({ profile: data })
   })
 
   /* ══ LOGOUT ══ */

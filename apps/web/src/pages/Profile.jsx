@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuthStore, usePageStore, useDeviseStore, usePlayerStore } from "../stores/index.js"
 import { ReactionBar } from "../components/ReactionBar.jsx"
 import BuyModal from "../components/BuyModal.jsx"
@@ -22,6 +22,36 @@ export default function Profile(){
   const [tracks,setTracks]=useState([])
   const [loading,setLoading]=useState(true)
   const [tab,setTab]=useState("🎵 Sons")
+  const [uploading,setUploading]=useState(false)
+  const avatarRef=useRef(null)
+  const coverRef=useRef(null)
+  const handleUpload=async(file,type)=>{
+    if(!file)return
+    setUploading(true)
+    const API=import.meta.env.VITE_API_URL||''
+    const token=localStorage.getItem('waiichia_token')
+    const form=new FormData()
+    form.append('file',file)
+    try{
+      const res=await fetch(API+'/api/upload/cover',{method:'POST',headers:{'Authorization':'Bearer '+token},body:form})
+      const json=await res.json()
+      console.log('Upload result:',json)
+      if(json.url){
+        const field=type==='avatar'?'avatar_url':'cover_url'
+        const patchRes=await fetch(API+'/api/auth/profile',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({[field]:json.url})})
+        const patchJson=await patchRes.json()
+        console.log('Patch result:',patchJson)
+        
+        window.location.href=window.location.href
+      }else{
+        alert('Erreur upload: '+(json.error||'inconnue'))
+      }
+    }catch(e){
+      console.error('Upload error:',e)
+      alert('Erreur: '+e.message)
+    }
+    setUploading(false)
+  }
   const [followed,setFollowed]=useState(false)
   const [buyModal,setBuyModal]=useState(null)
 
@@ -54,11 +84,15 @@ export default function Profile(){
     <div style={{paddingBottom:60}}>
       {buyModal&&<BuyModal track={buyModal} mode="buy" onClose={()=>setBuyModal(null)}/>}
 
+      {/* HIDDEN FILE INPUTS */}
+      <input type="file" ref={avatarRef} accept="image/*" style={{display:'none'}} onChange={e=>handleUpload(e.target.files[0],'avatar')}/>
+      <input type="file" ref={coverRef} accept="image/*" style={{display:'none'}} onChange={e=>handleUpload(e.target.files[0],'cover')}/>
+      {uploading&&<div style={{position:'fixed',top:0,left:0,right:0,height:3,background:'var(--gold)',zIndex:999,animation:'shimmer 1s infinite'}}/>}
       {/* COVER */}
       <div className="profile-cover">
         <div className="profile-cover-img">{p?.cover_url?<img src={p.cover_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🌊"}</div>
         {isOwn&&<div className="profile-cover-actions">
-          <button className="btn btn-sm btn-secondary" style={{opacity:.85}}>📷 Modifier couverture</button>
+          <button className="btn btn-sm btn-secondary" style={{opacity:.85}} onClick={()=>coverRef.current?.click()}>{uploading?'⏳...':'📷 Modifier couverture'}</button>
         </div>}
       </div>
 
@@ -66,7 +100,7 @@ export default function Profile(){
       <div className="profile-info-row">
         <div className="profile-avatar-lg">
           {p?.avatar_url?<img src={p.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:initials}
-          {isOwn&&<div className="profile-ava-edit">📷</div>}
+          {isOwn&&<div className="profile-ava-edit" onClick={()=>avatarRef.current?.click()} style={{cursor:'pointer'}}>📷</div>}
         </div>
         <div className="profile-meta">
           <div className="profile-name">

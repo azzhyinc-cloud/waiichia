@@ -12,7 +12,7 @@ const MENU=[
   {id:'logout',icon:'🚪',label:'Déconnexion',red:true},
 ]
 const COUNTRIES=[['KM','🇰🇲 Comores'],['MG','🇲🇬 Madagascar'],['TZ','🇹🇿 Tanzanie'],['RW','🇷🇼 Rwanda'],['CI',"🇨🇮 Côte d'Ivoire"],['NG','🇳🇬 Nigeria'],['SN','🇸🇳 Sénégal']]
-const PROFILE_TYPES=['Artiste','Media','Label','Influenceur','Entrepreneur','Pro','Consommateur']
+const PROFILE_TYPES=[{label:'🎧 Auditeur',value:'listener'},{label:'🎵 Artiste',value:'artist'},{label:'📺 Média',value:'media'},{label:'🏷️ Label',value:'label'},{label:'💼 Pro',value:'pro'}]
 
 export default function Settings(){
   const {user,logout}=useAuthStore()
@@ -20,7 +20,29 @@ export default function Settings(){
   const [section,setSection]=useState('profile')
   const [saved,setSaved]=useState(false)
 
-  const save=()=>{setSaved(true);setTimeout(()=>setSaved(false),2000)}
+  const save=async()=>{
+    const API=import.meta.env.VITE_API_URL||''
+    const token=localStorage.getItem('waiichia_token')
+    const fields={}
+    const dn=document.getElementById('s-displayname')
+    const un=document.getElementById('s-username')
+    const bio=document.getElementById('s-bio')
+    const phone=document.getElementById('s-phone')
+    const email=document.getElementById('s-email')
+    if(dn)fields.display_name=dn.value
+    if(un)fields.username=un.value.replace(/^@/,'')
+    if(bio)fields.bio=bio.value
+    if(phone)fields.phone=phone.value
+    if(email&&email.value)fields.email=email.value
+    
+    
+    try{
+      const res=await fetch(API+'/api/auth/profile',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(fields)})
+      const data=await res.json()
+      if(data.profile){setSaved(true);setTimeout(()=>window.location.reload(),1500)}else if(data.error){alert('Erreur: '+data.error)}
+      else{alert('Erreur: '+(data.error||'inconnue'))}
+    }catch(e){alert('Erreur réseau')}
+  }
   const handleLogout=()=>{logout();setPage('home')}
 
   if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>⚙️</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
@@ -30,7 +52,7 @@ export default function Settings(){
       <div className="page-title">⚙️ Paramètres & Compte</div>
       {saved&&<div style={{position:'fixed',top:20,right:20,background:'var(--green)',color:'#000',padding:'10px 20px',borderRadius:'var(--radius-sm)',fontWeight:700,fontSize:13,zIndex:999,animation:'slideIn .3s'}}>✅ Sauvegardé !</div>}
 
-      <div style={{display:'grid',gridTemplateColumns:'200px 1fr',gap:22}}>
+      <div className="settings-layout" style={{display:'grid',gridTemplateColumns:'200px 1fr',gap:22}}>
         {/* MENU GAUCHE */}
         <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:12,height:'fit-content',position:'sticky',top:80}}>
           <div style={{display:'flex',flexDirection:'column',gap:2}}>
@@ -52,15 +74,15 @@ export default function Settings(){
         <div>
           {section==='profile'&&<div>
             <Card title="👤 Informations du profil">
-              <div className="form-group"><label className="label">Nom complet</label><input className="input-field" defaultValue={user.display_name||'Kolo Officiel'}/></div>
-              <div className="form-group"><label className="label">Nom d'utilisateur</label><input className="input-field" defaultValue={user.username?'@'+user.username:'@kolo_komori'}/></div>
+              <div className="form-group"><label className="label">Nom complet</label><input id="s-displayname" className="input-field" defaultValue={user.display_name||'Kolo Officiel'}/></div>
+              <div className="form-group"><label className="label">Nom d'utilisateur</label><input id="s-username" className="input-field" defaultValue={user.username?'@'+user.username:'@kolo_komori'}/></div>
               <div className="form-row">
-                <div className="form-group"><label className="label">Email</label><input className="input-field" type="email" defaultValue={user.email||'kolo@waiichia.com'}/></div>
-                <div className="form-group"><label className="label">Téléphone</label><input className="input-field" type="tel" defaultValue="+269 321 0000"/></div>
+                <div className="form-group"><label className="label">Email</label><input className="input-field" type="email" disabled style={{opacity:0.6,cursor:'not-allowed'}} defaultValue={user.email||'kolo@waiichia.com'}/></div>
+                <div className="form-group"><label className="label">Téléphone</label><input id="s-phone" className="input-field" type="tel" defaultValue={user.phone||"+269"}/></div>
               </div>
-              <div className="form-group"><label className="label">Bio</label><textarea className="textarea-field" defaultValue={user.bio||'Artiste comorien 🇰🇲 · Twarab & Afrobeats · Moroni'}/></div>
+              <div className="form-group"><label className="label">Bio</label><textarea className="textarea-field" id='s-bio' defaultValue={user.bio||'Artiste comorien 🇰🇲 · Twarab & Afrobeats · Moroni'}/></div>
               <div className="form-row">
-                <div className="form-group"><label className="label">Type de profil</label><select className="select-styled" style={{width:'100%'}} defaultValue={user.profile_type||'Artiste'}>{PROFILE_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                <div className="form-group"><label className="label">Type de profil actuel</label><div style={{padding:'11px 16px',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',fontSize:14,color:'var(--gold)',fontWeight:600}}>{user.profile_type==='listener'?'🎧 Utilisateur (Listener)':user.profile_type==='artist'?'🎵 Artiste':user.profile_type==='media'?'📺 Média':user.profile_type==='label'?'🏷️ Label':user.profile_type==='pro'?'💼 Pro':user.profile_type||'🎧 Listener'}</div>{user.profile_change_requested?<div style={{marginTop:10,padding:'12px 16px',background:'rgba(245,166,35,.1)',border:'1px solid rgba(245,166,35,.25)',borderRadius:'var(--radius-sm)',fontSize:13,color:'var(--gold)'}}>⏳ Demande en cours de traitement — profil demandé : <strong>{user.requested_profile_type}</strong></div>:<div style={{marginTop:10}}><label className="label">Demander un changement de profil</label><select id="newProfileType" className="select-styled" style={{width:'100%',marginBottom:10}}><option value="">— Choisir le nouveau profil —</option>{PROFILE_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select><textarea id="profileReason" className="textarea-field" placeholder="Pourquoi souhaitez-vous ce profil ? (liens, expérience...)" style={{marginBottom:10}}/><button className="btn btn-primary" onClick={async()=>{const t=document.getElementById('newProfileType').value;const r=document.getElementById('profileReason').value;if(!t){alert('Choisissez un profil');return}const API=import.meta.env.VITE_API_URL||'';const token=localStorage.getItem('waiichia_token');const res=await fetch(API+'/api/auth/request-profile',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({requested_profile_type:t,reason:r})});const data=await res.json();if(data.message){alert('✅ '+data.message);window.location.reload()}else{alert('Erreur: '+(data.error||'inconnue'))}}}>📩 Envoyer la demande</button></div>}</div>
                 <div className="form-group"><label className="label">Pays principal</label><select className="select-styled" style={{width:'100%'}}>{COUNTRIES.map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></div>
               </div>
               <button className="btn btn-primary" onClick={save}>💾 Sauvegarder</button>
