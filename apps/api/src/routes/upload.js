@@ -24,7 +24,7 @@ export default async function uploadRoutes(app) {
     const data = await request.file()
     if (!data) return reply.status(400).send({ error: 'Aucun fichier recu' })
     const ext = data.filename.split('.').pop().toLowerCase()
-    const allowed = ['jpg', 'jpeg', 'png', 'webp']
+    const allowed = ['jpg', 'jpeg', 'png', 'webp', 'webm', 'ogg', 'mp3', 'wav', 'gif']
     if (!allowed.includes(ext)) return reply.status(400).send({ error: 'Format non supporte' })
     const filename = request.user.id + '_' + Date.now() + '.' + ext
     const buffer = await data.toBuffer()
