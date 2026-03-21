@@ -78,9 +78,14 @@ export default async function messagesRoutes(fastify) {
   })
 
   fastify.post('/react', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const { message_id, reaction } = req.body
+    const { message_id, reaction, user_id } = req.body
     if (!message_id) return reply.status(400).send({ error: 'message_id requis' })
-    const { error } = await supabase.from('messages').update({ reaction }).eq('id', message_id)
+    const { data: msg } = await supabase.from('messages').select('reaction').eq('id', message_id).single()
+    const current = msg?.reaction || {}
+    if (current[user_id || req.user.id] === reaction) delete current[user_id || req.user.id]
+    else current[user_id || req.user.id] = reaction
+    const newReaction = Object.keys(current).length ? current : null
+    const { error } = await supabase.from('messages').update({ reaction: newReaction }).eq('id', message_id)
     if (error) return reply.status(500).send({ error: error.message })
     return { ok: true }
   })

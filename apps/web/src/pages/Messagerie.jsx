@@ -201,10 +201,16 @@ export default function Messagerie(){
 
   // React to message
   const reactTo=async(msgId,emoji)=>{
-    setMessages(ms=>ms.map(m=>m.id===msgId?{...m,reaction:emoji}:m))
+    setMessages(ms=>ms.map(m=>{
+      if(m.id!==msgId)return m
+      const r={...(m.reaction||{})}
+      if(r[user.id]===emoji)delete r[user.id]
+      else r[user.id]=emoji
+      return{...m,reaction:Object.keys(r).length?r:null}
+    }))
     setReactMsg(null)
     try{
-      await fetch(API_URL+'/api/messages/react',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify({message_id:msgId,reaction:emoji})})
+      await fetch(API_URL+'/api/messages/react',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify({message_id:msgId,reaction:emoji,user_id:user.id})})
     }catch(e){console.error(e)}
   }
 
@@ -239,7 +245,8 @@ export default function Messagerie(){
     const isMe=m.sender_id===user.id
     const cls='msg-bubble '+(isMe?'msg-out':'msg-in')
     const timeEl=<div style={{fontSize:9,color:isMe?'rgba(0,0,0,.5)':'var(--text3)',marginTop:4,textAlign:'right'}}>{fmtTime(m.created_at)}</div>
-    const reactionEl=m.reaction?<span style={{position:'absolute',bottom:-8,[isMe?'right':'left']:8,fontSize:14,background:'var(--card)',borderRadius:20,padding:'1px 4px',border:'1px solid var(--border)'}}>{m.reaction}</span>:null
+    const reactions=m.reaction&&typeof m.reaction==='object'?Object.values(m.reaction):m.reaction?[m.reaction]:[]
+    const reactionEl=reactions.length?<div style={{position:'absolute',bottom:-8,[isMe?'right':'left']:8,display:'flex',gap:1,background:'var(--card)',borderRadius:20,padding:'1px 6px',border:'1px solid var(--border)'}}>{reactions.map((r,i)=><span key={i} style={{fontSize:13}}>{r}</span>)}</div>:null
 
     let content=null
 
