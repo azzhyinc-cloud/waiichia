@@ -112,8 +112,10 @@ const api = {
   },
   messages: {
     conversations: () => api.get('/api/messages/conversations'),
-    messages: (id)    => api.get('/api/messages/' + id),
-    send:     (d)     => api.post('/api/messages/', d),
+    messages: (convId) => api.get('/api/messages/conversations/' + convId + '/messages'),
+    send: (convId, content) => api.post('/api/messages/conversations/' + convId + '/messages', { content }),
+    createConv: (otherId) => api.post('/api/messages/conversations', { other_user_id: otherId }),
+    searchUsers: (q) => api.get('/api/messages/users/search?q=' + encodeURIComponent(q)),
   },
 }
 

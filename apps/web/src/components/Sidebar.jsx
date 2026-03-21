@@ -18,7 +18,7 @@ const NAV = [
   { section: 'Mon Espace', items: [
     { id:'profile',    icon:'👤', label:'Mon Profil' },
     { id:'upload',     icon:'⬆️', label:'Publier' },
-    { id:'messages',   icon:'💬', label:'Messagerie', badge:'3', badgeColor:'blue' },
+    { id:'messages',   icon:'💬', label:'Messagerie' },
     { id:'wallet',     icon:'💰', label:'Mon Portefeuille' },
     { id:'my_content', icon:'🎵', label:'Mon Contenu' },
     { id:'my_events',  icon:'🎟️', label:'Mes Événements' },

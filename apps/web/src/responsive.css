@@ -163,8 +163,6 @@
   .wallet-actions { grid-template-columns: repeat(2,1fr) !important; }
 
   /* ── Messagerie 1 colonne ── */
-  .messages-layout { grid-template-columns: 1fr !important; }
-  .conv-list { max-height: 200px !important; }
 
   /* ── Settings/Admin 1 colonne ── */
   [style*="gridTemplateColumns:'200px"],
@@ -431,5 +429,65 @@
     flex-shrink: 0 !important;
     font-size: 12px !important;
     padding: 8px 12px !important;
+  }
+}
+
+/* CONV LIST: always visible on desktop, toggleable on mobile */
+@media (min-width: 769px) {
+}
+
+/* Better bubble colors */
+
+@media (max-width: 768px) {
+}
+
+
+/* ═══ MESSAGERIE LAYOUT ═══ */
+.messages-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: calc(100vh - var(--topnav-h, 65px) - 120px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.messages-layout .conv-list {
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+.messages-layout .chat-area {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.messages-layout .chat-msgs {
+  flex: 1;
+  overflow-y: auto;
+}
+.messages-layout .chat-input-row {
+  flex-shrink: 0;
+  position: relative;
+}
+.msg-out {
+  background: linear-gradient(135deg, var(--gold), #e8920a) !important;
+  color: #000 !important;
+  max-width: 70%;
+}
+.msg-in {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  max-width: 70%;
+}
+@media (min-width: 769px) {
+  .chat-back-btn { display: none !important; }
+  .messages-layout .conv-list { display: block !important; }
+  .messages-layout .chat-area { display: flex !important; }
+}
+@media (max-width: 768px) {
+  .chat-back-btn { display: inline-flex !important; }
+  .messages-layout {
+    grid-template-columns: 1fr;
+    height: calc(100vh - 170px);
   }
 }
