@@ -200,9 +200,12 @@ export default function Messagerie(){
   }
 
   // React to message
-  const reactTo=(msgId,emoji)=>{
+  const reactTo=async(msgId,emoji)=>{
     setMessages(ms=>ms.map(m=>m.id===msgId?{...m,reaction:emoji}:m))
     setReactMsg(null)
+    try{
+      await fetch(API_URL+'/api/messages/react',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify({message_id:msgId,reaction:emoji})})
+    }catch(e){console.error(e)}
   }
 
   // === GUARDS ===
