@@ -49,7 +49,10 @@ export default async function tracksRoutes(app) {
   app.post('/:id/play', async (request, reply) => {
     const { id } = request.params
     if (id && id !== 'undefined') {
-      await supabase.rpc('increment_play_count', { track_uuid: id }).catch(() => {})
+      try {
+        const { data: track } = await supabase.from('tracks').select('play_count').eq('id', id).single()
+        if (track) await supabase.from('tracks').update({ play_count: (track.play_count || 0) + 1 }).eq('id', id)
+      } catch(e) {}
     }
     return reply.send({ ok: true })
   })
