@@ -33,6 +33,7 @@ export default function Messagerie(){
   const [editText,setEditText]=useState('')
   const [menuMsg,setMenuMsg]=useState(null)
   const [selectMode,setSelectMode]=useState(false)
+  const [replyTo,setReplyTo]=useState(null)
   const [selected,setSelected]=useState(new Set())
 
   const msgsEnd=useRef(null)
@@ -139,7 +140,7 @@ export default function Messagerie(){
     }catch(e){console.error(e)}
   }
 
-  const sendText=()=>{if(!input.trim())return;sendMessage(input,'text');setInput('')}
+  const sendText=()=>{if(!input.trim())return;const msg=replyTo?'> '+replyTo.content?.slice(0,40)+'...\n'+input:input;sendMessage(msg,'text');setInput('');setReplyTo(null)}
 
   const shareTrack=(track)=>{
     sendMessage('🎵 '+track.title+' — '+(track.profiles?.display_name||'Artiste'),'track',track.id)
@@ -257,7 +258,17 @@ export default function Messagerie(){
           </div>
         </div>
       }else{
+        if(m.content?.startsWith('> ')){
+        const parts=m.content.split('\n')
+        const quote=parts[0].replace(/^> /,'').replace(/\.\.\. $/,'')
+        const reply=parts.slice(1).join('\n').trim()
+        content=<div>
+          <div style={{borderLeft:'3px solid '+(isMe?'rgba(0,0,0,.3)':'var(--gold)'),paddingLeft:8,marginBottom:6,fontSize:11,color:isMe?'rgba(0,0,0,.5)':'var(--text3)',fontStyle:'italic'}}>{quote}</div>
+          {reply||''}
+        </div>
+      }else{
         content=m.content
+      }
       }
     }
 
@@ -290,7 +301,7 @@ export default function Messagerie(){
           <MenuItem icon="😊" label="Reagir" onClick={()=>{setReactMsg(m.id);setMenuMsg(null)}}/>
           {isMe&&m.message_type==='text'&&<MenuItem icon="✏️" label="Modifier" onClick={()=>startEdit(m)}/>}
           <MenuItem icon="📋" label="Copier" onClick={()=>{navigator.clipboard?.writeText(m.content);setMenuMsg(null)}}/>
-          <MenuItem icon="↩️" label="Repondre" onClick={()=>{setInput('> '+m.content?.slice(0,30)+'... ');setMenuMsg(null)}}/>
+          <MenuItem icon="↩️" label="Repondre" onClick={()=>{setReplyTo(m);setMenuMsg(null)}}/>
           <MenuItem icon="☑️" label="Selectionner" onClick={()=>{setSelectMode(true);setSelected(new Set([m.id]));setMenuMsg(null)}}/>
           {isMe&&<MenuItem icon="🗑️" label="Supprimer" red onClick={()=>deleteMsg(m.id)}/>}
         </div>}
@@ -351,6 +362,13 @@ export default function Messagerie(){
               <div ref={msgsEnd}/>
             </div>
 
+            {replyTo&&<div style={{display:'flex',alignItems:'center',gap:10,padding:'8px 14px',background:'var(--card)',borderTop:'1px solid var(--border)',borderLeft:'3px solid var(--gold)'}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:10,color:'var(--gold)',fontWeight:700,marginBottom:2}}>Repondre a {replyTo.sender?.display_name||'message'}</div>
+                <div style={{fontSize:12,color:'var(--text2)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{replyTo.content?.startsWith('http')?replyTo.message_type==='voice'?'🎤 Vocal':'📷 Photo':replyTo.content?.slice(0,60)}</div>
+              </div>
+              <button onClick={()=>setReplyTo(null)} style={{background:'none',border:'none',color:'var(--text3)',cursor:'pointer',fontSize:16,padding:4}}>✕</button>
+            </div>}
             {uploading&&<div style={{height:3,background:'var(--border)',width:'100%'}}><div style={{height:'100%',background:'var(--gold)',width:'60%',animation:'shimmer 1.5s infinite',borderRadius:3}}/></div>}
 
             <div className="chat-input-row" style={{position:'relative',flexWrap:'wrap',gap:6,alignItems:'center'}}>
