@@ -68,7 +68,7 @@ export default async function messagesRoutes(fastify) {
     if (conv) {
       const isP1 = conv.participant_1 === req.user.id
       await supabase.from('conversations').update({
-        last_message: content || 'Son partage',
+        last_message: content?.startsWith('http') ? (message_type === 'voice' ? '🎤 Vocal' : '📷 Photo') : content || 'Son partage',
         last_message_at: new Date().toISOString(),
         unread_1: isP1 ? conv.unread_1 : (conv.unread_1 + 1),
         unread_2: isP1 ? (conv.unread_2 + 1) : conv.unread_2,
@@ -77,19 +77,47 @@ export default async function messagesRoutes(fastify) {
     return { message: msg }
   })
 
+  // React to a message
   fastify.post('/react', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { message_id, reaction, user_id } = req.body
     if (!message_id) return reply.status(400).send({ error: 'message_id requis' })
     const { data: msg } = await supabase.from('messages').select('reaction').eq('id', message_id).single()
-    const current = msg?.reaction || {}
-    if (current[user_id || req.user.id] === reaction) delete current[user_id || req.user.id]
-    else current[user_id || req.user.id] = reaction
+    const current = (msg?.reaction && typeof msg.reaction === 'object') ? msg.reaction : {}
+    const uid = user_id || req.user.id
+    if (current[uid] === reaction) delete current[uid]
+    else current[uid] = reaction
     const newReaction = Object.keys(current).length ? current : null
     const { error } = await supabase.from('messages').update({ reaction: newReaction }).eq('id', message_id)
     if (error) return reply.status(500).send({ error: error.message })
     return { ok: true }
   })
 
+  // Edit a message
+  fastify.patch('/edit', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const { message_id, content } = req.body
+    if (!message_id || !content) return reply.status(400).send({ error: 'message_id et content requis' })
+    const { data, error } = await supabase.from('messages')
+      .update({ content, edited: true })
+      .eq('id', message_id)
+      .eq('sender_id', req.user.id)
+      .select().single()
+    if (error) return reply.status(500).send({ error: error.message })
+    return { message: data }
+  })
+
+  // Delete a message
+  fastify.delete('/delete', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const { message_id } = req.body
+    if (!message_id) return reply.status(400).send({ error: 'message_id requis' })
+    const { error } = await supabase.from('messages')
+      .delete()
+      .eq('id', message_id)
+      .eq('sender_id', req.user.id)
+    if (error) return reply.status(500).send({ error: error.message })
+    return { ok: true }
+  })
+
+  // Search users
   fastify.get('/users/search', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { q } = req.query
     if (!q || q.length < 2) return { users: [] }
