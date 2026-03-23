@@ -85,7 +85,7 @@ export default function Karaoke(){
           Choisis un son, l'instrumental se lance, chante par-dessus et partage ton enregistrement !
         </div>
         <div style={{display:"flex",gap:10,position:"relative",zIndex:1,flexWrap:"wrap"}}>
-          <button className="btn btn-primary" onClick={()=>filtered[0]&&setStudio(filtered[0])}>🎤 Commencer</button>
+          <button className="btn btn-primary" onClick={()=>setStudio({picking:true})}>🎤 Commencer</button>
         </div>
       </div>
 
@@ -194,7 +194,7 @@ export default function Karaoke(){
         </div>
       )}
 
-      {studio&&<StudioModal track={studio} user={user} onClose={()=>setStudio(null)} onSaved={()=>{loadData();setStudio(null)}}/>}
+      {studio&&<StudioModal track={studio} allTracks={tracks} user={user} onClose={()=>setStudio(null)} onSaved={()=>{loadData();setStudio(null)}}/>}
     </div>
   )
 }
@@ -202,7 +202,10 @@ export default function Karaoke(){
 // ═══════════════════════════════════════
 // STUDIO MODAL
 // ═══════════════════════════════════════
-function StudioModal({track,user,onClose,onSaved}){
+function StudioModal({track:initialTrack,allTracks=[],user,onClose,onSaved}){
+  const [track,setTrack]=useState(initialTrack?.picking?null:initialTrack)
+  const [trackSearch,setTrackSearch]=useState('')
+  const [showPicker,setShowPicker]=useState(initialTrack?.picking||false)
   const [phase,setPhase]=useState('ready')
   const [time,setTime]=useState(0)
   const [countdown,setCountdown]=useState(3)
@@ -216,7 +219,8 @@ function StudioModal({track,user,onClose,onSaved}){
   const [muteOriginalVoice,setMuteOriginalVoice]=useState(false)
   const [waveData,setWaveData]=useState(new Array(40).fill(5))
   const [isPlaying,setIsPlaying]=useState(false)
-  const [duetTitle,setDuetTitle]=useState('Duet_'+track.title?.replace(/[^a-zA-Z0-9]/g,'_')+'_'+(user?.username||'moi'))
+  const filteredTracks=allTracks.filter(t=>{if(!trackSearch)return true;const q=trackSearch.toLowerCase();return t.title?.toLowerCase().includes(q)||t.artist?.toLowerCase().includes(q)})
+  const [duetTitle,setDuetTitle]=useState(track?'Duet_'+track.title?.replace(/[^a-zA-Z0-9]/g,'_')+'_'+(user?.username||'moi'):'')
 
   const timerRef=useRef(null)
   const mediaRef=useRef(null)
@@ -405,7 +409,27 @@ function StudioModal({track,user,onClose,onSaved}){
           <button className="modal-close" onClick={()=>{stopAll();onClose()}}>✕</button>
         </div>
 
-        {/* Track info */}
+        {/* Track picker or info */}
+        {(!track||showPicker)?(
+          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:16,marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>🎵 Choisir un son</div>
+            <input value={trackSearch} onChange={e=>setTrackSearch(e.target.value)} placeholder="Rechercher un son..." className="input-field" style={{fontSize:13,padding:'10px 14px',marginBottom:10}}/>
+            <div style={{maxHeight:250,overflowY:'auto',display:'flex',flexDirection:'column',gap:4}}>
+              {filteredTracks.slice(0,20).map((t,i)=>(
+                <div key={t.id||i} onClick={()=>{setTrack(t);setShowPicker(false);setDuetTitle('Duet_'+t.title?.replace(/[^a-zA-Z0-9]/g,'_')+'_'+(user?.username||'moi'))}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',cursor:'pointer',borderRadius:10,transition:'background .15s',border:'1px solid transparent'}} onMouseEnter={e=>{e.currentTarget.style.background='var(--bg2)';e.currentTarget.style.borderColor='var(--gold)'}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent'}}>
+                  <div style={{width:42,height:42,borderRadius:10,background:t.bg||BG_COLORS[i%6],display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0,overflow:'hidden'}}>
+                    {t.cover_url?<img src={t.cover_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:(t.emoji||'🎵')}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</div>
+                    <div style={{fontSize:11,color:'var(--text3)'}}>{t.artist} · {fmtK(t.plays)} plays</div>
+                  </div>
+                </div>
+              ))}
+              {filteredTracks.length===0&&<div style={{padding:20,textAlign:'center',color:'var(--text3)',fontSize:12}}>Aucun son trouve</div>}
+            </div>
+          </div>
+        ):(
         <div style={{display:"flex",alignItems:"center",gap:12,background:"var(--card)",borderRadius:"var(--radius-sm)",padding:12,marginBottom:16}}>
           <div style={{width:52,height:52,borderRadius:10,background:track.bg||"var(--purple)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0,overflow:'hidden'}}>
             {track.cover_url?<img src={track.cover_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:(track.emoji||"🎵")}
@@ -417,9 +441,11 @@ function StudioModal({track,user,onClose,onSaved}){
           <div style={{fontFamily:"Space Mono,monospace",fontSize:11,padding:'4px 10px',borderRadius:20,background:phase==='recording'?'rgba(230,57,70,.2)':phase==='review'?'rgba(44,198,83,.2)':'var(--bg2)',color:phase==='recording'?'var(--red)':phase==='review'?'var(--green)':'var(--text3)'}}>
             {phase==='recording'?'🔴 REC':phase==='review'?'✅ TERMINE':phase==='countdown'?'⏳':'🎵 PRET'}
           </div>
+          {phase==='ready'&&<button onClick={()=>setShowPicker(true)} style={{padding:'4px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text3)',fontSize:11,cursor:'pointer'}}>Changer</button>}
         </div>
+        )}
 
-        {/* MIXING CONTROLS */}
+        {track&&<>{/* MIXING CONTROLS */}
         <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:14,marginBottom:16}}>
           <div style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--text2)'}}>🎚️ Mixage audio</div>
           <div style={{display:'flex',gap:16}}>
@@ -527,6 +553,7 @@ function StudioModal({track,user,onClose,onSaved}){
             </div>
           </div>
         )}
+        </>}
       </div>
     </div>
   )
