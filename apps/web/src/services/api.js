@@ -105,10 +105,13 @@ const api = {
     stats:  (id) => api.get('/api/campaigns/' + id + '/stats'),
   },
   products: {
-    list:   (q = '') => api.get('/api/products/' + q, false),
-    buy:    (d)      => api.post('/api/products/buy', d),
-    my:     ()       => api.get('/api/products/my/products'),
-    create: (d)      => api.post('/api/products/', d),
+    list:   (q = '') => api.get('/api/products' + q, false),
+    get:    (id)     => api.get('/api/products/' + id, false),
+    buy:    (id)     => api.post('/api/products/' + id + '/buy', {}),
+    my:     ()       => api.get('/api/products/mine'),
+    create: (d)      => api.post('/api/products', d),
+    update: (id, d)  => api.patch('/api/products/' + id, d),
+    delete: (id)     => api.delete('/api/products/' + id),
   },
   messages: {
     conversations: () => api.get('/api/messages/conversations'),

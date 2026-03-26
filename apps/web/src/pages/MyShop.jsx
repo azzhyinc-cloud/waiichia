@@ -31,7 +31,7 @@ export default function MyShop() {
       formData.append('file', file)
       const token = localStorage.getItem('waiichia_token')
       const API = import.meta.env.VITE_API_URL
-      const res = await fetch(API + '/api/upload/image', { method:'POST', headers:{'Authorization':'Bearer '+token}, body:formData })
+      const res = await fetch(API + '/api/upload/cover', { method:'POST', headers:{'Authorization':'Bearer '+token}, body:formData })
       const data = await res.json()
       if (data.url) { set('cover_url', data.url); setPreviewUrl(data.url) }
     } catch(e) { alert('Erreur upload: ' + e.message) }

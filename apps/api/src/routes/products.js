@@ -3,11 +3,13 @@ import { supabase } from '../config.js'
 export default async function productsRoutes(fastify) {
 
   // GET tous les produits publics
-  fastify.get('/api/products', async (req, reply) => {
+  fastify.get('/', async (req, reply) => {
     const { category, sort = 'created_at', seller_id } = req.query
-    let query = supabase.from('products').select('*, profiles(username, display_name, avatar_url, is_verified), tracks(id, title, cover_url, play_count, genre), albums:tracks(id, title, cover_url)').eq('is_active', true)
+    let query = supabase.from('products').select('*, profiles:creator_id(username, display_name, avatar_url, is_verified)').eq('is_active', true)
     if (category) query = query.eq('category', category)
     if (seller_id) query = query.eq('user_id', seller_id)
+    const { content_id } = req.query
+    if (content_id) query = query.eq('content_id', content_id)
     query = query.order(sort === 'price_asc' ? 'price' : sort === 'price_desc' ? 'price' : 'created_at', { ascending: sort === 'price_asc' })
     const { data, error } = await query
     if (error) return reply.status(500).send({ error: error.message })
@@ -15,26 +17,27 @@ export default async function productsRoutes(fastify) {
   })
 
   // GET mes produits
-  fastify.get('/api/products/mine', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.get('/mine', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { data, error } = await supabase.from('products').select('*').eq('user_id', req.user.id).order('created_at', { ascending: false })
     if (error) return reply.status(500).send({ error: error.message })
     return { products: data }
   })
 
   // GET un produit
-  fastify.get('/api/products/:id', async (req, reply) => {
-    const { data, error } = await supabase.from('products').select('*, profiles(username, display_name, avatar_url, is_verified)').eq('id', req.params.id).single()
+  fastify.get('/:id', async (req, reply) => {
+    const { data, error } = await supabase.from('products').select('*, profiles:creator_id(username, display_name, avatar_url, is_verified)').eq('id', req.params.id).single()
     if (error) return reply.status(404).send({ error: 'Produit introuvable' })
     return { product: data }
   })
 
   // POST creer produit
-  fastify.post('/api/products', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.post('/', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { name, description, category, price, currency, emoji, cover_url, background, stock, tags, content_id, content_type } = req.body
     if (!name || !price) return reply.status(400).send({ error: 'name et price requis' })
     const { data, error } = await supabase.from('products').insert({
-      user_id: req.user.id, name, description,
+      user_id: req.user.id, creator_id: req.user.id, name, description,
       category: category || 'digital',
+      product_type: category || 'digital',
       price: parseInt(price),
       currency: currency || 'KMF',
       emoji: emoji || '🛍️',
@@ -48,7 +51,7 @@ export default async function productsRoutes(fastify) {
   })
 
   // PATCH modifier produit
-  fastify.patch('/api/products/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.patch('/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const allowed = ['name','description','price','category','emoji','cover_url','background','stock','is_active','tags']
     const updates = {}
     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k] })
@@ -59,14 +62,14 @@ export default async function productsRoutes(fastify) {
   })
 
   // DELETE supprimer
-  fastify.delete('/api/products/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.delete('/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { error } = await supabase.from('products').delete().eq('id', req.params.id).eq('user_id', req.user.id)
     if (error) return reply.status(500).send({ error: error.message })
     return { success: true }
   })
 
   // POST acheter un produit (depuis wallet)
-  fastify.post('/api/products/:id/buy', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.post('/:id/buy', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { data: product, error: pErr } = await supabase.from('products').select('*').eq('id', req.params.id).single()
     if (pErr || !product) return reply.status(404).send({ error: 'Produit introuvable' })
     if (!product.is_active) return reply.status(400).send({ error: 'Produit indisponible' })

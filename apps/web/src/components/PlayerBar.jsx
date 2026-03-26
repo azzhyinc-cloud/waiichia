@@ -1,6 +1,6 @@
 import { usePlayerStore } from "../stores/index.js"
 import { usePageStore } from "../stores/index.js"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 
 const fmt = s => {
   if (!s || isNaN(s)) return "0:00"
@@ -16,10 +16,25 @@ export default function PlayerBar() {
   const [repeat,  setRepeat]  = useState(false)
   const [liked,   setLiked]   = useState(false)
   const [muted,   setMuted]   = useState(false)
+  const [product, setProduct] = useState(null)
   const [showQ,   setShowQ]   = useState(false)
   const prevVol = useRef(volume)
   const progRef = useRef(null)
   const volRef  = useRef(null)
+
+  // Check if current track has a linked product
+  const checkProduct = async (trackId) => {
+    if (!trackId) { setProduct(null); return }
+    try {
+      const res = await fetch((import.meta.env.VITE_API_URL||'')+'/api/products?content_id='+trackId)
+      const data = await res.json()
+      const p = (data.products||[]).find(p => p.content_id === trackId)
+      setProduct(p || null)
+    } catch(e) { setProduct(null) }
+  }
+  
+
+  useEffect(()=>{if(currentTrack?.id)checkProduct(currentTrack.id);else setProduct(null)},[currentTrack?.id])
 
   const pct = duration > 0 ? (progress / duration) * 100 : 0
 
@@ -122,6 +137,8 @@ export default function PlayerBar() {
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
             boxShadow:"0 4px 14px rgba(0,0,0,.4)",
             animation:isPlaying?"spin 8s linear infinite":"none"}}>
+            {/* Product badge */}
+            {product&&<div onClick={()=>setPage('shop')} style={{position:'absolute',top:-8,right:-8,background:'linear-gradient(135deg,var(--gold),#e8920a)',color:'#000',borderRadius:20,padding:'3px 8px',fontSize:10,fontWeight:800,cursor:'pointer',boxShadow:'0 2px 8px rgba(245,166,35,.4)',zIndex:5,display:'flex',alignItems:'center',gap:3,animation:'pulse-glow 2s infinite',whiteSpace:'nowrap'}}>🛒 {product.price?.toLocaleString()} {product.currency||'KMF'}</div>}
             {currentTrack.cover_url
               ? <img src={currentTrack.cover_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
               : "🎵"}

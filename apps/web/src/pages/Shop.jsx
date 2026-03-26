@@ -37,7 +37,9 @@ export default function Shop() {
     setBuying(true)
     setBuyMsg(null)
     try {
-      const res = await api.products.buy(product.id)
+      const token = localStorage.getItem('waiichia_token')
+      const res = await fetch((import.meta.env.VITE_API_URL||'')+'/api/products/'+product.id+'/buy',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({})}).then(r=>r.json())
+      if(res.error) throw new Error(res.error)
       setBuyMsg({ ok: true, text: res.message + ' · Solde: ' + (res.new_balance||0).toLocaleString() + ' KMF' })
       setProducts(ps => ps.map(p => p.id===product.id ? {...p, sold_count:(p.sold_count||0)+1} : p))
     } catch(e) {
