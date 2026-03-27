@@ -3,7 +3,7 @@ import { supabase } from '../config.js'
 export default async function paymentsRoutes(app) {
 
   // ── ACHAT / LOCATION TRACK ──
-  app.post('/api/payments/track', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/track', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { track_id, type, period } = request.body
     if (!track_id || !type) return reply.status(400).send({ error: 'track_id et type requis' })
 
@@ -47,7 +47,7 @@ export default async function paymentsRoutes(app) {
   })
 
   // ── RECHARGE WALLET ──
-  app.post('/api/payments/recharge', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/recharge', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { amount, gateway = 'huri_money', phone } = request.body
     if (!amount || amount < 100) return reply.status(400).send({ error: 'Montant minimum 100 KMF' })
 
@@ -63,7 +63,7 @@ export default async function paymentsRoutes(app) {
   })
 
   // ── ACHAT BILLET ──
-  app.post('/api/payments/ticket', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/ticket', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { event_id, quantity = 1 } = request.body
     const { data: event } = await supabase.from('events')
       .select('id,title,ticket_price,currency,is_free,creator_id,capacity,tickets_sold').eq('id', event_id).single()
@@ -97,13 +97,13 @@ export default async function paymentsRoutes(app) {
   })
 
   // ── SOLDE WALLET ──
-  app.get('/api/wallet/balance', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get('/wallet/balance', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { data } = await supabase.from('profiles').select('wallet_balance,currency').eq('id', request.user.id).single()
     return { balance: data?.wallet_balance || 0, currency: data?.currency || 'KMF' }
   })
 
   // ── HISTORIQUE TRANSACTIONS ──
-  app.get('/api/payments/history', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get('/history', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { data, error } = await supabase.from('transactions')
       .select('*').eq('user_id', request.user.id)
       .order('created_at', { ascending: false }).limit(50)
@@ -112,7 +112,7 @@ export default async function paymentsRoutes(app) {
   })
 
   // ── TICKETS ACHETES ──
-  app.get('/api/payments/tickets', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get('/tickets', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { data, error } = await supabase.from('event_tickets')
       .select('*, events(id,title,event_date,location,cover_url)')
       .eq('user_id', request.user.id).order('created_at', { ascending: false })

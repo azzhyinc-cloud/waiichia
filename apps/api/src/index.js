@@ -52,10 +52,6 @@ await app.register(radioRoutes,     { prefix: '/api/radio' })
 await app.register(karaokeRoutes,   { prefix: '/api/karaoke' })
 await app.register(adminRoutes, { prefix: '/api/admin' })
 
-app.get('/api/wallet/balance', { preHandler: app.authenticate }, async (req, reply) => {
-  const { data } = await supabase.from('wallets').select('balance, currency').eq('user_id', req.user.id).single()
-  return reply.send({ balance: data?.balance || 0, currency: data?.currency || 'KMF' })
-})
 
 app.get('/health', async () => ({ status: 'ok', version: '1.1.0', timestamp: new Date().toISOString() }))
 

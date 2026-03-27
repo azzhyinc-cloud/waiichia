@@ -45,12 +45,16 @@ export default async function profilesRoutes(app) {
   app.post('/:username/follow', { preHandler: app.authenticate }, async (request, reply) => {
     const { data: target } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
     await supabase.from('follows').upsert({ follower_id: request.user.id, following_id: target.id })
+    const { count } = await supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', target.id)
+    await supabase.from('profiles').update({ followers_count: count || 0, fans_count: count || 0 }).eq('id', target.id)
     return reply.send({ following: true })
   })
 
   app.delete('/:username/follow', { preHandler: app.authenticate }, async (request, reply) => {
     const { data: target } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
     await supabase.from('follows').delete().eq('follower_id', request.user.id).eq('following_id', target.id)
+    const { count } = await supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', target.id)
+    await supabase.from('profiles').update({ followers_count: count || 0, fans_count: count || 0 }).eq('id', target.id)
     return reply.send({ following: false })
   })
 

@@ -3,7 +3,7 @@ import { supabase } from '../config.js'
 export default async function campaignsRoutes(fastify) {
 
   // GET mes campagnes
-  fastify.get('/api/campaigns', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.get('/', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { status } = req.query
     let query = supabase.from('campaigns').select('*').eq('user_id', req.user.id).order('created_at', { ascending: false })
     if (status) query = query.eq('status', status)
@@ -13,7 +13,7 @@ export default async function campaignsRoutes(fastify) {
   })
 
   // GET stats campagnes
-  fastify.get('/api/campaigns/stats', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.get('/stats', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { data, error } = await supabase.from('campaigns').select('*').eq('user_id', req.user.id)
     if (error) return reply.status(500).send({ error: error.message })
     const stats = {
@@ -30,7 +30,7 @@ export default async function campaignsRoutes(fastify) {
   })
 
   // POST creer campagne
-  fastify.post('/api/campaigns', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.post('/', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { name, format, titre, description, url_destination, objectif, budget, budget_type, devise, pays, genres, placements, age_range, genre_cible, date_debut, date_fin } = req.body
     if (!name || !format || !budget) return reply.status(400).send({ error: 'name, format et budget requis' })
     const { data, error } = await supabase.from('campaigns').insert({
@@ -54,7 +54,7 @@ export default async function campaignsRoutes(fastify) {
   })
 
   // PATCH modifier statut
-  fastify.patch('/api/campaigns/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.patch('/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const updates = {}
     const allowed = ['status','name','budget','date_fin','titre','description']
     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k] })
@@ -65,7 +65,7 @@ export default async function campaignsRoutes(fastify) {
   })
 
   // DELETE supprimer
-  fastify.delete('/api/campaigns/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.delete('/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const { error } = await supabase.from('campaigns').delete().eq('id', req.params.id).eq('user_id', req.user.id)
     if (error) return reply.status(500).send({ error: error.message })
     return { success: true }
