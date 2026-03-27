@@ -55,7 +55,6 @@ export default async function productsRoutes(fastify) {
     const allowed = ['name','description','price','category','emoji','cover_url','background','stock','is_active','tags']
     const updates = {}
     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k] })
-    updates.updated_at = new Date().toISOString()
     const { data, error } = await supabase.from('products').update(updates).eq('id', req.params.id).eq('user_id', req.user.id).select().single()
     if (error) return reply.status(500).send({ error: error.message })
     return { product: data }

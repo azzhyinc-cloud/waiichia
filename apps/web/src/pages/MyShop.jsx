@@ -65,8 +65,10 @@ export default function MyShop() {
   }
 
   const toggleActive = async (p) => {
-    await api.products.update(p.id, { is_active: !p.is_active })
-    setProducts(ps => ps.map(x => x.id===p.id ? {...x, is_active: !x.is_active} : x))
+    try {
+      await api.products.update(p.id, { is_active: !p.is_active })
+      setProducts(ps => ps.map(x => x.id===p.id ? {...x, is_active: !x.is_active} : x))
+    } catch(e) { console.error('TOGGLE ERROR:', e.message); alert('Erreur: ' + e.message) }
   }
 
   const handleDelete = async (id) => {
