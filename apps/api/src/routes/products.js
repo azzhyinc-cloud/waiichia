@@ -9,7 +9,7 @@ export default async function productsRoutes(fastify) {
     if (category) query = query.eq('category', category)
     if (seller_id) query = query.eq('user_id', seller_id)
     const { content_id } = req.query
-    if (content_id) query = query.eq('content_id', content_id)
+    if (content_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(content_id)) query = query.eq('content_id', content_id)
     query = query.order(sort === 'price_asc' ? 'price' : sort === 'price_desc' ? 'price' : 'created_at', { ascending: sort === 'price_asc' })
     const { data, error } = await query
     if (error) return reply.status(500).send({ error: error.message })
