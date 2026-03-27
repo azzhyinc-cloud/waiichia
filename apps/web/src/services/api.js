@@ -2,7 +2,8 @@ const API_URL = import.meta.env.VITE_API_URL || ''
 
 const api = {
   async request(method, path, data = null, auth = true) {
-    const headers = { 'Content-Type': 'application/json' }
+    const headers = {}
+    if (data !== null && data !== undefined) headers['Content-Type'] = 'application/json'
     if (auth) {
       const token = localStorage.getItem('waiichia_token')
       if (token) headers['Authorization'] = 'Bearer ' + token

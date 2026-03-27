@@ -48,7 +48,7 @@ export default function MyShop() {
 
   const loadProducts = async () => {
     setLoading(true)
-    try { const data = await api.products.mine(); setProducts(data.products||[]) } catch(e) {}
+    try { const data = await api.products.my(); console.log('MINE OK:', data); setProducts(data.products||[]) } catch(e) { console.error('MINE ERROR:', e.message, e.status) }
     setLoading(false)
   }
 
@@ -72,8 +72,10 @@ export default function MyShop() {
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ce produit ?')) return
     setDeleting(id)
-    await api.products.delete(id)
-    setProducts(ps => ps.filter(x => x.id!==id))
+    try {
+      await api.products.delete(id)
+      setProducts(ps => ps.filter(x => x.id!==id))
+    } catch(e) { console.error('DELETE ERROR:', e.message); alert('Erreur suppression: ' + e.message) }
     setDeleting(null)
   }
 
