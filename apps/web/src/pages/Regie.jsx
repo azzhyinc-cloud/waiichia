@@ -3,12 +3,6 @@ import { useAuthStore, usePageStore } from "../stores/index.js"
 
 const fmtK=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
 const FORMATS=[{id:'audio',icon:'🎵',name:'Audio Ad',desc:'15–30s entre les sons'},{id:'banner',icon:'🖼️',name:'Banner',desc:'Bandeau visuel'},{id:'interstitial',icon:'📱',name:'Interstitiel',desc:'Plein écran mobile'},{id:'sponsored',icon:'🎙️',name:'Son Sponsorisé',desc:'Mis en avant dans le feed'},{id:'podcast',icon:'🎧',name:'Podcast Ad',desc:'Pré-roll ou mid-roll'},{id:'event',icon:'🎪',name:'Event Boost',desc:'Boost événement'}]
-const MOCK_CAMPAIGNS=[
-  {id:'cp1',name:'Lancement Album Ocean',format:'audio',status:'active',impressions:42000,clicks:1800,budget:50000,spent:32000,ctr:'4.3%'},
-  {id:'cp2',name:'Promo Concert Moroni',format:'event',status:'active',impressions:28000,clicks:2400,budget:30000,spent:18000,ctr:'8.6%'},
-  {id:'cp3',name:'Banner Huri Money',format:'banner',status:'paused',impressions:15000,clicks:420,budget:20000,spent:12000,ctr:'2.8%'},
-  {id:'cp4',name:'Podcast Mindset',format:'podcast',status:'completed',impressions:68000,clicks:3200,budget:40000,spent:40000,ctr:'4.7%'},
-]
 const STATUS_STYLE={active:{bg:'rgba(44,198,83,.15)',c:'var(--green)',l:'🟢 Active'},paused:{bg:'rgba(245,166,35,.15)',c:'var(--gold)',l:'⏸ Pausée'},completed:{bg:'rgba(77,159,255,.15)',c:'var(--blue)',l:'✅ Terminée'},draft:{bg:'var(--bg2)',c:'var(--text3)',l:'📝 Brouillon'}}
 
 export default function Regie(){

@@ -35,10 +35,10 @@ export default function Home() {
   useEffect(()=>{
     Promise.all([
       api.profiles.stats().catch(()=>({tracks_count:0,creators_count:0,total_plays:0,countries_count:0})),
-      api.tracks.list('?limit=8').catch(()=>({tracks:[]})),
-      api.profiles.list('?limit=6').catch(()=>({profiles:[]})),
-      fetch((import.meta.env.VITE_API_URL||'')+'/api/events/?limit=4').then(r=>r.json()).catch(()=>({events:[]})),
-      fetch((import.meta.env.VITE_API_URL||'')+'/api/radio/').then(r=>r.json()).catch(()=>({stations:[]})),
+      api.tracks.list('?limit=8').catch(()=>({})),
+      api.profiles.list('?limit=6').catch(()=>({})),
+      fetch((import.meta.env.VITE_API_URL||'')+'/api/events/?limit=4').then(r=>r.json()).catch(()=>({})),
+      fetch((import.meta.env.VITE_API_URL||'')+'/api/radio/').then(r=>r.json()).catch(()=>({})),
     ]).then(([s,t,p,ev,rd])=>{
       setStats(s)
       if(t?.tracks?.length){setTracks(t.tracks.map((tr,i)=>({...tr,bg:BGS[i%8],emoji:EMOJIS[i%8]})))}

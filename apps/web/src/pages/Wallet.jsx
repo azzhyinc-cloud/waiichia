@@ -6,14 +6,6 @@ const DEVISES=[{code:'KMF',flag:'🇰🇲',label:'Franc Comorien'},{code:'MGA',f
 const AMOUNTS=[2000,5000,10000,25000,50000,100000]
 const PERIODS=['Aujourd\'hui','Semaine','Mois','Année']
 const TX_TYPES=[{v:'',l:'Tous types'},{v:'income',l:'Recettes'},{v:'expense',l:'Dépenses'},{v:'transfer',l:'Transferts'},{v:'withdraw',l:'Retraits'}]
-const MOCK_TX=[
-  {id:'tx1',type:'income',title:'Vente — Twarab ya Komori',sub:'Achat par @wallyafro',amount:2500,currency:'KMF',time:'Aujourd\'hui 14:32'},
-  {id:'tx2',type:'income',title:'Location — Moroni by Night',sub:'7 jours par @fatima_k',amount:800,currency:'KMF',time:'Aujourd\'hui 11:20'},
-  {id:'tx3',type:'expense',title:'Achat — Afrika Rising',sub:'Wally Afro',amount:-2000,currency:'KMF',time:'Hier 18:45'},
-  {id:'tx4',type:'income',title:'Tips — Radio Live',sub:'5 tips reçus',amount:4500,currency:'KMF',time:'Hier 20:10'},
-  {id:'tx5',type:'transfer',title:'Transfert vers @djchami',sub:'Paiement featuring',amount:-5000,currency:'KMF',time:'12 Mar 09:30'},
-  {id:'tx6',type:'withdraw',title:'Retrait — Mvola',sub:'Vers +269 321 XXXX',amount:-15000,currency:'KMF',time:'10 Mar 16:00'},
-]
 const fmtMoney=n=>Math.abs(n).toLocaleString()
 const isMobile=()=>/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||window.innerWidth<=600
 
@@ -34,10 +26,10 @@ export default function Wallet(){
   useEffect(()=>{
     Promise.all([
       api.payments.walletBalance().catch(()=>({balance:0})),
-      api.payments.history().catch(()=>({transactions:[]})),
+      api.payments.history().catch(()=>({})),
     ]).then(([w,h])=>{
       if(w.balance)setBalance(w.balance)
-      setTransactions(h.transactions?.length?h.transactions:MOCK_TX)
+      setTransactions(h.transactions || [])
     }).finally(()=>setLoading(false))
   },[])
 

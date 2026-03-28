@@ -60,7 +60,7 @@ export default function Profile(){
     if(!who){setLoading(false);return}
     Promise.all([
       api.profiles.get(who).catch(()=>null),
-      api.profiles.tracks?api.profiles.tracks(who).catch(()=>({tracks:[]})):Promise.resolve({tracks:[]}),
+      api.profiles.tracks?api.profiles.tracks(who).catch(()=>({})):Promise.resolve({tracks:[]}),
     ]).then(([p,t])=>{
       if(p)setProfile(p.profile||p)
       setTracks(t?.tracks?.length?t.tracks:(isOwn?MOCK_TRACKS:[]))

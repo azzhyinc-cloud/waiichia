@@ -25,8 +25,8 @@ export default function Karaoke(){
 
   const loadData=async()=>{
     try{
-      const kt=await api.karaoke.tracks().catch(()=>({tracks:[]}))
-      const pt=await fetch(API_URL+'/api/tracks?limit=50',{headers:{'Authorization':'Bearer '+getToken()}}).then(r=>r.json()).catch(()=>({tracks:[]}))
+      const kt=await api.karaoke.tracks().catch(()=>({}))
+      const pt=await fetch(API_URL+'/api/tracks?limit=50',{headers:{'Authorization':'Bearer '+getToken()}}).then(r=>r.json()).catch(()=>({}))
       const karaokeT=kt.tracks||[]
       const platformT=(pt.tracks||pt.data||[]).map((t,i)=>({
         id:t.id,title:t.title,artist:t.profiles?.display_name||'Artiste',
@@ -40,10 +40,10 @@ export default function Karaoke(){
       }))
       setTracks([...karaokeT,...platformT].filter(t=>t.audio_url))
       // Load public duets
-      const pd=await fetch(API_URL+'/api/karaoke/recordings/public',{headers:{'Authorization':'Bearer '+getToken()}}).then(r=>r.json()).catch(()=>({recordings:[]}))
+      const pd=await fetch(API_URL+'/api/karaoke/recordings/public',{headers:{'Authorization':'Bearer '+getToken()}}).then(r=>r.json()).catch(()=>({}))
       setPublicDuets(pd.recordings||[])
       if(user){
-        const mr=await fetch(API_URL+'/api/karaoke/recordings/my',{headers:{'Authorization':'Bearer '+getToken()}}).then(r=>r.json()).catch(()=>({recordings:[]}))
+        const mr=await fetch(API_URL+'/api/karaoke/recordings/my',{headers:{'Authorization':'Bearer '+getToken()}}).then(r=>r.json()).catch(()=>({}))
         setMyRecordings(mr.recordings||[])
       }
     }catch(e){}

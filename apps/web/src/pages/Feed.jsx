@@ -3,14 +3,6 @@ import { useAuthStore, usePageStore } from "../stores/index.js"
 import api from "../services/api.js"
 
 const FILTERS=['Tous','Musique','Podcast','Événements']
-const MOCK_POSTS=[
-  {id:'f1',user:'Kolo Officiel',handle:'@kolo_komori',ava:'KO',bg:'linear-gradient(135deg,#f5a623,#e63946)',event_type:'upload',content:'a publié un nouveau son',ref_title:'Twarab ya Komori',ref_type:'track',time:'Il y a 2h',reactions:342,comments:28},
-  {id:'f2',user:'DJ Chami',handle:'@djchami',ava:'DC',bg:'linear-gradient(135deg,#9b59f5,#6c3483)',event_type:'album_release',content:'a sorti un nouvel album',ref_title:'Moroni Groove Vol.2',ref_type:'album',time:'Il y a 5h',reactions:891,comments:64},
-  {id:'f3',user:'Coach Amina',handle:'@amina_mindset',ava:'CA',bg:'linear-gradient(135deg,#2dc653,#00bfa5)',event_type:'upload',content:'a publié un nouveau podcast',ref_title:'Mindset Afrique Ep.15',ref_type:'podcast',time:'Hier',reactions:214,comments:18},
-  {id:'f4',user:'Waiichia',handle:'@waiichia',ava:'WA',bg:'linear-gradient(135deg,#f5a623,#e63946)',event_type:'event_created',content:'a créé un événement',ref_title:'Nuit Twarab Moroni — 22 Mars',ref_type:'event',time:'Hier',reactions:567,comments:42},
-  {id:'f5',user:'Wally Afro',handle:'@wallyafro',ava:'WL',bg:'linear-gradient(135deg,#4d9fff,#9b59f5)',event_type:'achievement',content:'a atteint 25 000 fans !',ref_title:'🏆 Milestone : 25K fans',ref_type:'achievement',time:'Il y a 2j',reactions:1200,comments:89},
-  {id:'f6',user:'Nassim B.',handle:'@nassimb_km',ava:'NB',bg:'linear-gradient(135deg,#ff6b35,#cc4411)',event_type:'follow',content:'suit maintenant',ref_title:'Radio Komori FM',ref_type:'follow',time:'Il y a 3j',reactions:45,comments:3},
-]
 const fmtK=n=>n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
 const EVENT_ICONS={upload:'🎵',album_release:'💿',event_created:'🎪',achievement:'🏆',follow:'👥',purchase:'🛒',live_start:'🔴'}
 
@@ -23,8 +15,8 @@ export default function Feed(){
 
   useEffect(()=>{
     api.social.feed()
-      .then(d=>setPosts(d.feed?.length?d.feed:MOCK_POSTS))
-      .catch(()=>setPosts(MOCK_POSTS))
+      .then(d=>setPosts(d.feed || []))
+      .catch(()=>{})
       .finally(()=>setLoading(false))
   },[])
 
