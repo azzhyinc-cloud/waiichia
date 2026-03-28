@@ -79,7 +79,7 @@ export default function Regie(){
           <button className="btn btn-primary btn-sm" onClick={()=>setTab('create')}>+ Nouvelle campagne</button>
         </div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
-          {MOCK_CAMPAIGNS.map(cp=>{
+          {(campaigns||[]).map(cp=>{
             const st=STATUS_STYLE[cp.status]||STATUS_STYLE.draft
             const pct=cp.budget?Math.round(cp.spent/cp.budget*100):0
             return(

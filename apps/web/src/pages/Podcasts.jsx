@@ -72,7 +72,7 @@ export default function Podcasts(){
       {/* SÉRIES / COLLECTIONS */}
       <div className="section-hdr"><div className="section-title">📦 Séries / Collections</div></div>
       <div className="tracks-grid">
-        {MOCK_SERIES.map(s=>(
+        {([]/*TODO*/).map(s=>(
           <div key={s.id} className="album-card">
             <div className="album-cover">
               <div className="album-cover-bg" style={{background:s.bg}}>{s.emoji}</div>
