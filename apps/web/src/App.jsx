@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react'
+import React, { useEffect, lazy, Suspense } from 'react'
 import { useThemeStore, useAuthStore, usePageStore } from './stores/index.js'
 import Layout from './components/Layout.jsx'
 import Home from './pages/Home.jsx'
@@ -55,6 +55,20 @@ const PAGES = {
   messages:     <Messagerie />,
 }
 
+class ChunkErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false } }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(error) {
+    if (error?.message?.includes('dynamically imported module') || error?.message?.includes('Loading chunk') || error?.message?.includes('Failed to fetch')) {
+      window.location.reload()
+    }
+  }
+  render() {
+    if (this.state.hasError) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)'}}><div style={{textAlign:'center',color:'var(--text3)'}}><div style={{fontSize:32,marginBottom:12}}>🔄</div><div style={{fontSize:14,marginBottom:12}}>Mise à jour en cours...</div><button onClick={()=>window.location.reload()} style={{padding:'8px 20px',borderRadius:8,border:'1px solid var(--gold)',background:'var(--gold)',color:'#000',fontWeight:700,cursor:'pointer'}}>Actualiser</button></div></div>
+    return this.props.children
+  }
+}
+
 const Loading = () => <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:60,color:'var(--text3)'}}><div style={{textAlign:'center'}}><div style={{fontSize:32,marginBottom:8,animation:'pulse-glow 1.5s infinite'}}>🎵</div><div style={{fontSize:13}}>Chargement...</div></div></div>
 
 export default function App() {
@@ -62,11 +76,11 @@ export default function App() {
   const { loadMe, user } = useAuthStore()
   const { currentPage, profileUsername } = usePageStore()
   useEffect(() => { initTheme(); loadMe() }, [])
-  if (currentPage === 'login')    return <Suspense fallback={<Loading/>}><Login /></Suspense>
-  if (currentPage === 'register') return <Suspense fallback={<Loading/>}><Register /></Suspense>
+  if (currentPage === 'login')    return <ChunkErrorBoundary><Suspense fallback={<Loading/>}><Login /></Suspense></ChunkErrorBoundary>
+  if (currentPage === 'register') return <ChunkErrorBoundary><Suspense fallback={<Loading/>}><Register /></Suspense></ChunkErrorBoundary>
   if (currentPage === 'profile') {
     const uname = profileUsername || user?.username
-    return <Layout><Suspense fallback={<Loading/>}><Profile username={uname} /></Suspense></Layout>
+    return <Layout><ChunkErrorBoundary><Suspense fallback={<Loading/>}><Profile username={uname} /></Suspense></ChunkErrorBoundary></Layout>
   }
-  return <Layout><Suspense fallback={<Loading/>}>{PAGES[currentPage] || PAGES.home}</Suspense></Layout>
+  return <Layout><ChunkErrorBoundary><Suspense fallback={<Loading/>}>{PAGES[currentPage] || PAGES.home}</Suspense></ChunkErrorBoundary></Layout>
 }
