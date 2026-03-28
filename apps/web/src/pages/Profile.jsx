@@ -8,6 +8,62 @@ const TABS=["🎵 Sons","💿 Albums","📋 Playlists","📻 Diffusions","🛍�
 const BGS=["linear-gradient(135deg,#1a6fcc,#4d9fff)","linear-gradient(135deg,#9b59f5,#6d3db5)","linear-gradient(135deg,#f5a623,#e63946)","linear-gradient(135deg,#2dc653,#0a9e4a)","linear-gradient(135deg,#ff6b35,#cc4411)","linear-gradient(135deg,#00b4d8,#0077b6)"]
 const FLAGS={KM:"🇰🇲",MG:"🇲🇬",NG:"🇳🇬",CI:"🇨🇮",SN:"🇸🇳",TZ:"🇹🇿",FR:"🇫🇷"}
 const fmtK=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
+const MOCK_TRACKS=Array.from({length:6},(_,i)=>({id:"t"+i,title:["Twarab ya Komori","Moroni Flow","Island Vibe","Masiwa Matatu","Komori Nights","Afrika Rising"][i],profiles:{display_name:"Kolo Officiel"},genre:["TWARAB","AFROBEATS","AFROBEATS","TWARAB","AFROTRAP","AMAPIANO"][i],play_count:[8420,6180,4930,3760,2100,980][i],sale_price:[2500,1500,0,2500,500,0][i],access_type:i%3===0?"paid":"free",cover_url:null}))
+
+export default function Profile(){
+  const {user}=useAuthStore()
+  const {setPage,profileUsername}=usePageStore()
+  const {devise}=useDeviseStore()
+  const {toggle,currentTrack,isPlaying}=usePlayerStore()
+  const dc=devise?.code||"KMF"
+  const isOwn=!profileUsername||profileUsername===user?.username
+
+  const [profile,setProfile]=useState(null)
+  const [tracks,setTracks]=useState([])
+  const [loading,setLoading]=useState(true)
+  const [tab,setTab]=useState("🎵 Sons")
+  const [uploading,setUploading]=useState(false)
+  const avatarRef=useRef(null)
+  const coverRef=useRef(null)
+  const handleUpload=async(file,type)=>{
+    if(!file)return
+    setUploading(true)
+    const API=import.meta.env.VITE_API_URL||''
+    const token=localStorage.getItem('waiichia_token')
+    const form=new FormData()
+    form.append('file',file)
+    try{
+      const res=await fetch(API+'/api/upload/cover',{method:'POST',headers:{'Authorization':'Bearer '+token},body:form})
+      const json=await res.json()
+      console.log('Upload result:',json)
+      if(json.url){
+        const field=type==='avatar'?'avatar_url':'cover_url'
+        const patchRes=await fetch(API+'/api/auth/profile',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({[field]:json.url})})
+        const patchJson=await patchRes.json()
+        console.log('Patch result:',patchJson)
+        
+        window.location.href=window.location.href
+      }else{
+        alert('Erreur upload: '+(json.error||'inconnue'))
+      }
+    }catch(e){
+      console.error('Upload error:',e)
+      alert('Erreur: '+e.message)
+    }
+    setUploading(false)
+  }
+  const [followed,setFollowed]=useState(false)
+  const [buyModal,setBuyModal]=useState(null)
+
+  useEffect(()=>{
+    const who=profileUsername||(user?.username)
+    if(!who){setLoading(false);return}
+    Promise.all([
+      api.profiles.get(who).catch(()=>null),
+      api.profiles.tracks?api.profiles.tracks(who).catch(()=>({})):Promise.resolve({tracks:[]}),
+    ]).then(([p,t])=>{
+      if(p)setProfile(p.profile||p)
+      setTracks(t?.tracks?.length?t.tracks:([]))
     }).finally(()=>setLoading(false))
   },[profileUsername,user])
 
