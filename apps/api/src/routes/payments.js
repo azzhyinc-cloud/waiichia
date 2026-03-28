@@ -111,6 +111,50 @@ export default async function paymentsRoutes(app) {
     return { transactions: data }
   })
 
+  // ── RETRAIT ──
+  app.post('/withdraw', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { amount, method, destination, notes } = request.body
+    if (!amount || amount < 500) return reply.status(400).send({ error: 'Montant minimum 500 KMF' })
+    const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', request.user.id).single()
+    if (!wallet || wallet.balance < amount) return reply.status(400).send({ error: 'Solde insuffisant', balance: wallet?.balance || 0 })
+    const fee = Math.floor(amount * 0.025)
+    const { data, error } = await supabase.from('withdrawal_requests').insert({
+      user_id: request.user.id, amount, currency: 'KMF', method: method || 'mvola', destination, notes, status: 'pending'
+    }).select().single()
+    if (error) return reply.status(500).send({ error: error.message })
+    await supabase.from('transactions').insert({
+      user_id: request.user.id, type: 'withdrawal', amount, fee, net_amount: amount - fee,
+      currency: 'KMF', description: 'Retrait ' + (method || 'mvola') + ' → ' + (destination || ''), status: 'pending', gateway: method || 'mvola'
+    })
+    return reply.send({ withdrawal: data, message: 'Demande de retrait enregistrée', fee })
+  })
+
+  // ── TRANSFERT ──
+  app.post('/transfer', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { to_username, amount, message } = request.body
+    if (!to_username || !amount || amount < 100) return reply.status(400).send({ error: 'Destinataire et montant requis (min 100 KMF)' })
+    const { data: sender } = await supabase.from('wallets').select('balance').eq('user_id', request.user.id).single()
+    if (!sender || sender.balance < amount) return reply.status(400).send({ error: 'Solde insuffisant' })
+    const { data: recipient } = await supabase.from('profiles').select('id').eq('username', to_username.toLowerCase()).single()
+    if (!recipient) return reply.status(404).send({ error: 'Utilisateur introuvable' })
+    if (recipient.id === request.user.id) return reply.status(400).send({ error: 'Impossible de transférer à vous-même' })
+    const fee = Math.floor(amount * 0.01)
+    const net = amount - fee
+    // Debit sender
+    await supabase.from('wallets').update({ balance: sender.balance - amount }).eq('user_id', request.user.id)
+    // Credit recipient
+    const { data: rWallet } = await supabase.from('wallets').select('balance').eq('user_id', recipient.id).single()
+    if (rWallet) await supabase.from('wallets').update({ balance: (rWallet.balance || 0) + net }).eq('user_id', recipient.id)
+    else await supabase.from('wallets').insert({ user_id: recipient.id, balance: net, currency: 'KMF' })
+    // Record transfer
+    await supabase.from('transfers').insert({ from_user_id: request.user.id, to_user_id: recipient.id, amount, currency: 'KMF', message, status: 'completed' })
+    await supabase.from('transactions').insert({
+      user_id: request.user.id, recipient_id: recipient.id, type: 'transfer', amount, fee, net_amount: net,
+      currency: 'KMF', description: 'Transfert → @' + to_username + (message ? ' · ' + message : ''), status: 'completed', gateway: 'wallet'
+    })
+    return reply.send({ message: net + ' KMF transférés à @' + to_username, fee, new_balance: sender.balance - amount })
+  })
+
   // ── TICKETS ACHETES ──
   app.get('/tickets', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { data, error } = await supabase.from('event_tickets')

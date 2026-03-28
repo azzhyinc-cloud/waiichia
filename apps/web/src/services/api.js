@@ -62,6 +62,7 @@ const api = {
     feed:          ()         => api.get('/api/social/feed'),
     notifications: ()         => api.get('/api/social/notifications'),
     report:        (d)        => api.post('/api/social/reports', d),
+    markRead:      ()         => api.patch('/api/social/notifications/read', {}),
   },
   payments: {
     wallet:        () => api.get('/api/payments/wallet'),
