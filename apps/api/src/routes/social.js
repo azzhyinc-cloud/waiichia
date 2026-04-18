@@ -1,4 +1,28 @@
 import { supabase } from '../config.js'
+import { Notify } from '../utils/notify.js'
+
+/**
+ * Résout le propriétaire d'un contenu selon son type
+ */
+async function resolveContentOwner(target_type, target_id) {
+  const tableMap = {
+    track:    { table: 'tracks',         ownerCol: 'creator_id', titleCol: 'title' },
+    album:    { table: 'albums',         ownerCol: 'creator_id', titleCol: 'title' },
+    episode:  { table: 'episodes',       ownerCol: 'user_id',    titleCol: 'title' },
+    emission: { table: 'emissions',      ownerCol: 'user_id',    titleCol: 'title' },
+    event:    { table: 'events',         ownerCol: 'creator_id', titleCol: 'title' },
+    product:  { table: 'products',       ownerCol: 'creator_id', titleCol: 'name' },
+    radio:    { table: 'radio_stations', ownerCol: 'creator_id', titleCol: 'name' },
+  }
+  const mapping = tableMap[target_type]
+  if (!mapping) return { owner_id: null, title: null }
+  const { data } = await supabase
+    .from(mapping.table)
+    .select(`${mapping.ownerCol}, ${mapping.titleCol}`)
+    .eq('id', target_id)
+    .single()
+  return { owner_id: data?.[mapping.ownerCol] || null, title: data?.[mapping.titleCol] || null }
+}
 
 export default async function socialRoutes(app) {
 
@@ -50,6 +74,22 @@ export default async function socialRoutes(app) {
       is_emoji_only: isEmojiOnly
     }).select(`*, profiles:user_id(id, username, display_name, avatar_url, is_verified)`).single()
     if (error) return reply.status(500).send({ error: error.message })
+
+    // ── NOTIFICATION ──
+    if (parent_id) {
+      // Réponse → notifier l'auteur du commentaire parent
+      const { data: parent } = await supabase.from('comments').select('user_id').eq('id', parent_id).single()
+      if (parent) {
+        Notify.comment(request.user.id, parent.user_id, request.user.username, target_type, 'votre commentaire')
+      }
+    } else {
+      // Commentaire racine → notifier le propriétaire du contenu
+      const { owner_id, title } = await resolveContentOwner(target_type, target_id)
+      if (owner_id) {
+        Notify.comment(request.user.id, owner_id, request.user.username, target_type, title)
+      }
+    }
+
     return reply.status(201).send({ comment: data })
   })
 

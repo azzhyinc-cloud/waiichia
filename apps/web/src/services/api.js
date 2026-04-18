@@ -13,7 +13,6 @@ const api = {
       body: data !== null && data !== undefined ? JSON.stringify(data) : undefined
     })
     const json = await res.json()
-    // BUG FIX : throw si le serveur renvoie une erreur HTTP
     if (!res.ok) {
       const msg = json?.error || json?.message || `Erreur ${res.status}`
       const err = new Error(msg)
@@ -46,13 +45,15 @@ const api = {
     access:   (id)     => api.get('/api/tracks/' + id + '/access'),
   },
   profiles: {
-    stats:    ()         => api.get('/api/profiles/stats', false),
-    get:      (username) => api.get('/api/profiles/' + username, false),
-    update:   (d)        => api.patch('/api/profiles/me', d),
-    follow:   (username) => api.post('/api/profiles/' + username + '/follow', {}),
-    unfollow: (username) => api.delete('/api/profiles/' + username + '/follow'),
-    tracks:   (username) => api.get('/api/profiles/' + username + '/tracks', false),
-    list:     (q = '')   => api.get('/api/profiles/' + q, false),
+    stats:       ()         => api.get('/api/profiles/stats', false),
+    get:         (username) => api.get('/api/profiles/' + username, false),
+    update:      (d)        => api.patch('/api/profiles/me', d),
+    follow:      (username) => api.post('/api/profiles/' + username + '/follow', {}),
+    unfollow:    (username) => api.delete('/api/profiles/' + username + '/follow'),
+    isFollowing:  (username) => api.get('/api/profiles/' + username + '/is-following'),
+    followingIds: ()         => api.get('/api/profiles/me/following-ids'),
+    tracks:      (username) => api.get('/api/profiles/' + username + '/tracks', false),
+    list:        (q = '')   => api.get('/api/profiles/' + q, false),
   },
   social: {
     react:         (d)        => api.post('/api/social/react', d),
@@ -66,16 +67,18 @@ const api = {
   },
   payments: {
     wallet:        () => api.get('/api/payments/wallet'),
-    walletBalance: () => api.get('/api/wallet/balance'),
-    history:       () => api.get('/api/payments/history'),
+    walletBalance: () => api.get('/api/payments/wallet/balance'),
+    history:       (q='') => api.get('/api/payments/history' + q),
     rentals:       () => api.get('/api/payments/rentals'),
     invoices:      () => api.get('/api/payments/invoices'),
     tickets:       () => api.get('/api/payments/tickets'),
     recharge:      (d) => api.post('/api/payments/recharge', d),
-    rentTrack:     (d) => api.post("/api/payments/rent", d),
+    rentTrack:     (d) => api.post('/api/payments/rent', d),
     buyTrack:      (d) => api.post('/api/payments/track', d),
     withdraw:      (d) => api.post('/api/payments/withdraw', d),
     transfer:      (d) => api.post('/api/payments/transfer', d),
+    buyProduct:    (d) => api.post('/api/products/' + d.product_id + '/buy', {}),
+    buyTicket:     (d) => api.post('/api/events/tickets', d),
   },
   emissions: {
     list:     (q = '') => api.get('/api/emissions/' + q, false),
@@ -94,6 +97,7 @@ const api = {
     duets:      ()   => api.get('/api/karaoke/duets', false),
     recordings: ()   => api.get('/api/karaoke/recordings/my'),
     save:       (d)  => api.post('/api/karaoke/recordings', d),
+    publicRecordings: () => api.get('/api/karaoke/recordings/public', false),
   },
   events: {
     list:     (q = '') => api.get('/api/events/' + q, false),
@@ -121,6 +125,10 @@ const api = {
     send: (convId, content) => api.post('/api/messages/conversations/' + convId + '/messages', { content }),
     createConv: (otherId) => api.post('/api/messages/conversations', { other_user_id: otherId }),
     searchUsers: (q) => api.get('/api/messages/users/search?q=' + encodeURIComponent(q)),
+  },
+  currency: {
+    rates:   (base) => api.get('/api/currency/rates' + (base ? '?base=' + base : ''), false),
+    convert: (amount, from, to) => api.get('/api/currency/convert?amount=' + amount + '&from=' + (from||'KMF') + '&to=' + (to||'USD'), false),
   },
 }
 

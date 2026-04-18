@@ -1,0 +1,20 @@
+# Waiichia — robots.txt
+# Contrôle du crawl Google
+
+User-agent: *
+Allow: /
+
+# Bloquer les anciennes URLs de l'ancien site
+Disallow: /*?lang=
+Disallow: /blogs/
+Disallow: /blogs
+Disallow: /spotlight
+Disallow: /spotlight/
+Disallow: /search/
+Disallow: /404
+
+# Bloquer les assets internes
+Disallow: /assets/*.map
+
+# Sitemap
+Sitemap: https://waiichia.com/sitemap.xml

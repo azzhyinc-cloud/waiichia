@@ -5,16 +5,32 @@ import { useDeviseStore } from "../stores/index.js"
 import DeviseModal from "./DeviseModal.jsx"
 import api from "../services/api.js"
 
-const SEARCH_MOCK = [
-  {type:"track",title:"Twarab ya Komori",sub:"Kolo Officiel",icon:"🎵"},
-  {type:"track",title:"Moroni Flow",sub:"DJ Comoros",icon:"🎵"},
-  {type:"artist",title:"Fatima K",sub:"Artiste · 12K fans",icon:"👤"},
-  {type:"track",title:"Afrika Rising",sub:"Waiichia Beats",icon:"🎵"},
-  {type:"artist",title:"Nadjib Pro",sub:"Producteur · Comores",icon:"👤"},
-  {type:"event",title:"Waiichia Music Festival",sub:"Moroni · 2 500 KMF",icon:"🎪"},
-  {type:"track",title:"Pumzika Beat",sub:"Omar Said",icon:"🎵"},
-  {type:"artist",title:"Studio KM",sub:"Label · Comores",icon:"🏷️"},
-]
+// ── AJOUT : correspondance code devise → code ISO pays (pour flagcdn.com) ──
+// flagcdn.com utilise des codes ISO 2 lettres en minuscule ex: "km", "mg"
+const CODE_TO_ISO = {
+  KMF:"km", MGA:"mg", TZS:"tz", RWF:"rw", XOF:"ci", NGN:"ng",
+  CDF:"cd", XAF:"cg", GHS:"gh", KES:"ke", ETB:"et", MAD:"ma",
+  DZD:"dz", TND:"tn", USD:"us", EUR:"eu", GBP:"gb",
+}
+
+// ── AJOUT : composant image drapeau (fonctionne sur tous les OS dont Windows) ──
+function FlagImg({ iso, code, size = 20 }) {
+  const isoCode = iso
+    ? iso.toLowerCase()
+    : (CODE_TO_ISO[code] ?? "km")
+  // flagcdn.com fournit des PNG gratuits sans clé API
+  const src = `https://flagcdn.com/w${size}/${isoCode}.png`
+  return (
+    <img
+      src={src}
+      alt={isoCode}
+      width={size}
+      height={Math.round(size * 0.67)}
+      style={{ borderRadius: 2, objectFit: "cover", display: "inline-block", verticalAlign: "middle" }}
+      onError={e => { e.target.style.display = "none" }}
+    />
+  )
+}
 
 export default function TopNav({ onMenuToggle }) {
   const { theme, toggle: toggleTheme } = useThemeStore()
@@ -27,7 +43,7 @@ export default function TopNav({ onMenuToggle }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [deviseOpen, setDeviseOpen] = useState(false)
   const { devise, setDevise } = useDeviseStore()
-  const [notifCount]              = useState(5)
+  const [notifCount, setNotifCount] = useState(0)
   const searchRef                 = useRef(null)
 
   useEffect(()=>{
@@ -37,10 +53,54 @@ export default function TopNav({ onMenuToggle }) {
   },[])
 
   useEffect(()=>{
+    if (!user) return
+    const loadCount = async () => {
+      try {
+        const data = await api.social.notifications()
+        const unread = (data.notifications || []).filter(n => !n.is_read).length
+        setNotifCount(unread)
+      } catch(e) {}
+    }
+    loadCount()
+    const interval = setInterval(loadCount, 30000)
+    return () => clearInterval(interval)
+  },[user])
+
+  useEffect(()=>{
+    if (!notifOpen && user) {
+      const t = setTimeout(async () => {
+        try {
+          const data = await api.social.notifications()
+          const unread = (data.notifications || []).filter(n => !n.is_read).length
+          setNotifCount(unread)
+        } catch(e) {}
+      }, 500)
+      return () => clearTimeout(t)
+    }
+  },[notifOpen])
+
+  useEffect(()=>{
     if(!search.trim()){setResults([]);setShowRes(false);return}
     const q=search.toLowerCase()
-    const filtered=SEARCH_MOCK.filter(r=>r.title.toLowerCase().includes(q)||r.sub.toLowerCase().includes(q))
-    setResults(filtered); setShowRes(true)
+    const doSearch = async () => {
+      try {
+        const [tracksRes, profilesRes] = await Promise.all([
+          api.tracks.list('?search=' + encodeURIComponent(q) + '&limit=4').catch(()=>({tracks:[]})),
+          api.profiles.list('?search=' + encodeURIComponent(q) + '&limit=4').catch(()=>({profiles:[]})),
+        ])
+        const mapped = [
+          ...(tracksRes.tracks || []).map(t => ({type:"track",title:t.title,sub:t.profiles?.display_name||"Artiste",icon:"🎵",id:t.id})),
+          ...(profilesRes.profiles || []).map(p => ({type:"artist",title:p.display_name,sub:"@"+p.username,icon:"👤",username:p.username})),
+        ]
+        setResults(mapped.length > 0 ? mapped : [])
+        setShowRes(true)
+      } catch(e) {
+        setResults([])
+        setShowRes(false)
+      }
+    }
+    const timer = setTimeout(doSearch, 300)
+    return () => clearTimeout(timer)
   },[search])
 
   useEffect(()=>{
@@ -52,6 +112,14 @@ export default function TopNav({ onMenuToggle }) {
   const initials=user?.display_name
     ?user.display_name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()
     :user?.username?.slice(0,2).toUpperCase()||"W"
+
+  const handleResultClick = (r) => {
+    setSearch("")
+    setShowRes(false)
+    if (r.type === "artist" && r.username) {
+      setPage("profile", { profileUsername: r.username })
+    }
+  }
 
   return (
     <>
@@ -77,7 +145,7 @@ export default function TopNav({ onMenuToggle }) {
           {showRes&&results.length>0&&(
             <div style={{position:"absolute",top:"calc(100% + 8px)",left:0,right:0,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:"var(--radius)",boxShadow:"0 8px 32px rgba(0,0,0,.3)",zIndex:300,overflow:"hidden"}}>
               {results.map((r,i)=>(
-                <div key={i} onClick={()=>{setSearch("");setShowRes(false)}}
+                <div key={i} onClick={()=>handleResultClick(r)}
                   style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:i<results.length-1?"1px solid var(--border2)":"none",transition:"background .15s"}}
                   onMouseEnter={e=>e.currentTarget.style.background="var(--card)"}
                   onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
@@ -89,9 +157,6 @@ export default function TopNav({ onMenuToggle }) {
                   <div style={{fontSize:10,color:"var(--text3)",fontFamily:"Space Mono,monospace",textTransform:"uppercase",flexShrink:0}}>{r.type}</div>
                 </div>
               ))}
-              <div style={{padding:"8px 14px",borderTop:"1px solid var(--border)",fontSize:11,color:"var(--text3)",textAlign:"center",cursor:"pointer"}} onClick={()=>setShowRes(false)}>
-                Appuyez sur Entrée pour "{search}"
-              </div>
             </div>
           )}
         </div>
@@ -105,13 +170,13 @@ export default function TopNav({ onMenuToggle }) {
             {online?"EN LIGNE":"HORS LIGNE"}
           </div>
 
-          {/* Devise — ouvre modal */}
+          {/* Devise — MODIFIÉ : <FlagImg> au lieu de emoji (marche sur Windows) */}
           <div className="hide-mobile" onClick={()=>setDeviseOpen(true)}
             style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",background:"var(--card)",border:"1px solid var(--border)",borderRadius:50,cursor:"pointer",fontSize:12,fontFamily:"Plus Jakarta Sans,sans-serif",transition:"all .2s",color:"var(--text2)"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.color="var(--text)"}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--text2)"}}>
-            <span>{devise?.flag ?? "🇰🇲"}</span>
-            <span style={{fontFamily:"Space Mono,monospace",fontSize:11}}>{devise?.country?.slice(0,2) ?? "KM".toUpperCase()} · {devise?.code ?? "KMF"}</span>
+            <FlagImg iso={devise?.iso} code={devise?.code ?? "KMF"} size={20} />
+            <span style={{fontFamily:"Space Mono,monospace",fontSize:11}}>{devise?.country?.slice(0,2) ?? "KM"} · {devise?.code ?? "KMF"}</span>
           </div>
 
           {/* Cloche notifs */}
@@ -120,11 +185,11 @@ export default function TopNav({ onMenuToggle }) {
             onMouseEnter={e=>{if(!notifOpen)e.currentTarget.style.borderColor="var(--gold)"}}
             onMouseLeave={e=>{if(!notifOpen)e.currentTarget.style.borderColor="var(--border)"}}>
             <span style={{filter:notifOpen?"invert(1) brightness(0)":"none"}}>🔔</span>
-            {notifCount>0&&!notifOpen&&<div style={{position:"absolute",top:-2,right:-2,width:9,height:9,background:"var(--red)",borderRadius:"50%",border:"2px solid var(--bg2)"}}/>}
+            {notifCount>0&&!notifOpen&&<div style={{position:"absolute",top:-2,right:-2,minWidth:16,height:16,background:"var(--red)",borderRadius:10,border:"2px solid var(--bg2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"#fff",padding:"0 3px"}}>{notifCount>99?"99+":notifCount}</div>}
           </div>
 
           {/* Avatar */}
-          <div onClick={()=>setPage("profile")} style={{cursor:"pointer"}}>
+          <div onClick={()=>setPage("profile", { profileUsername: null })} style={{cursor:"pointer"}}>
             <div style={{width:36,height:36,borderRadius:"50%",overflow:"hidden",background:"linear-gradient(135deg,var(--gold),#e8920a)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13,color:"#000",border:"2px solid transparent",transition:"border-color .2s"}}
               onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"}
               onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
@@ -142,7 +207,13 @@ export default function TopNav({ onMenuToggle }) {
       </div>
 
       <NotifPanel open={notifOpen} onClose={()=>setNotifOpen(false)}/>
-      <DeviseModal open={deviseOpen} onClose={()=>setDeviseOpen(false)} current={devise?.code ?? "KMF"} onChange={(d)=>{setDevise(d)}}/>
+      <DeviseModal
+        open={deviseOpen}
+        onClose={()=>setDeviseOpen(false)}
+        current={devise?.code ?? "KMF"}
+        onChange={(d)=>setDevise(d)}
+        userIso={user?.country ?? "KM"}
+      />
     </>
   )
 }

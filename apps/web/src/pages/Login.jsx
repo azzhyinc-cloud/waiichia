@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuthStore, usePageStore } from "../stores/index.js"
 import api from "../services/api.js"
 
@@ -10,8 +10,20 @@ export default function Login() {
   const [error, setError]     = useState("")
   const [info, setInfo]       = useState("")
   const [form, setForm]       = useState({ email:"", password:"", username:"", display_name:"", country:"KM" })
+  const [socialConfig, setSocialConfig] = useState({ facebook: false, google: false, wanzani: false })
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // Charger la config des boutons sociaux
+  useEffect(() => {
+    const API = import.meta.env.VITE_API_URL || ''
+    fetch(API + '/api/auth/social-config')
+      .then(r => r.json())
+      .then(d => { if (d && typeof d === 'object') setSocialConfig(d) })
+      .catch(() => {})
+  }, [])
+
+  const hasSocial = socialConfig.facebook || socialConfig.google || socialConfig.wanzani
 
   const handleSubmit = async () => {
     setError(""); setInfo(""); setLoading(true)
@@ -73,16 +85,19 @@ export default function Login() {
           </button>
         </div>
 
-        {/* Social buttons */}
-        <SBtn bg="#1877f2" color="#fff" icon="📘" label="Facebook" onClick={()=>setError("Bientôt disponible")} />
-        <SBtn bg="#fff" color="#000" icon="🔍" label="Google" border onClick={()=>setError("Bientôt disponible")} />
-        <SBtn bg="linear-gradient(135deg,#00b894,#00a381)" color="#fff" icon="🌴" label="Continuer avec Wanzani" shine onClick={()=>setError("Bientôt disponible")} />
+        {/* Social buttons — affichés uniquement si activés en admin */}
+        {socialConfig.facebook && <SBtn bg="#1877f2" color="#fff" icon="📘" label="Facebook" onClick={()=>setError("Connexion Facebook en cours d'intégration")} />}
+        {socialConfig.google && <SBtn bg="#fff" color="#000" icon="🔍" label="Google" border onClick={()=>setError("Connexion Google en cours d'intégration")} />}
+        {socialConfig.wanzani && <SBtn bg="linear-gradient(135deg,#00b894,#00a381)" color="#fff" icon="🌴" label="Continuer avec Wanzani" shine onClick={()=>setError("Connexion Wanzani en cours d'intégration")} />}
 
-        <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0"}}>
-          <div style={{flex:1,height:1,background:"var(--border)"}}/>
-          <span style={{fontSize:12,color:"var(--text3)"}}>ou</span>
-          <div style={{flex:1,height:1,background:"var(--border)"}}/>
-        </div>
+        {/* Séparateur — uniquement si au moins un bouton social est affiché */}
+        {hasSocial && (
+          <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0"}}>
+            <div style={{flex:1,height:1,background:"var(--border)"}}/>
+            <span style={{fontSize:12,color:"var(--text3)"}}>ou</span>
+            <div style={{flex:1,height:1,background:"var(--border)"}}/>
+          </div>
+        )}
 
         {/* Messages */}
         {error && <Alert color="var(--red)" bg="rgba(230,57,70,.1)" msg={"⚠️ " + error} />}

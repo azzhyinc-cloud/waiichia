@@ -18,6 +18,16 @@ export default async function eventsRoutes(app) {
     return reply.send({ events: data })
   })
 
+  // MES EVENEMENTS
+  app.get('/my/events', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data, error } = await supabase.from('events')
+      .select('*')
+      .eq('creator_id', request.user.id)
+      .order('event_date', { ascending: false })
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.send({ events: data || [] })
+  })
+
   // UN EVENEMENT
   app.get('/:id', async (request, reply) => {
     const { data, error } = await supabase.from('events')
@@ -30,12 +40,13 @@ export default async function eventsRoutes(app) {
 
   // CREER UN EVENEMENT
   app.post('/', { preHandler: app.authenticate }, async (request, reply) => {
-    const { title, description, cover_url, location, country, event_date, ticket_price, is_free, capacity } = request.body
+    const { title, description, cover_url, location, country, event_date, ticket_price, is_free, capacity, category } = request.body
     if (!title || !event_date) return reply.status(400).send({ error: 'Titre et date requis' })
     const { data, error } = await supabase.from('events').insert({
       creator_id: request.user.id,
       title, description, cover_url, location,
       country: country || 'KM',
+      category: category || 'Concert',
       event_date,
       ticket_price: ticket_price || 0,
       is_free: is_free !== false,
@@ -51,7 +62,7 @@ export default async function eventsRoutes(app) {
     if (!existing) return reply.status(404).send({ error: 'Introuvable' })
     if (existing.creator_id !== request.user.id) return reply.status(403).send({ error: 'Non autorise' })
     const updates = {}
-    const allowed = ['title','description','cover_url','location','country','event_date','ticket_price','is_free','capacity']
+    const allowed = ['title','description','cover_url','location','country','event_date','ticket_price','is_free','capacity','category']
     allowed.forEach(k => { if (request.body[k] !== undefined) updates[k] = request.body[k] })
     const { data, error } = await supabase.from('events').update(updates).eq('id', request.params.id).select().single()
     if (error) return reply.status(500).send({ error: error.message })
@@ -67,4 +78,94 @@ export default async function eventsRoutes(app) {
     return reply.send({ message: 'Evenement supprime' })
   })
 
+  // ─── RÉSERVER UN TICKET ───
+  app.post('/tickets', { preHandler: app.authenticate }, async (request, reply) => {
+    const { event_id } = request.body
+    if (!event_id) return reply.status(400).send({ error: 'event_id requis' })
+
+    // Récupérer l'événement
+    const { data: event, error: evErr } = await supabase.from('events')
+      .select('*')
+      .eq('id', event_id)
+      .eq('is_active', true)
+      .single()
+    if (evErr || !event) return reply.status(404).send({ error: 'Événement introuvable' })
+
+    // Vérifier capacité
+    if (event.capacity && (event.tickets_sold || 0) >= event.capacity) {
+      return reply.status(400).send({ error: 'Événement complet, plus de places disponibles' })
+    }
+
+    // Vérifier si déjà inscrit
+    const { data: existing } = await supabase.from('event_registrations')
+      .select('id')
+      .eq('event_id', event_id)
+      .eq('user_id', request.user.id)
+      .maybeSingle()
+    if (existing) return reply.status(409).send({ error: 'Vous êtes déjà inscrit à cet événement' })
+
+    // Si payant, vérifier le solde wallet
+    if (!event.is_free && event.ticket_price > 0) {
+      const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', request.user.id).maybeSingle()
+      const balance = wallet?.balance || 0
+      if (balance < event.ticket_price) {
+        return reply.status(400).send({ error: 'Solde insuffisant', balance, required: event.ticket_price })
+      }
+
+      // Débiter le wallet
+      await supabase.from('wallets').update({ balance: balance - event.ticket_price }).eq('user_id', request.user.id)
+
+      // Créditer l'organisateur (90%)
+      const net = Math.floor(event.ticket_price * 0.9)
+      const { data: sellerWallet } = await supabase.from('wallets').select('balance').eq('user_id', event.creator_id).maybeSingle()
+      if (sellerWallet) {
+        await supabase.from('wallets').update({ balance: (sellerWallet.balance || 0) + net }).eq('user_id', event.creator_id)
+      }
+
+      // Transaction
+      await supabase.from('transactions').insert({
+        user_id: request.user.id,
+        recipient_id: event.creator_id,
+        type: 'ticket',
+        amount: event.ticket_price,
+        net_amount: net,
+        currency: event.currency || 'KMF',
+        description: 'Ticket: ' + event.title,
+        status: 'completed',
+        gateway: 'wallet'
+      })
+    }
+
+    // Enregistrer la réservation
+    const { data: registration, error: regErr } = await supabase.from('event_registrations').insert({
+      event_id,
+      user_id: request.user.id,
+      status: 'confirmed',
+      amount_paid: event.is_free ? 0 : (event.ticket_price || 0),
+      currency: event.currency || 'KMF'
+    }).select().single()
+
+    if (regErr) return reply.status(500).send({ error: regErr.message })
+
+    // Incrémenter tickets_sold
+    await supabase.from('events').update({
+      tickets_sold: (event.tickets_sold || 0) + 1
+    }).eq('id', event_id)
+
+    return reply.send({
+      message: event.is_free ? 'Inscription confirmée !' : 'Réservation confirmée !',
+      registration,
+      new_balance: event.is_free ? undefined : undefined
+    })
+  })
+
+  // ─── MES TICKETS / RÉSERVATIONS ───
+  app.get('/tickets/my', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data, error } = await supabase.from('event_registrations')
+      .select('*, events(*)')
+      .eq('user_id', request.user.id)
+      .order('created_at', { ascending: false })
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.send({ tickets: data || [] })
+  })
 }

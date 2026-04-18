@@ -18,7 +18,10 @@ import eventsRoutes    from './routes/events.js'
 import emissionsRoutes from './routes/emissions.js'
 import radioRoutes     from './routes/radio.js'
 import karaokeRoutes   from './routes/karaoke.js'
-import adminRoutes from './routes/admin.js'
+import adminRoutes     from './routes/admin.js'
+import currencyRoutes  from './routes/currency.js'
+import albumRoutes     from './routes/albums.js'
+import notificationsRoutes from './routes/notifications.js'
 
 const app = Fastify({
   logger: {
@@ -27,16 +30,29 @@ const app = Fastify({
   }
 })
 
-await app.register(cors, { origin: config.corsOrigin, credentials: true })
+await app.register(cors, {
+  origin: [
+    'https://waiichia.com',
+    'https://www.waiichia.com',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  credentials: true
+})
 await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 await app.register(multipart, { limits: { fileSize: (parseInt(process.env.MAX_UPLOAD_SIZE_MB) || 200) * 1024 * 1024 } })
 await app.register(jwt, { secret: config.jwtSecret })
+
+// Decorate supabase + config pour les routes qui en ont besoin
+app.decorate('supabase', supabase)
+app.decorate('config', config)
 
 app.decorate('authenticate', async function(request, reply) {
   try { await request.jwtVerify() }
   catch (err) { reply.status(401).send({ error: 'Non autorise', message: err.message }) }
 })
 
+// ─── Routes originales ───
 await app.register(authRoutes,      { prefix: '/api/auth' })
 await app.register(tracksRoutes,    { prefix: '/api/tracks' })
 await app.register(profilesRoutes,  { prefix: '/api/profiles' })
@@ -50,11 +66,24 @@ await app.register(messagesRoutes,  { prefix: '/api/messages' })
 await app.register(emissionsRoutes, { prefix: '/api/emissions' })
 await app.register(radioRoutes,     { prefix: '/api/radio' })
 await app.register(karaokeRoutes,   { prefix: '/api/karaoke' })
-await app.register(adminRoutes, { prefix: '/api/admin' })
+await app.register(adminRoutes,     { prefix: '/api/admin' })
 
+// ─── Routes ajoutées (sessions précédentes) ───
+await app.register(currencyRoutes,      { prefix: '/api/currency' })
+await app.register(albumRoutes,         { prefix: '/api/albums' })
+await app.register(notificationsRoutes, { prefix: '/api/notifications' })
 
+// ─── Wallet balance (original) ───
+app.get('/api/wallet/balance', { preHandler: app.authenticate }, async (req, reply) => {
+  const { data } = await supabase.from('wallets').select('balance, currency').eq('user_id', req.user.id).single()
+  return reply.send({ balance: data?.balance || 0, currency: data?.currency || 'KMF' })
+})
+
+// ─── Health check ───
 app.get('/health', async () => ({ status: 'ok', version: '1.1.0', timestamp: new Date().toISOString() }))
+app.get('/api/health', async () => ({ status: 'ok', version: '1.1.0', timestamp: new Date().toISOString() }))
 
+// ─── Error handler (original) ───
 app.setErrorHandler((error, request, reply) => {
   app.log.error(error)
   reply.status(error.statusCode || 500).send({ error: error.message || 'Erreur serveur' })

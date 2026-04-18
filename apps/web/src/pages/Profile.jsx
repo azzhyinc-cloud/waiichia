@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useAuthStore, usePageStore, useDeviseStore, usePlayerStore } from "../stores/index.js"
 import { ReactionBar } from "../components/ReactionBar.jsx"
 import BuyModal from "../components/BuyModal.jsx"
+import ShareModal from "../components/ShareModal.jsx"
+import AddToPlaylistModal from "../components/AddToPlaylistModal.jsx"
 import api from "../services/api.js"
 
 const TABS=["🎵 Sons","💿 Albums","📋 Playlists","📻 Diffusions","🛍️ Boutique","🎪 Événements","🛒 Mes achats","📥 Hors-ligne"]
@@ -14,60 +16,59 @@ export default function Profile(){
   const {user}=useAuthStore()
   const {setPage,profileUsername}=usePageStore()
   const {devise}=useDeviseStore()
-  const {toggle,currentTrack,isPlaying}=usePlayerStore()
+  const {toggle,currentTrack,isPlaying,play,setQueue}=usePlayerStore()
   const dc=devise?.code||"KMF"
   const isOwn=!profileUsername||profileUsername===user?.username
 
   const [profile,setProfile]=useState(null)
   const [tracks,setTracks]=useState([])
+  const [playlists,setPlaylists]=useState([])
   const [loading,setLoading]=useState(true)
   const [tab,setTab]=useState("🎵 Sons")
-  const [uploading,setUploading]=useState(false)
-  const avatarRef=useRef(null)
-  const coverRef=useRef(null)
-  const handleUpload=async(file,type)=>{
-    if(!file)return
-    setUploading(true)
-    const API=import.meta.env.VITE_API_URL||''
-    const token=localStorage.getItem('waiichia_token')
-    const form=new FormData()
-    form.append('file',file)
-    try{
-      const res=await fetch(API+'/api/upload/cover',{method:'POST',headers:{'Authorization':'Bearer '+token},body:form})
-      const json=await res.json()
-      console.log('Upload result:',json)
-      if(json.url){
-        const field=type==='avatar'?'avatar_url':'cover_url'
-        const patchRes=await fetch(API+'/api/auth/profile',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({[field]:json.url})})
-        const patchJson=await patchRes.json()
-        console.log('Patch result:',patchJson)
-        
-        window.location.href=window.location.href
-      }else{
-        alert('Erreur upload: '+(json.error||'inconnue'))
-      }
-    }catch(e){
-      console.error('Upload error:',e)
-      alert('Erreur: '+e.message)
-    }
-    setUploading(false)
-  }
   const [followed,setFollowed]=useState(false)
   const [buyModal,setBuyModal]=useState(null)
+  const [shareItem,setShareItem]=useState(null)
+  const [shareType,setShareType]=useState('profile')
+  const [playlistTrack,setPlaylistTrack]=useState(null)
 
   useEffect(()=>{
     const who=profileUsername||(user?.username)
     if(!who){setLoading(false);return}
     Promise.all([
-      api.profiles.get(who).catch(()=>null),
-      api.profiles.tracks?api.profiles.tracks(who).catch(()=>({})):Promise.resolve({tracks:[]}),
+      api.profiles.get(who).catch(e=>{if(e.message&&e.message.includes("suspendu"))return{suspended:true};return null}),
+      api.profiles.tracks?api.profiles.tracks(who).catch(()=>({tracks:[]})):Promise.resolve({tracks:[]}),
     ]).then(([p,t])=>{
+      if(p&&p.suspended){setProfile({suspended:true});setLoading(false);return}
       if(p)setProfile(p.profile||p)
-      setTracks(t?.tracks?.length?t.tracks:([]))
+      setTracks(t?.tracks?.length?t.tracks:(isOwn?MOCK_TRACKS:[]))
     }).finally(()=>setLoading(false))
   },[profileUsername,user])
 
+  // Charger les playlists quand l'onglet change
+  useEffect(()=>{
+    if(tab==="📋 Playlists"&&profile){
+      api.get('/api/albums/playlists/public?user_id='+profile.id)
+        .then(d=>setPlaylists(d.playlists||d||[]))
+        .catch(()=>setPlaylists([]))
+    }
+  },[tab,profile])
+
+  const playPlaylist = async (pl) => {
+    try {
+      const data = await api.get('/api/albums/playlists/' + pl.id)
+      const plTracks = (data.playlist_tracks || [])
+        .sort((a, b) => a.position - b.position)
+        .map(pt => pt.tracks || pt.track)
+        .filter(Boolean)
+      if (plTracks.length > 0) { setQueue(plTracks); play(plTracks[0]) }
+      else alert('Playlist vide')
+    } catch (e) { alert('Erreur lecture playlist') }
+  }
+
+  const openShare = (item, type) => { setShareItem(item); setShareType(type) }
+
   const p=profile||user
+  if(p&&p.suspended)return(<div style={{textAlign:"center",padding:80}}><div style={{fontSize:48,marginBottom:12}}>🚫</div><div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:800,marginBottom:8}}>Compte suspendu</div><div style={{color:"var(--text3)",fontSize:14,marginBottom:16}}>Ce compte a été suspendu. Si vous pensez que c'est une erreur, contactez le support.</div><button className="btn btn-primary" onClick={()=>setPage("home")}>Retour à l'accueil</button></div>)
   if(!p&&!loading)return(
     <div style={{textAlign:"center",padding:80}}>
       <div style={{fontSize:48,marginBottom:12}}>👤</div>
@@ -84,15 +85,11 @@ export default function Profile(){
     <div style={{paddingBottom:60}}>
       {buyModal&&<BuyModal track={buyModal} mode="buy" onClose={()=>setBuyModal(null)}/>}
 
-      {/* HIDDEN FILE INPUTS */}
-      <input type="file" ref={avatarRef} accept="image/*" style={{display:'none'}} onChange={e=>handleUpload(e.target.files[0],'avatar')}/>
-      <input type="file" ref={coverRef} accept="image/*" style={{display:'none'}} onChange={e=>handleUpload(e.target.files[0],'cover')}/>
-      {uploading&&<div style={{position:'fixed',top:0,left:0,right:0,height:3,background:'var(--gold)',zIndex:999,animation:'shimmer 1s infinite'}}/>}
       {/* COVER */}
       <div className="profile-cover">
         <div className="profile-cover-img">{p?.cover_url?<img src={p.cover_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🌊"}</div>
         {isOwn&&<div className="profile-cover-actions">
-          <button className="btn btn-sm btn-secondary" style={{opacity:.85}} onClick={()=>coverRef.current?.click()}>{uploading?'⏳...':'📷 Modifier couverture'}</button>
+          <button className="btn btn-sm btn-secondary" style={{opacity:.85}}>📷 Modifier couverture</button>
         </div>}
       </div>
 
@@ -100,7 +97,7 @@ export default function Profile(){
       <div className="profile-info-row">
         <div className="profile-avatar-lg">
           {p?.avatar_url?<img src={p.avatar_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:initials}
-          {isOwn&&<div className="profile-ava-edit" onClick={()=>avatarRef.current?.click()} style={{cursor:'pointer'}}>📷</div>}
+          {isOwn&&<div className="profile-ava-edit">📷</div>}
         </div>
         <div className="profile-meta">
           <div className="profile-name">
@@ -122,6 +119,8 @@ export default function Profile(){
               <button className="btn btn-secondary btn-sm">💬 Message</button>
               <button className="btn btn-outline btn-sm">🎁 Tip</button>
             </>}
+            {/* Bouton partage profil */}
+            <button className="btn btn-outline btn-sm" onClick={()=>openShare(p,'profile')}>🔗 Partager</button>
           </div>
         </div>
       </div>
@@ -149,7 +148,7 @@ export default function Profile(){
         ))}
       </div>
 
-      {/* CONTENU */}
+      {/* ══════ ONGLET SONS ══════ */}
       {tab==="🎵 Sons"&&(
         tracks.length===0
           ?<div style={{textAlign:"center",padding:80,color:"var(--text3)"}}>
@@ -170,7 +169,7 @@ export default function Profile(){
                     <div className="track-title">{t.title}</div>
                     <div className="track-artist">{t.profiles?.display_name||p?.display_name||"Artiste"}</div>
                     <div className="track-meta">
-                      <span>{fmtK(t.play_count)} 🎧</span>
+                      <span>{fmtK(t.play_count||t.plays_count)} 🎧</span>
                       <span>{t.access_type==="free"||!t.sale_price?"🆓 Gratuit":(t.sale_price?.toLocaleString()+" "+dc)}</span>
                     </div>
                   </div>
@@ -181,19 +180,59 @@ export default function Profile(){
                     :<button className="buy-chip buy-chip-buy" onClick={()=>setBuyModal(t)}>🛒 Acheter <span className="price-tag">{t.sale_price?.toLocaleString()} {dc}</span></button>
                   }
                 </div>
+                {/* Boutons playlist + partage */}
+                <div style={{display:'flex',gap:6,padding:'0 10px 8px'}}>
+                  <button onClick={(e)=>{e.stopPropagation();setPlaylistTrack(t)}} style={{background:'none',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontSize:'0.75rem',padding:'3px 8px',color:'var(--text-secondary)'}}>➕ Playlist</button>
+                  <button onClick={(e)=>{e.stopPropagation();openShare(t,'track')}} style={{background:'none',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontSize:'0.75rem',padding:'3px 8px',color:'var(--text-secondary)'}}>🔗 Partager</button>
+                </div>
                 <ReactionBar targetType="track" targetId={t.id} showComments={true}/>
               </div>
             ))}
           </div>
       )}
 
-      {tab!=="🎵 Sons"&&(
+      {/* ══════ ONGLET PLAYLISTS ══════ */}
+      {tab==="📋 Playlists"&&(
+        playlists.length===0
+          ?<div style={{textAlign:"center",padding:80,color:"var(--text3)"}}>
+            <div style={{fontSize:48,marginBottom:12}}>📋</div>
+            <div style={{fontSize:15,marginBottom:8}}>Aucune playlist publique</div>
+          </div>
+          :<div className="tracks-grid">
+            {playlists.map((pl,i)=>(
+              <div key={pl.id} className="track-card">
+                <div onClick={()=>playPlaylist(pl)}>
+                  <div className="track-cover">
+                    <div className="track-cover-bg" style={{background:pl.cover_url?`url(${pl.cover_url}) center/cover`:BGS[i%6]}}>{pl.cover_url?null:"🎶"}</div>
+                    <div className="type-badge type-music">PLAYLIST</div>
+                    <div className="play-overlay"><button className="play-btn-circle">▶</button></div>
+                  </div>
+                  <div className="track-info">
+                    <div className="track-title">{pl.title}</div>
+                    <div className="track-artist">{pl.profiles?.display_name||p?.display_name||'Utilisateur'}</div>
+                    <div className="track-meta"><span>{pl.track_count||0} sons</span></div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:6,padding:'6px 10px 8px'}}>
+                  <button onClick={(e)=>{e.stopPropagation();openShare(pl,'playlist')}} style={{background:'none',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontSize:'0.75rem',padding:'3px 8px',color:'var(--text-secondary)'}}>🔗 Partager</button>
+                </div>
+              </div>
+            ))}
+          </div>
+      )}
+
+      {/* ══════ AUTRES ONGLETS (à venir) ══════ */}
+      {tab!=="🎵 Sons"&&tab!=="📋 Playlists"&&(
         <div style={{textAlign:"center",padding:80,color:"var(--text3)"}}>
           <div style={{fontSize:48,marginBottom:12}}>📋</div>
           <div style={{fontSize:15,marginBottom:8}}>{tab.replace(/^[^ ]+ /,"")} — Bientôt disponible</div>
           <div style={{fontSize:12}}>Cette section est en cours de développement</div>
         </div>
       )}
+
+      {/* Modals */}
+      <ShareModal isOpen={!!shareItem} onClose={()=>setShareItem(null)} item={shareItem} type={shareType} />
+      <AddToPlaylistModal isOpen={!!playlistTrack} onClose={()=>setPlaylistTrack(null)} track={playlistTrack} />
     </div>
   )
 }

@@ -1,195 +1,336 @@
-import { useState } from "react"
-import { useAuthStore, usePageStore } from "../stores/index.js"
+import { useState, useEffect } from 'react'
+import { useAuthStore, usePageStore, useThemeStore } from '../stores/index.js'
+import api from '../services/api.js'
+import { isPushSupported, subscribeToPush, unsubscribeFromPush, isPushSubscribed, getNotificationPermission } from '../services/push.js'
 
-const MENU=[
-  {id:'profile',icon:'👤',label:'Profil'},
-  {id:'security',icon:'🔒',label:'Sécurité'},
-  {id:'notifications',icon:'🔔',label:'Notifications'},
-  {id:'language',icon:'🌍',label:'Langue & Région'},
-  {id:'billing',icon:'💳',label:'Facturation'},
-  {id:'rights',icon:'⚖️',label:"Droits d'auteur"},
-  {id:'privacy',icon:'🛡️',label:'Confidentialité'},
-  {id:'logout',icon:'🚪',label:'Déconnexion',red:true},
-]
-const COUNTRIES=[['KM','🇰🇲 Comores'],['MG','🇲🇬 Madagascar'],['TZ','🇹🇿 Tanzanie'],['RW','🇷🇼 Rwanda'],['CI',"🇨🇮 Côte d'Ivoire"],['NG','🇳🇬 Nigeria'],['SN','🇸🇳 Sénégal']]
-const PROFILE_TYPES=[{label:'🎧 Auditeur',value:'listener'},{label:'🎵 Artiste',value:'artist'},{label:'📺 Média',value:'media'},{label:'🏷️ Label',value:'label'},{label:'💼 Pro',value:'pro'}]
+export default function Settings() {
+  const { user, token, loadMe, logout, setUser } = useAuthStore()
+  const { setPage } = usePageStore()
+  const { theme, toggle: toggleTheme } = useThemeStore()
+  const [tab, setTab] = useState('profile')
+  const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState('')
 
-export default function Settings(){
-  const {user,logout}=useAuthStore()
-  const {setPage}=usePageStore()
-  const [section,setSection]=useState('profile')
-  const [saved,setSaved]=useState(false)
+  // Profile fields
+  const [displayName, setDisplayName] = useState(user?.display_name || '')
+  const [bio, setBio] = useState(user?.bio || '')
+  const [country, setCountry] = useState(user?.country || '')
+  const [email, setEmail] = useState(user?.email || '')
 
-  const save=async()=>{
-    const API=import.meta.env.VITE_API_URL||''
-    const token=localStorage.getItem('waiichia_token')
-    const fields={}
-    const dn=document.getElementById('s-displayname')
-    const un=document.getElementById('s-username')
-    const bio=document.getElementById('s-bio')
-    const phone=document.getElementById('s-phone')
-    const email=document.getElementById('s-email')
-    if(dn)fields.display_name=dn.value
-    if(un)fields.username=un.value.replace(/^@/,'')
-    if(bio)fields.bio=bio.value
-    if(phone)fields.phone=phone.value
-    if(email&&email.value)fields.email=email.value
-    
-    
-    try{
-      const res=await fetch(API+'/api/auth/profile',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(fields)})
-      const data=await res.json()
-      if(data.profile){setSaved(true);setTimeout(()=>window.location.reload(),1500)}else if(data.error){alert('Erreur: '+data.error)}
-      else{alert('Erreur: '+(data.error||'inconnue'))}
-    }catch(e){alert('Erreur réseau')}
+  // Password
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+
+  // Push
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushPermission, setPushPermission] = useState('default')
+
+  useEffect(() => {
+    checkPushStatus()
+  }, [])
+
+  const checkPushStatus = async () => {
+    const supported = isPushSupported()
+    setPushSupported(supported)
+    if (supported) {
+      setPushPermission(getNotificationPermission())
+      const subscribed = await isPushSubscribed()
+      setPushEnabled(subscribed)
+    }
   }
-  const handleLogout=()=>{logout();setPage('home')}
 
-  if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>⚙️</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
+  const updateProfile = async () => {
+    setLoading(true)
+    setMsg('')
+    try {
+      const res = await api.patch('/api/profiles/me', {
+        display_name: displayName,
+        bio,
+        country
+      }, { headers: { Authorization: `Bearer ${token}` } })
+      setUser({ ...user, ...res.data })
+      setMsg('✅ Profil mis à jour !')
+    } catch (e) {
+      setMsg('❌ ' + (e.response?.data?.error || 'Erreur'))
+    }
+    setLoading(false)
+  }
 
-  return(
-    <div style={{paddingBottom:60}}>
-      <div className="page-title">⚙️ Paramètres & Compte</div>
-      {saved&&<div style={{position:'fixed',top:20,right:20,background:'var(--green)',color:'#000',padding:'10px 20px',borderRadius:'var(--radius-sm)',fontWeight:700,fontSize:13,zIndex:999,animation:'slideIn .3s'}}>✅ Sauvegardé !</div>}
+  const changePassword = async () => {
+    if (!oldPassword || !newPassword) return setMsg('Remplissez les deux champs')
+    if (newPassword.length < 6) return setMsg('Le nouveau mot de passe doit faire au moins 6 caractères')
+    setLoading(true)
+    setMsg('')
+    try {
+      await api.post('/api/auth/change-password', {
+        old_password: oldPassword,
+        new_password: newPassword
+      }, { headers: { Authorization: `Bearer ${token}` } })
+      setMsg('✅ Mot de passe changé !')
+      setOldPassword('')
+      setNewPassword('')
+    } catch (e) {
+      setMsg('❌ ' + (e.response?.data?.error || 'Erreur'))
+    }
+    setLoading(false)
+  }
 
-      <div className="settings-layout" style={{display:'grid',gridTemplateColumns:'200px 1fr',gap:22}}>
-        {/* MENU GAUCHE */}
-        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:12,height:'fit-content',position:'sticky',top:80}}>
-          <div style={{display:'flex',flexDirection:'column',gap:2}}>
-            {MENU.map(m=>(
-              <div key={m.id} onClick={()=>m.id==='logout'?handleLogout():setSection(m.id)}
-                style={{padding:'10px 12px',borderRadius:'var(--radius-sm)',cursor:'pointer',fontSize:13,
-                  background:section===m.id?'var(--bg2)':'transparent',
-                  color:m.red?'var(--red)':section===m.id?'var(--text)':'var(--text2)',
-                  fontWeight:section===m.id?600:400,transition:'all .15s'}}
-                onMouseEnter={e=>{if(section!==m.id)e.currentTarget.style.background='var(--bg2)'}}
-                onMouseLeave={e=>{if(section!==m.id)e.currentTarget.style.background='transparent'}}>
-                {m.icon} {m.label}
-              </div>
-            ))}
+  const togglePush = async () => {
+    setPushLoading(true)
+    try {
+      if (pushEnabled) {
+        const success = await unsubscribeFromPush(token)
+        if (success) {
+          setPushEnabled(false)
+          setMsg('🔕 Notifications push désactivées')
+        } else {
+          setMsg('❌ Erreur désactivation push')
+        }
+      } else {
+        const success = await subscribeToPush(token)
+        if (success) {
+          setPushEnabled(true)
+          setMsg('🔔 Notifications push activées !')
+        } else {
+          const perm = getNotificationPermission()
+          setPushPermission(perm)
+          if (perm === 'denied') {
+            setMsg('❌ Notifications bloquées dans votre navigateur. Réactivez-les dans les paramètres du navigateur.')
+          } else {
+            setMsg('❌ Erreur activation push')
+          }
+        }
+      }
+    } catch (e) {
+      setMsg('❌ Erreur push')
+    }
+    setPushLoading(false)
+  }
+
+  const handleLogout = () => {
+    logout()
+    setPage('home')
+  }
+
+  const tabs = [
+    { key: 'profile', label: '👤 Profil' },
+    { key: 'security', label: '🔒 Sécurité' },
+    { key: 'notifications', label: '🔔 Notifications' },
+    { key: 'appearance', label: '🎨 Apparence' },
+  ]
+
+  return (
+    <div style={{ padding: '1rem', maxWidth: 600, margin: '0 auto' }}>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)', marginBottom: '1rem' }}>⚙️ Paramètres</h1>
+
+      {/* Onglets */}
+      <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '1.5rem', overflowX: 'auto', paddingBottom: 4 }}>
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setMsg('') }}
+            style={{
+              padding: '0.5rem 0.8rem', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap',
+              background: tab === t.key ? 'var(--accent)' : 'var(--card)',
+              color: tab === t.key ? '#fff' : 'var(--text-secondary)',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {msg && (
+        <div style={{ padding: '0.6rem 1rem', borderRadius: 8, marginBottom: '1rem', fontSize: '0.85rem', background: msg.startsWith('✅') || msg.startsWith('🔔') || msg.startsWith('🔕') ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: msg.startsWith('✅') || msg.startsWith('🔔') || msg.startsWith('🔕') ? '#22c55e' : '#ef4444' }}>
+          {msg}
+        </div>
+      )}
+
+      <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', padding: '1.2rem' }}>
+        {/* PROFIL */}
+        {tab === 'profile' && (
+          <div>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1rem' }}>Modifier le profil</h2>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>Nom affiché</label>
+              <input
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>Bio</label>
+              <textarea
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+                rows={3}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text)', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>Pays</label>
+              <input
+                value={country}
+                onChange={e => setCountry(e.target.value)}
+                placeholder="ex: KM, FR, MG..."
+                style={{ width: '100%', padding: '0.6rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>Email</label>
+              <input
+                value={email}
+                disabled
+                style={{ width: '100%', padding: '0.6rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', fontSize: '0.9rem', boxSizing: 'border-box', opacity: 0.7 }}
+              />
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 4 }}>L'email ne peut pas être modifié</p>
+            </div>
+
+            <button
+              onClick={updateProfile}
+              disabled={loading}
+              style={{ width: '100%', padding: '0.7rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: loading ? 0.6 : 1 }}
+            >
+              {loading ? 'Enregistrement...' : '💾 Enregistrer'}
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* CONTENU DROITE */}
-        <div>
-          {section==='profile'&&<div>
-            <Card title="👤 Informations du profil">
-              <div className="form-group"><label className="label">Nom complet</label><input id="s-displayname" className="input-field" defaultValue={user.display_name||'Kolo Officiel'}/></div>
-              <div className="form-group"><label className="label">Nom d'utilisateur</label><input id="s-username" className="input-field" defaultValue={user.username?'@'+user.username:'@kolo_komori'}/></div>
-              <div className="form-row">
-                <div className="form-group"><label className="label">Email</label><input className="input-field" type="email" disabled style={{opacity:0.6,cursor:'not-allowed'}} defaultValue={user.email||'kolo@waiichia.com'}/></div>
-                <div className="form-group"><label className="label">Téléphone</label><input id="s-phone" className="input-field" type="tel" defaultValue={user.phone||"+269"}/></div>
-              </div>
-              <div className="form-group"><label className="label">Bio</label><textarea className="textarea-field" id='s-bio' defaultValue={user.bio||'Artiste comorien 🇰🇲 · Twarab & Afrobeats · Moroni'}/></div>
-              <div className="form-row">
-                <div className="form-group"><label className="label">Type de profil actuel</label><div style={{padding:'11px 16px',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',fontSize:14,color:'var(--gold)',fontWeight:600}}>{user.profile_type==='listener'?'🎧 Utilisateur (Listener)':user.profile_type==='artist'?'🎵 Artiste':user.profile_type==='media'?'📺 Média':user.profile_type==='label'?'🏷️ Label':user.profile_type==='pro'?'💼 Pro':user.profile_type||'🎧 Listener'}</div>{user.profile_change_requested?<div style={{marginTop:10,padding:'12px 16px',background:'rgba(245,166,35,.1)',border:'1px solid rgba(245,166,35,.25)',borderRadius:'var(--radius-sm)',fontSize:13,color:'var(--gold)'}}>⏳ Demande en cours de traitement — profil demandé : <strong>{user.requested_profile_type}</strong></div>:<div style={{marginTop:10}}><label className="label">Demander un changement de profil</label><select id="newProfileType" className="select-styled" style={{width:'100%',marginBottom:10}}><option value="">— Choisir le nouveau profil —</option>{PROFILE_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select><textarea id="profileReason" className="textarea-field" placeholder="Pourquoi souhaitez-vous ce profil ? (liens, expérience...)" style={{marginBottom:10}}/><button className="btn btn-primary" onClick={async()=>{const t=document.getElementById('newProfileType').value;const r=document.getElementById('profileReason').value;if(!t){alert('Choisissez un profil');return}const API=import.meta.env.VITE_API_URL||'';const token=localStorage.getItem('waiichia_token');const res=await fetch(API+'/api/auth/request-profile',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({requested_profile_type:t,reason:r})});const data=await res.json();if(data.message){alert('✅ '+data.message);window.location.reload()}else{alert('Erreur: '+(data.error||'inconnue'))}}}>📩 Envoyer la demande</button></div>}</div>
-                <div className="form-group"><label className="label">Pays principal</label><select className="select-styled" style={{width:'100%'}}>{COUNTRIES.map(([c,l])=><option key={c} value={c}>{l}</option>)}</select></div>
-              </div>
-              <button className="btn btn-primary" onClick={save}>💾 Sauvegarder</button>
-            </Card>
+        {/* SÉCURITÉ */}
+        {tab === 'security' && (
+          <div>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1rem' }}>Sécurité</h2>
 
-            <Card title="🖼️ Photo de profil & Couverture">
-              <div style={{display:'flex',gap:20,alignItems:'flex-start',flexWrap:'wrap'}}>
-                <div style={{textAlign:'center'}}>
-                  <div style={{width:90,height:90,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),var(--kente2))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,margin:'0 auto 8px',border:'3px solid var(--border)',cursor:'pointer'}}>{user.display_name?.[0]||'K'}</div>
-                  <button className="btn btn-outline btn-sm">Changer avatar</button>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>Ancien mot de passe</label>
+              <input
+                type="password"
+                value={oldPassword}
+                onChange={e => setOldPassword(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>Nouveau mot de passe</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <button
+              onClick={changePassword}
+              disabled={loading}
+              style={{ width: '100%', padding: '0.7rem', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', marginBottom: '1.5rem', opacity: loading ? 0.6 : 1 }}
+            >
+              {loading ? 'Changement...' : '🔒 Changer le mot de passe'}
+            </button>
+
+            <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '1.5rem 0' }} />
+
+            <button
+              onClick={handleLogout}
+              style={{ width: '100%', padding: '0.7rem', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}
+            >
+              🚪 Se déconnecter
+            </button>
+          </div>
+        )}
+
+        {/* NOTIFICATIONS */}
+        {tab === 'notifications' && (
+          <div>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1rem' }}>Notifications push</h2>
+
+            {!pushSupported ? (
+              <div style={{ padding: '1rem', background: 'rgba(239,68,68,0.1)', borderRadius: 8, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                ⚠️ Les notifications push ne sont pas supportées par votre navigateur.
+                <br /><br />
+                Utilisez un navigateur récent (Chrome, Firefox, Edge) pour activer cette fonctionnalité.
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
+                  Recevez des notifications en temps réel quand quelqu'un vous suit, commente vos sons, ou vous envoie un message.
+                </p>
+
+                {pushPermission === 'denied' && (
+                  <div style={{ padding: '0.8rem', background: 'rgba(239,68,68,0.1)', borderRadius: 8, color: '#ef4444', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                    ❌ Les notifications sont bloquées dans votre navigateur.
+                    <br />Pour les réactiver, allez dans les paramètres de votre navigateur → Notifications → Autoriser pour waiichia.com
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: 10, marginBottom: '1rem' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text)' }}>
+                      {pushEnabled ? '🔔 Notifications activées' : '🔕 Notifications désactivées'}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                      {pushEnabled ? 'Vous recevrez des notifications push' : 'Activez pour recevoir des alertes'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={togglePush}
+                    disabled={pushLoading || pushPermission === 'denied'}
+                    style={{
+                      padding: '0.5rem 1rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
+                      background: pushEnabled ? '#ef4444' : 'var(--accent)',
+                      color: '#fff',
+                      opacity: (pushLoading || pushPermission === 'denied') ? 0.5 : 1
+                    }}
+                  >
+                    {pushLoading ? '...' : pushEnabled ? 'Désactiver' : 'Activer'}
+                  </button>
                 </div>
-                <div style={{textAlign:'center'}}>
-                  <div style={{width:200,height:70,borderRadius:'var(--radius-sm)',background:'linear-gradient(135deg,#0a1e2e,#1060a0)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'var(--text3)',margin:'0 auto 8px',border:'1px solid var(--border)'}}>Cover 1500×400</div>
-                  <button className="btn btn-outline btn-sm">Changer couverture</button>
+
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  💡 Les notifications push fonctionnent même quand l'application est fermée.
+                  Vous pouvez les désactiver à tout moment.
                 </div>
               </div>
-            </Card>
-          </div>}
+            )}
+          </div>
+        )}
 
-          {section==='security'&&<div>
-            <Card title="🔒 Mot de passe">
-              <div className="form-group"><label className="label">Mot de passe actuel</label><input className="input-field" type="password" placeholder="••••••••"/></div>
-              <div className="form-row">
-                <div className="form-group"><label className="label">Nouveau mot de passe</label><input className="input-field" type="password" placeholder="Min. 8 caractères"/></div>
-                <div className="form-group"><label className="label">Confirmer</label><input className="input-field" type="password" placeholder="Répéter le mot de passe"/></div>
-              </div>
-              <button className="btn btn-primary" onClick={save}>🔒 Modifier le mot de passe</button>
-            </Card>
-            <Card title="🔐 Authentification à deux facteurs">
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                <div><div style={{fontWeight:600,fontSize:13}}>2FA par SMS</div><div style={{fontSize:12,color:'var(--text2)'}}>Recevez un code par SMS à chaque connexion</div></div>
-                <div className="toggle-switch" onClick={e=>e.currentTarget.classList.toggle('off')}/>
-              </div>
-            </Card>
-            <Card title="✅ Vérification du compte">
-              <div style={{background:user.is_verified?'rgba(44,198,83,.08)':'rgba(245,166,35,.06)',border:`1px solid ${user.is_verified?'rgba(44,198,83,.2)':'rgba(245,166,35,.2)'}`,borderRadius:'var(--radius-sm)',padding:16,display:'flex',alignItems:'center',gap:12}}>
-                <span style={{fontSize:28}}>{user.is_verified?'✅':'🔒'}</span>
-                <div>
-                  <div style={{fontWeight:700,fontSize:13,color:user.is_verified?'var(--green)':'var(--gold)'}}>{user.is_verified?'Compte vérifié':'Compte non vérifié'}</div>
-                  <div style={{fontSize:12,color:'var(--text2)'}}>{user.is_verified?'Vous pouvez monétiser votre contenu':'Faites vérifier pour vendre, louer et recevoir des paiements'}</div>
+        {/* APPARENCE */}
+        {tab === 'appearance' && (
+          <div>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '1rem' }}>Apparence</h2>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: 10 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text)' }}>Mode sombre</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                  {theme === 'dark' ? 'Activé' : 'Désactivé'}
                 </div>
-                {!user.is_verified&&<button className="btn btn-primary btn-sm" style={{marginLeft:'auto'}}>Demander la vérification</button>}
               </div>
-            </Card>
-          </div>}
-
-          {section==='notifications'&&<Card title="🔔 Préférences de notifications">
-            <div style={{display:'flex',flexDirection:'column',gap:14}}>
-              {[['Nouveaux fans','Quand quelqu\'un vous suit',true],['Ventes & Revenus','Chaque vente ou location de contenu',true],['Messages privés','Nouveaux messages reçus',true],['Commentaires','Sur vos publications',false],['Événements','Rappels et mises à jour',true],['Marketing','Offres et nouveautés Waiichia',false]].map(([t,d,on])=>(
-                <div key={t} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
-                  <div><div style={{fontWeight:600,fontSize:13}}>{t}</div><div style={{fontSize:12,color:'var(--text2)'}}>  {d}</div></div>
-                  <div className={`toggle-switch${on?'':' off'}`} onClick={e=>e.currentTarget.classList.toggle('off')}/>
-                </div>
-              ))}
+              <button
+                onClick={toggleTheme}
+                style={{
+                  width: 52, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer', position: 'relative',
+                  background: theme === 'dark' ? 'var(--accent)' : '#ccc', transition: 'background 0.2s'
+                }}
+              >
+                <div style={{
+                  width: 22, height: 22, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3,
+                  left: theme === 'dark' ? 27 : 3, transition: 'left 0.2s'
+                }} />
+              </button>
             </div>
-          </Card>}
-
-          {section==='language'&&<Card title="🌍 Langue & Région">
-            <div className="form-row">
-              <div className="form-group"><label className="label">Langue de l'interface</label><select className="select-styled" style={{width:'100%'}}><option>Français</option><option>English</option><option>Shikomori</option><option>Swahili</option><option>Malagasy</option></select></div>
-              <div className="form-group"><label className="label">Devise d'affichage</label><select className="select-styled" style={{width:'100%'}}><option>KMF - Franc Comorien</option><option>USD</option><option>EUR</option><option>MGA</option><option>XOF</option></select></div>
-            </div>
-            <button className="btn btn-primary" onClick={save}>💾 Sauvegarder</button>
-          </Card>}
-
-          {section==='billing'&&<Card title="💳 Facturation & Abonnement">
-            <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:16,marginBottom:16}}>
-              <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,marginBottom:4}}>Plan actuel : Gratuit</div>
-              <div style={{fontSize:12,color:'var(--text2)'}}>Vous utilisez le plan gratuit de Waiichia. Passez à Premium pour débloquer plus de fonctionnalités.</div>
-            </div>
-            <button className="btn btn-primary">⭐ Passer à Premium</button>
-          </Card>}
-
-          {section==='rights'&&<Card title="⚖️ Droits d'auteur">
-            <div style={{fontSize:13,color:'var(--text2)',lineHeight:1.8}}>
-              <p>Waiichia respecte les droits d'auteur et la propriété intellectuelle. Tout contenu publié sur la plateforme reste la propriété de son créateur.</p>
-              <p style={{marginTop:12}}>Si vous êtes affilié à une société de droits (SACEM, OROLM, etc.), vous pouvez lier votre compte pour faciliter la gestion de vos revenus.</p>
-            </div>
-            <div className="form-group" style={{marginTop:16}}><label className="label">Société de droits</label><input className="input-field" placeholder="Ex: SACEM, OROLM..."/></div>
-            <div className="form-group"><label className="label">Numéro d'affiliation</label><input className="input-field" placeholder="Votre numéro d'artiste"/></div>
-            <button className="btn btn-primary" onClick={save}>💾 Enregistrer</button>
-          </Card>}
-
-          {section==='privacy'&&<Card title="🛡️ Confidentialité">
-            <div style={{display:'flex',flexDirection:'column',gap:14}}>
-              {[['Profil public','Votre profil est visible par tout le monde',true],['Historique d\'écoute','Afficher vos écoutes récentes sur votre profil',false],['Apparaître dans les suggestions','Être recommandé aux autres utilisateurs',true],['Partage de données anonymes','Aider Waiichia à améliorer la plateforme',true]].map(([t,d,on])=>(
-                <div key={t} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
-                  <div><div style={{fontWeight:600,fontSize:13}}>{t}</div><div style={{fontSize:12,color:'var(--text2)'}}>{d}</div></div>
-                  <div className={`toggle-switch${on?'':' off'}`} onClick={e=>e.currentTarget.classList.toggle('off')}/>
-                </div>
-              ))}
-            </div>
-            <div style={{marginTop:20,padding:14,background:'rgba(230,57,70,.05)',border:'1px solid rgba(230,57,70,.2)',borderRadius:'var(--radius-sm)'}}>
-              <div style={{fontWeight:700,fontSize:13,color:'var(--red)',marginBottom:6}}>⚠️ Zone dangereuse</div>
-              <div style={{fontSize:12,color:'var(--text2)',marginBottom:12}}>Supprimer votre compte est irréversible. Toutes vos données seront perdues.</div>
-              <button className="btn btn-sm" style={{background:'rgba(230,57,70,.1)',color:'var(--red)',border:'1px solid rgba(230,57,70,.3)',borderRadius:'var(--radius-sm)',padding:'8px 16px',cursor:'pointer',fontSize:12}}>Supprimer mon compte</button>
-            </div>
-          </Card>}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
-}
-
-function Card({title,children}){
-  return(<div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:24,marginBottom:16}}>
-    <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:16,marginBottom:18}}>{title}</div>
-    {children}
-  </div>)
 }

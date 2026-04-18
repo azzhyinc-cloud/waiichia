@@ -32,9 +32,10 @@ export default async function authRoutes(app) {
       email,
       country: country || 'KM',
       currency: 'KMF',
-      profile_type: 'listener',
+      profile_type: 'artist',
       role: 'user',
       is_verified: false,
+      is_active: true,
       fans_count: 0,
       followers_count: 0,
     }, { onConflict: 'id' })
@@ -84,10 +85,15 @@ export default async function authRoutes(app) {
         id: data.user.id, email,
         username: data.user.user_metadata?.username || email.split('@')[0],
         display_name: data.user.user_metadata?.display_name || email.split('@')[0],
-        country: 'KM', currency: 'KMF', profile_type: 'listener', role: 'user'
+        country: 'KM', currency: 'KMF', profile_type: 'artist', role: 'user', is_active: true
       })
       const { data: p2 } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
       profile = p2
+    }
+
+    // ── Blocage si compte désactivé ──
+    if (profile && profile.is_active === false) {
+      return reply.status(403).send({ error: 'Votre compte a été désactivé. Contactez le support.' })
     }
 
     // Récupérer/créer wallet
@@ -111,11 +117,10 @@ export default async function authRoutes(app) {
         cover_url: profile.cover_url,
         profile_type: profile.profile_type,
         country: profile.country,
-        bio: profile.bio,
-        phone: profile.phone,
         currency: profile.currency,
         role: profile.role || 'user',
         is_verified: profile.is_verified,
+        is_active: profile.is_active,
         fans_count: profile.fans_count || 0,
         wallet_balance: wallet?.balance || 0,
       }
@@ -126,35 +131,14 @@ export default async function authRoutes(app) {
   app.get('/me', { preHandler: app.authenticate }, async (request, reply) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', request.user.id).single()
     if (!profile) return reply.status(404).send({ error: 'Profil introuvable' })
+
+    // ── Blocage si compte désactivé ──
+    if (profile.is_active === false) {
+      return reply.status(403).send({ error: 'Votre compte a été désactivé. Contactez le support.' })
+    }
+
     const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', request.user.id).single()
     return reply.send({ profile: { ...profile, wallet_balance: wallet?.balance || 0 } })
-  })
-
-  /* ══ REQUEST PROFILE CHANGE ══ */
-  app.post('/request-profile', { preHandler: app.authenticate }, async (request, reply) => {
-    const { requested_profile_type, reason } = request.body
-    if (!requested_profile_type) return reply.status(400).send({ error: 'Type de profil requis' })
-    const { error } = await supabase.from('profiles').update({
-      profile_change_requested: true,
-      requested_profile_type,
-      profile_request_reason: reason || '',
-      updated_at: new Date().toISOString()
-    }).eq('id', request.user.id)
-    if (error) return reply.status(500).send({ error: error.message })
-    return reply.send({ message: 'Demande envoyee! L admin va examiner votre demande.' })
-  })
-
-  /* ══ UPDATE PROFILE ══ */
-  app.patch('/profile', { preHandler: app.authenticate }, async (request, reply) => {
-    const allowed = ['display_name','username','bio','phone','avatar_url','cover_url','country','profile_type']
-    const updates = {}
-    for (const key of allowed) {
-      if (request.body[key] !== undefined) updates[key] = request.body[key]
-    }
-    updates.updated_at = new Date().toISOString()
-    const { data, error } = await supabase.from('profiles').update(updates).eq('id', request.user.id).select().single()
-    if (error) return reply.status(500).send({ error: error.message })
-    return reply.send({ profile: data })
   })
 
   /* ══ LOGOUT ══ */
@@ -168,5 +152,122 @@ export default async function authRoutes(app) {
     if (!email) return reply.status(400).send({ error: 'Email requis' })
     await supabase.auth.resetPasswordForEmail(email)
     return reply.send({ message: 'Email envoyé si le compte existe' })
+  })
+
+  /* ══ CHANGE PASSWORD ══ */
+  app.post('/change-password', { preHandler: app.authenticate }, async (request, reply) => {
+    try {
+      const { old_password, new_password } = request.body
+      if (!old_password || !new_password)
+        return reply.status(400).send({ error: 'Ancien et nouveau mot de passe requis' })
+      if (new_password.length < 6)
+        return reply.status(400).send({ error: 'Le nouveau mot de passe doit faire au moins 6 caractères' })
+
+      // Get user email
+      const { data: profile } = await supabase.from('profiles').select('email').eq('id', request.user.id).single()
+      if (!profile) return reply.status(404).send({ error: 'Profil introuvable' })
+
+      // Verify old password
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: old_password
+      })
+      if (signInError) return reply.status(401).send({ error: 'Ancien mot de passe incorrect' })
+
+      // Update password via admin API
+      const { error: updateError } = await supabase.auth.admin.updateUserById(request.user.id, {
+        password: new_password
+      })
+      if (updateError) return reply.status(500).send({ error: 'Erreur changement mot de passe' })
+
+      return reply.send({ success: true, message: 'Mot de passe changé avec succès' })
+    } catch (e) {
+      app.log.error(e)
+      return reply.status(500).send({ error: 'Erreur serveur' })
+    }
+  })
+
+  /* ══ SOCIAL CONFIG (public) ══ */
+  app.get('/social-config', async (request, reply) => {
+    try {
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('key', 'social_logins')
+        .single()
+
+      if (error || !data) return reply.send({ providers: {} })
+
+      const settings = typeof data.value === 'string' ? JSON.parse(data.value) : data.value
+      const providers = {}
+      for (const [key, val] of Object.entries(settings)) {
+        if (val && val.enabled) {
+          providers[key] = {
+            enabled: true,
+            client_id: val.client_id || null,
+            app_id: val.app_id || null
+          }
+        }
+      }
+      return reply.send({ providers })
+    } catch (e) {
+      app.log.error(e)
+      return reply.send({ providers: {} })
+    }
+  })
+
+  /* ══ SOCIAL CONFIG FULL (admin) ══ */
+  app.get('/social-config/full', { preHandler: app.authenticate }, async (request, reply) => {
+    try {
+      if (!['admin', 'superadmin'].includes(request.user.role)) {
+        return reply.status(403).send({ error: 'Accès refusé' })
+      }
+
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('key', 'social_logins')
+        .single()
+
+      if (error || !data) return reply.send({ providers: {} })
+
+      const settings = typeof data.value === 'string' ? JSON.parse(data.value) : data.value
+      return reply.send({ providers: settings })
+    } catch (e) {
+      app.log.error(e)
+      return reply.status(500).send({ error: 'Erreur serveur' })
+    }
+  })
+
+  /* ══ SOCIAL CONFIG UPDATE (admin) ══ */
+  app.patch('/social-config', { preHandler: app.authenticate }, async (request, reply) => {
+    try {
+      if (!['admin', 'superadmin'].includes(request.user.role)) {
+        return reply.status(403).send({ error: 'Accès refusé' })
+      }
+
+      const { providers } = request.body
+      if (!providers) return reply.status(400).send({ error: 'providers requis' })
+
+      const { error } = await supabase
+        .from('platform_settings')
+        .upsert({ key: 'social_logins', value: providers }, { onConflict: 'key' })
+
+      if (error) throw error
+
+      // Log admin action
+      try {
+        await supabase.from('admin_logs').insert({
+          admin_id: request.user.id,
+          action: 'update_social_config',
+          details: { providers_updated: Object.keys(providers) }
+        })
+      } catch (logErr) {}
+
+      return reply.send({ success: true })
+    } catch (e) {
+      app.log.error(e)
+      return reply.status(500).send({ error: 'Erreur serveur' })
+    }
   })
 }

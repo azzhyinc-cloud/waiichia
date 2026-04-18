@@ -1,13 +1,34 @@
 import { useState, useEffect } from "react"
 import { useAuthStore, usePageStore } from "../stores/index.js"
 import api from "../services/api.js"
+import { getFlag, getFlagName } from "../services/flags.js"
 
 const API=import.meta.env.VITE_API_URL||''
 const adminApi={
-  get:async(path)=>{const r=await fetch(API+path,{headers:{'Authorization':'Bearer '+localStorage.getItem('waiichia_token')}});return r.json()},
-  patch:async(path,body)=>{const r=await fetch(API+path,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('waiichia_token')},body:JSON.stringify(body)});return r.json()},
-  put:async(path,body)=>{const r=await fetch(API+path,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('waiichia_token')},body:JSON.stringify(body)});return r.json()},
-  del:async(path)=>{const r=await fetch(API+path,{method:'DELETE',headers:{'Authorization':'Bearer '+localStorage.getItem('waiichia_token')}});return r.json()},
+  get:async(path)=>{
+    const r=await fetch(API+path,{headers:{'Authorization':'Bearer '+localStorage.getItem('waiichia_token')}})
+    const d=await r.json()
+    if(!r.ok) throw new Error(d.error||'Erreur '+r.status)
+    return d
+  },
+  patch:async(path,body)=>{
+    const r=await fetch(API+path,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('waiichia_token')},body:JSON.stringify(body)})
+    const d=await r.json()
+    if(!r.ok) throw new Error(d.error||'Erreur '+r.status)
+    return d
+  },
+  put:async(path,body)=>{
+    const r=await fetch(API+path,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('waiichia_token')},body:JSON.stringify(body)})
+    const d=await r.json()
+    if(!r.ok) throw new Error(d.error||'Erreur '+r.status)
+    return d
+  },
+  del:async(path)=>{
+    const r=await fetch(API+path,{method:'DELETE',headers:{'Authorization':'Bearer '+localStorage.getItem('waiichia_token')}})
+    const d=await r.json()
+    if(!r.ok) throw new Error(d.error||'Erreur '+r.status)
+    return d
+  },
 }
 const fmtS=n=>{if(!n||n===0)return'0';if(n>=1000000)return(n/1000000).toFixed(1)+'M';if(n>=1000)return(n/1000).toFixed(1)+'K';return String(n)}
 const NAV=[
@@ -28,13 +49,19 @@ export default function Admin(){
   const [deposits,setDeposits]=useState([])
   const [profileReqs,setProfileReqs]=useState([])
   const [payConfig,setPayConfig]=useState({})
+  const [socialConfig,setSocialConfig]=useState({
+    facebook:{enabled:false,client_id:'',client_secret:'',redirect_url:''},
+    google:{enabled:false,client_id:'',client_secret:'',redirect_url:''},
+    wanzani:{enabled:false,api_key:'',api_secret:'',redirect_url:'',base_url:''},
+    x:{enabled:false,client_id:'',client_secret:'',redirect_url:''}
+  })
+  const [savingSocial,setSavingSocial]=useState(false)
   const [loading,setLoading]=useState(false)
   const [toast,setToast]=useState('')
   const [search,setSearch]=useState('')
 
   const showToast=m=>{setToast(m);setTimeout(()=>setToast(''),3000)}
 
-  // Charger les données selon l'onglet
   useEffect(()=>{
     setLoading(true)
     if(tab==='dashboard') adminApi.get('/api/admin/stats').then(s=>setStats(s)).catch(()=>{api.profiles.stats().then(s=>setStats(s)).catch(()=>{})})
@@ -44,14 +71,14 @@ export default function Admin(){
     if(tab==='deposits') adminApi.get('/api/admin/deposits').then(d=>setDeposits(d.deposits||[])).catch(()=>{})
     if(tab==='profile_requests') adminApi.get('/api/admin/profile-requests').then(d=>setProfileReqs(d.requests||[])).catch(()=>{})
     if(tab==='payment_config') adminApi.get('/api/admin/payment-config').then(d=>setPayConfig(d.config||{})).catch(()=>{})
+    if(tab==='settings') adminApi.get('/api/auth/social-config/full').then(d=>{if(d?.config)setSocialConfig(d.config)}).catch(()=>{})
     setLoading(false)
   },[tab])
 
-  // Actions admin
   const userAction=async(id,action)=>{
     const r=await adminApi.patch('/api/admin/users/'+id+'/status',{action})
     showToast(r.message||'✅ Fait')
-    setUsers(u=>u.map(x=>x.id===id?{...x,...(action==='suspend'?{is_suspended:true}:action==='activate'?{is_suspended:false}:action==='verify'?{is_verified:true}:action==='unverify'?{is_verified:false}:{})}:x))
+    setUsers(u=>u.map(x=>x.id===id?{...x,...(action==='suspend'?{is_active:false}:action==='activate'?{is_active:true}:action==='verify'?{is_verified:true}:action==='unverify'?{is_verified:false}:{})}:x))
   }
   const contentAction=async(id,action)=>{
     const r=await adminApi.patch('/api/admin/content/'+id+'/status',{action})
@@ -80,8 +107,24 @@ export default function Admin(){
     setProfileReqs(p=>p.filter(x=>x.id!==id))
   }
   const savePayConfig=async()=>{
-    await adminApi.put('/api/admin/payment-config',{config:payConfig})
-    showToast('💾 Configuration sauvegardée')
+    try{
+      await adminApi.put('/api/admin/payment-config',{config:payConfig})
+      // Relire pour vérifier la persistance
+      const fresh=await adminApi.get('/api/admin/payment-config')
+      if(fresh?.config) setPayConfig(fresh.config)
+      showToast('✅ Configuration paiements sauvegardée')
+    }catch(e){showToast('❌ Erreur paiements: '+e.message)}
+  }
+  const saveSocialConfig=async()=>{
+    setSavingSocial(true)
+    try{
+      const res=await adminApi.patch('/api/auth/social-config',socialConfig)
+      // Relire pour vérifier la persistance
+      const fresh=await adminApi.get('/api/auth/social-config/full')
+      if(fresh?.config) setSocialConfig(fresh.config)
+      showToast('✅ Configuration sociale sauvegardée')
+    }catch(e){showToast('❌ Erreur sociale: '+e.message)}
+    setSavingSocial(false)
   }
 
   if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>🛡️</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous en admin</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
@@ -144,16 +187,16 @@ export default function Admin(){
                   <tr key={u.id} style={{borderBottom:'1px solid var(--border)'}}>
                     <td style={{padding:'10px 12px'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),#e63946)',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{(u.display_name||'?')[0]}</div><div><div style={{fontWeight:600}}>{u.display_name||'Sans nom'}</div><div style={{fontSize:10,color:'var(--text3)'}}>{u.email}</div></div></div></td>
                     <td style={{padding:'10px 12px'}}><span style={{padding:'2px 8px',borderRadius:12,fontSize:10,background:'var(--bg2)',fontFamily:'Space Mono,monospace'}}>{u.profile_type||'listener'}</span></td>
-                    <td style={{padding:'10px 12px'}}>{u.country||'—'}</td>
+                    <td style={{padding:'10px 12px'}}>{u.country?getFlagName(u.country):'—'}</td>
                     <td style={{padding:'10px 12px',fontSize:11,color:'var(--text3)'}}>{u.created_at?new Date(u.created_at).toLocaleDateString('fr'):'—'}</td>
                     <td style={{padding:'10px 12px'}}>{u.is_verified?<span style={{color:'var(--green)'}}>✅</span>:<span style={{color:'var(--text3)'}}>❌</span>}</td>
-                    <td style={{padding:'10px 12px'}}>{u.is_suspended?<span style={{color:'var(--red)',fontSize:10,fontWeight:700}}>SUSPENDU</span>:<span style={{color:'var(--green)',fontSize:10,fontWeight:700}}>ACTIF</span>}</td>
+                    <td style={{padding:'10px 12px'}}>{u.is_active===false?<span style={{color:'var(--red)',fontSize:10,fontWeight:700}}>SUSPENDU</span>:<span style={{color:'var(--green)',fontSize:10,fontWeight:700}}>ACTIF</span>}</td>
                     <td style={{padding:'10px 12px'}}><div style={{display:'flex',gap:4}}>
                       {!u.is_verified&&<Btn onClick={()=>userAction(u.id,'verify')} title="Vérifier">✅</Btn>}
                       {u.is_verified&&<Btn onClick={()=>userAction(u.id,'unverify')} title="Retirer vérification">❌</Btn>}
-                      {!u.is_suspended&&<Btn red onClick={()=>userAction(u.id,'suspend')} title="Suspendre">🔒</Btn>}
+                      {u.is_active!==false&&<Btn red onClick={()=>userAction(u.id,'suspend')} title="Suspendre">🔒</Btn>}
                       <select style={{padding:'2px 4px',borderRadius:4,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text)',fontSize:10,cursor:'pointer'}} value={u.profile_type||'listener'} onChange={e=>changeRole(u.id,e.target.value)}><option value="listener">listener</option><option value="artist">artist</option><option value="media">media</option><option value="label">label</option><option value="pro">pro</option></select>
-                      {u.is_suspended&&<Btn onClick={()=>userAction(u.id,'activate')} title="Réactiver">🔓</Btn>}
+                      {u.is_active===false&&<Btn onClick={()=>userAction(u.id,'activate')} title="Réactiver">🔓</Btn>}
                     </div></td>
                   </tr>
                 ))}
@@ -199,7 +242,7 @@ export default function Admin(){
               <div style={{width:48,height:48,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),#e63946)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:18}}>{(v.display_name||'?')[0]}</div>
               <div style={{flex:1}}>
                 <div style={{fontWeight:700,fontSize:14}}>{v.display_name} <span style={{fontSize:11,color:'var(--text3)'}}>@{v.username}</span></div>
-                <div style={{fontSize:12,color:'var(--text2)'}}>Profil demandé : {v.requested_profile_type||v.profile_type||'artiste'} · Pays : {v.country||'—'}</div>
+                <div style={{fontSize:12,color:'var(--text2)'}}>Profil demandé : {v.requested_profile_type||v.profile_type||'artiste'} · Pays : {v.country?getFlagName(v.country):'—'}</div>
                 <div style={{fontSize:11,color:'var(--text3)'}}>Email : {v.email} · Inscrit le {v.created_at?new Date(v.created_at).toLocaleDateString('fr'):''}</div>
               </div>
               <div style={{display:'flex',gap:8}}>
@@ -229,7 +272,6 @@ export default function Admin(){
           )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>✅</div>Aucun dépôt en attente</div>}
         </div>}
 
-        
         {/* ═══ DEMANDES DE PROFIL ═══ */}
         {tab==='profile_requests'&&<div>
           <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>🔄 Demandes de changement de profil ({profileReqs.length})</h2>
@@ -251,32 +293,56 @@ export default function Admin(){
 
         {/* ═══ CONFIG PAIEMENT ═══ */}
         {tab==='payment_config'&&<div>
-          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>💳 Méthodes de paiement</h2>
-          <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:20}}>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:6}}>💳 Méthodes de paiement</h2>
+          <div style={{fontSize:12,color:'var(--text3)',marginBottom:16}}>Activez les modes de paiement et configurez les informations API. Les mêmes modes seront disponibles pour la recharge et le retrait.</div>
+          <div style={{display:'flex',flexDirection:'column',gap:14,marginBottom:20}}>
             {[
-              {id:'mvola',icon:'📲',name:'Mvola (USSD)',desc:'Comores Telecom'},
-              {id:'cash',icon:'💵',name:'Dépôt Cash',desc:'Points de vente'},
-              {id:'bank',icon:'🏦',name:'Virement bancaire',desc:'IBAN / SWIFT'},
-              {id:'card',icon:'💳',name:'Carte bancaire',desc:'Stripe'},
-              {id:'paypal',icon:'🅿️',name:'PayPal',desc:'PayPal'},
-              {id:'wave',icon:'🌊',name:'Wave',desc:'SN, CI'},
-              {id:'orange',icon:'🟠',name:'Orange Money',desc:'CI, CM'},
+              {id:'mvola',icon:'📲',name:'Mvola (USSD)',desc:'Comores Telecom',fields:['phone']},
+              {id:'cash',icon:'💵',name:'Dépôt Cash',desc:'Points de vente',fields:[]},
+              {id:'bank',icon:'🏦',name:'Virement bancaire',desc:'IBAN / SWIFT',fields:['bank_name','iban','swift']},
+              {id:'card',icon:'💳',name:'Carte bancaire',desc:'Stripe',fields:['stripe_key']},
+              {id:'paypal',icon:'🅿️',name:'PayPal',desc:'PayPal',fields:['client_id','client_secret']},
+              {id:'wave',icon:'🌊',name:'Wave',desc:'SN, CI',fields:['api_key']},
+              {id:'orange_money',icon:'🟠',name:'Orange Money',desc:'Mobile Money',fields:['phone']},
+              {id:'mpesa',icon:'📱',name:'M-Pesa',desc:'Mobile Money',fields:['phone']},
             ].map(m=>{
-              const enabled=payConfig[m.id]?.enabled!==false
+              const cfg=payConfig[m.id]||{}
+              const enabled=!!cfg.enabled
               return(
-                <div key={m.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'14px 18px',display:'flex',alignItems:'center',gap:14}}>
-                  <span style={{fontSize:28}}>{m.icon}</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:13}}>{m.name}</div>
-                    <div style={{fontSize:11,color:'var(--text3)'}}>{m.desc}</div>
+                <div key={m.id} style={{background:'var(--card)',border:`1px solid ${enabled?'rgba(44,198,83,.3)':'var(--border)'}`,borderRadius:'var(--radius)',overflow:'hidden'}}>
+                  <div style={{padding:'14px 18px',display:'flex',alignItems:'center',gap:14}}>
+                    <span style={{fontSize:28}}>{m.icon}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,fontSize:13}}>{m.name}</div>
+                      <div style={{fontSize:11,color:'var(--text3)'}}>{m.desc}</div>
+                    </div>
+                    <span style={{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'Space Mono,monospace',background:enabled?'rgba(44,198,83,.15)':'rgba(230,57,70,.1)',color:enabled?'var(--green)':'var(--red)'}}>{enabled?'ACTIF':'INACTIF'}</span>
+                    <button onClick={()=>setPayConfig(c=>({...c,[m.id]:{...c[m.id],enabled:!enabled}}))} style={{
+                      width:44,height:24,borderRadius:12,border:'none',cursor:'pointer',position:'relative',transition:'background .2s',
+                      background:enabled?'var(--green)':'var(--border)'
+                    }}>
+                      <div style={{width:20,height:20,borderRadius:'50%',background:'#fff',position:'absolute',top:2,left:enabled?22:2,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.3)'}}/>
+                    </button>
                   </div>
-                  <span style={{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'Space Mono,monospace',background:enabled?'rgba(44,198,83,.15)':'var(--bg2)',color:enabled?'var(--green)':'var(--text3)'}}>{enabled?'ACTIF':'INACTIF'}</span>
-                  <div className={`toggle-switch${enabled?'':' off'}`} onClick={()=>setPayConfig(c=>({...c,[m.id]:{...c[m.id],enabled:!enabled}}))}/>
+                  {m.fields.length>0&&<div style={{padding:'0 18px 14px',display:'flex',flexWrap:'wrap',gap:8}}>
+                    {m.fields.map(field=>(
+                      <div key={field} style={{flex:field==='iban'?'1 1 100%':'1 1 45%',minWidth:140}}>
+                        <label style={{display:'block',fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>{field.replace(/_/g,' ')}</label>
+                        <input
+                          type={field.includes('secret')?'password':'text'}
+                          value={cfg[field]||''}
+                          onChange={e=>setPayConfig(c=>({...c,[m.id]:{...c[m.id],[field]:e.target.value}}))}
+                          placeholder={field==='phone'?'ex: 3234567':field==='iban'?'KM46 ...':field==='swift'?'BDCMKMKC':'...'}
+                          style={{width:'100%',padding:'8px 12px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg2)',color:'var(--text)',fontSize:12,boxSizing:'border-box',fontFamily:'Space Mono,monospace'}}
+                        />
+                      </div>
+                    ))}
+                  </div>}
                 </div>
               )
             })}
           </div>
-          <button className="btn btn-primary" onClick={savePayConfig}>💾 Sauvegarder la configuration</button>
+          <button className="btn btn-primary" onClick={savePayConfig}>💾 Sauvegarder la configuration paiements</button>
         </div>}
 
         {/* ═══ FINANCES ═══ */}
@@ -287,8 +353,49 @@ export default function Admin(){
 
         {/* ═══ PARAMÈTRES ═══ */}
         {tab==='settings'&&<div>
-          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>⚙️ Paramètres système</h2>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:20}}>⚙️ Paramètres système</h2>
+
+          {/* ── Connexion sociale ── */}
+          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20,marginBottom:20}}>
+            <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:4}}>🔑 Connexion sociale</div>
+            <div style={{fontSize:12,color:'var(--text3)',marginBottom:16}}>Configurez les clés API et activez chaque fournisseur. Les boutons activés apparaissent sur la page de connexion.</div>
+            <div style={{display:'flex',flexDirection:'column',gap:14,marginBottom:16}}>
+              {[
+                {id:'facebook',icon:'📘',name:'Facebook',fields:['client_id','client_secret','redirect_url']},
+                {id:'google',icon:'🔍',name:'Google',fields:['client_id','client_secret','redirect_url']},
+                {id:'wanzani',icon:'🌴',name:'Wanzani',fields:['api_key','api_secret','redirect_url','base_url']},
+                {id:'x',icon:'𝕏',name:'X (Twitter)',fields:['client_id','client_secret','redirect_url']},
+              ].map(btn=>{
+                const cfg=socialConfig[btn.id]||{}
+                const enabled=!!cfg.enabled
+                return(
+                  <div key={btn.id} style={{background:'var(--bg2)',borderRadius:10,border:`1px solid ${enabled?'rgba(44,198,83,.3)':'var(--border)'}`,overflow:'hidden'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:14,padding:'12px 16px'}}>
+                      <span style={{fontSize:24}}>{btn.icon}</span>
+                      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>{btn.name}</div></div>
+                      <span style={{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'Space Mono,monospace',background:enabled?'rgba(44,198,83,.15)':'rgba(230,57,70,.1)',color:enabled?'var(--green)':'var(--red)'}}>{enabled?'ACTIVÉ':'DÉSACTIVÉ'}</span>
+                      <button onClick={()=>setSocialConfig(c=>({...c,[btn.id]:{...(c[btn.id]||{}),enabled:!enabled}}))} style={{width:44,height:24,borderRadius:12,border:'none',cursor:'pointer',position:'relative',transition:'background .2s',background:enabled?'var(--green)':'var(--border)'}}>
+                        <div style={{width:20,height:20,borderRadius:'50%',background:'#fff',position:'absolute',top:2,left:enabled?22:2,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.3)'}}/>
+                      </button>
+                    </div>
+                    <div style={{padding:'0 16px 14px',display:'flex',flexDirection:'column',gap:6}}>
+                      {btn.fields.map(f=>(
+                        <div key={f}><label style={{display:'block',fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:3,textTransform:'uppercase'}}>{f.replace(/_/g,' ')}</label>
+                        <input type={f.includes('secret')?'password':'text'} value={cfg[f]||''} onChange={e=>setSocialConfig(c=>({...c,[btn.id]:{...(c[btn.id]||{}),[f]:e.target.value}}))} placeholder={f.includes('url')?'https://...':f.includes('id')?'Votre '+f:'••••••••'} style={{width:'100%',padding:'7px 10px',borderRadius:6,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text)',fontSize:11,boxSizing:'border-box',fontFamily:'Space Mono,monospace'}}/></div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={saveSocialConfig} disabled={savingSocial} style={{padding:'10px 24px',borderRadius:8,border:'none',background:'linear-gradient(135deg,var(--gold),#e8920a)',color:'#000',fontSize:13,fontWeight:700,cursor:savingSocial?'not-allowed':'pointer',opacity:savingSocial?.6:1}}>
+              {savingSocial?'⏳ Sauvegarde...':'💾 Sauvegarder la configuration sociale'}
+            </button>
+          </div>
+
+          {/* ── Infos système ── */}
           <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
+            <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:12}}>📋 Informations système</div>
             {[['Plateforme','Waiichia'],['Version','v7.2'],['Supabase','Connecté ✅'],['Profil par défaut','listener (utilisateur normal)'],['Commission ventes','15%'],['Commission locations','20%'],['Commission retraits','2.5%'],['Commission transferts','1%']].map(([k,v])=>(
               <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'12px 0',borderBottom:'1px solid var(--border)',fontSize:13}}>
                 <span style={{color:'var(--text2)'}}>{k}</span><span style={{fontFamily:'Space Mono,monospace'}}>{v}</span>

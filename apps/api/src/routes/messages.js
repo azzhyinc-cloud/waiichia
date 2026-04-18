@@ -1,4 +1,5 @@
 import { supabase } from '../config.js'
+import { createNotification } from '../utils/notify.js'
 
 export default async function messagesRoutes(fastify) {
 
@@ -67,12 +68,24 @@ export default async function messagesRoutes(fastify) {
     const { data: conv } = await supabase.from('conversations').select('participant_1,participant_2,unread_1,unread_2').eq('id', req.params.id).single()
     if (conv) {
       const isP1 = conv.participant_1 === req.user.id
+      const recipientId = isP1 ? conv.participant_2 : conv.participant_1
+      const preview = content?.startsWith('http') ? (message_type === 'voice' ? '🎤 Vocal' : '📷 Photo') : content || 'Son partagé'
       await supabase.from('conversations').update({
-        last_message: content?.startsWith('http') ? (message_type === 'voice' ? '🎤 Vocal' : '📷 Photo') : content || 'Son partage',
+        last_message: preview,
         last_message_at: new Date().toISOString(),
         unread_1: isP1 ? conv.unread_1 : (conv.unread_1 + 1),
         unread_2: isP1 ? (conv.unread_2 + 1) : conv.unread_2,
       }).eq('id', req.params.id)
+
+      // ── NOTIFICATION MESSAGE ──
+      const notifPreview = content?.startsWith('http') ? (message_type === 'voice' ? '🎤 Message vocal' : message_type === 'image' ? '📷 Photo' : '📎 Fichier') : (content || '').length > 50 ? content.slice(0, 47) + '...' : (content || 'Message')
+      createNotification({
+        user_id: recipientId,
+        from_id: req.user.id,
+        title: 'Nouveau message',
+        body: '@' + req.user.username + ': ' + notifPreview,
+        data: { type: 'message', conversation_id: req.params.id },
+      })
     }
     return { message: msg }
   })

@@ -28,6 +28,8 @@ const Admin = lazy(() => import('./pages/Admin.jsx'))
 const Messagerie = lazy(() => import('./pages/Messagerie.jsx'))
 const Emission = lazy(() => import('./pages/Emission.jsx'))
 const Karaoke = lazy(() => import('./pages/Karaoke.jsx'))
+// ── AJOUT : page Playlists ──
+const PlaylistsPage = lazy(() => import('./pages/PlaylistsPage.jsx'))
 
 const PAGES = {
   home:         <Home />,
@@ -53,6 +55,8 @@ const PAGES = {
   upload:       <Upload />,
   admin:        <Admin />,
   messages:     <Messagerie />,
+  // ── AJOUT : route playlists ──
+  playlists:    <PlaylistsPage />,
 }
 
 class ChunkErrorBoundary extends React.Component {
@@ -74,8 +78,9 @@ const Loading = () => <div style={{display:'flex',alignItems:'center',justifyCon
 export default function App() {
   const { init: initTheme } = useThemeStore()
   const { loadMe, user } = useAuthStore()
-  const { currentPage, profileUsername } = usePageStore()
+  const { currentPage, profileUsername, setPage } = usePageStore()
   useEffect(() => { initTheme(); loadMe() }, [])
+  useEffect(() => { const params = new URLSearchParams(window.location.search); if (params.get("u")) setTimeout(() => setPage("profile", { profileUsername: params.get("u") }), 100); else if (params.get("play")) setTimeout(() => setPage("music"), 100); else if (params.get("album")) setTimeout(() => setPage("albums"), 100); else if (params.get("event")) setTimeout(() => setPage("events"), 100); else if (params.get("playlist")) setTimeout(() => setPage("playlists"), 100) }, [])
   if (currentPage === 'login')    return <ChunkErrorBoundary><Suspense fallback={<Loading/>}><Login /></Suspense></ChunkErrorBoundary>
   if (currentPage === 'register') return <ChunkErrorBoundary><Suspense fallback={<Loading/>}><Register /></Suspense></ChunkErrorBoundary>
   if (currentPage === 'profile') {

@@ -1,4 +1,5 @@
 import { supabase } from '../config.js'
+import { Notify } from '../utils/notify.js'
 
 export default async function profilesRoutes(app) {
 
@@ -24,6 +25,14 @@ export default async function profilesRoutes(app) {
     return reply.send({ profile: data })
   })
 
+  // Liste des IDs que l'utilisateur suit (pour vérifier en batch)
+  app.get('/me/following-ids', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data } = await supabase.from('follows')
+      .select('following_id')
+      .eq('follower_id', request.user.id)
+    return reply.send({ ids: (data || []).map(f => f.following_id) })
+  })
+
   app.patch('/me', { preHandler: app.authenticate }, async (request, reply) => {
     const allowed = ['display_name','bio','avatar_url','cover_url','website','phone','country','currency','language','profile_type','role']
     const updates = {}
@@ -36,22 +45,39 @@ export default async function profilesRoutes(app) {
 
   app.get('/:username/tracks', async (request, reply) => {
     const { data: profile } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
+    if (!profile) return reply.send({ tracks: [] })
     const { data } = await supabase.from('tracks')
       .select('*').eq('creator_id', profile.id).eq('is_published', true).eq('is_active', true)
       .order('created_at', { ascending: false })
     return reply.send({ tracks: data || [] })
   })
 
+  // Verifier si l'utilisateur courant suit un profil
+  app.get('/:username/is-following', { preHandler: app.authenticate }, async (request, reply) => {
+    const { data: target } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
+    if (!target) return reply.send({ following: false })
+    const { data } = await supabase.from('follows')
+      .select('id')
+      .eq('follower_id', request.user.id)
+      .eq('following_id', target.id)
+      .maybeSingle()
+    return reply.send({ following: !!data })
+  })
+
   app.post('/:username/follow', { preHandler: app.authenticate }, async (request, reply) => {
     const { data: target } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
+    if (!target) return reply.status(404).send({ error: 'Profil introuvable' })
+    if (target.id === request.user.id) return reply.status(400).send({ error: 'Impossible de se suivre soi-meme' })
     await supabase.from('follows').upsert({ follower_id: request.user.id, following_id: target.id })
     const { count } = await supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', target.id)
     await supabase.from('profiles').update({ followers_count: count || 0, fans_count: count || 0 }).eq('id', target.id)
+    Notify.follow(request.user.id, target.id, request.user.username)
     return reply.send({ following: true })
   })
 
   app.delete('/:username/follow', { preHandler: app.authenticate }, async (request, reply) => {
     const { data: target } = await supabase.from('profiles').select('id').eq('username', request.params.username).single()
+    if (!target) return reply.status(404).send({ error: 'Profil introuvable' })
     await supabase.from('follows').delete().eq('follower_id', request.user.id).eq('following_id', target.id)
     const { count } = await supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', target.id)
     await supabase.from('profiles').update({ followers_count: count || 0, fans_count: count || 0 }).eq('id', target.id)
@@ -59,15 +85,17 @@ export default async function profilesRoutes(app) {
   })
 
   app.get('/', async (request, reply) => {
-    const { limit = 50, type } = request.query
-    let query = supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(parseInt(limit))
+    const { limit = 50, type, search } = request.query
+    let query = supabase.from('profiles').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(parseInt(limit))
     if (type) query = query.eq('profile_type', type)
+    if (search) query = query.or('display_name.ilike.%' + search + '%,username.ilike.%' + search + '%')
     const { data } = await query
     return reply.send({ profiles: data || [] })
   })
 
   app.get('/:username', async (request, reply) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('username', request.params.username.toLowerCase()).single()
+    if (data && data.is_active === false) return reply.status(403).send({ error: "Utilisateur suspendu ou introuvable" })
     return reply.send({ profile: data })
   })
 }

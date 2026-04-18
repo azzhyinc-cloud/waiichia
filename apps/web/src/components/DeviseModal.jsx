@@ -1,36 +1,56 @@
 import { useState } from "react"
 
+// ── AJOUT : image drapeau via flagcdn.com (fonctionne sur Windows) ──
+function FlagImg({ iso, size = 18 }) {
+  if (!iso) return null
+  const src = `https://flagcdn.com/w${size}/${iso.toLowerCase()}.png`
+  return (
+    <img src={src} alt={iso} width={size} height={Math.round(size * 0.67)}
+      style={{borderRadius:2,objectFit:"cover",display:"inline-block",verticalAlign:"middle",flexShrink:0}}
+      onError={e=>{e.target.style.display="none"}}
+    />
+  )
+}
+
 const PAYS = [
-  {code:"KMF",flag:"🇰🇲",country:"Comores",label:"Franc Comorien",tel:"+269",iso:"KM"},
-  {code:"MGA",flag:"🇲🇬",country:"Madagascar",label:"Ariary Malgache",tel:"+261",iso:"MG"},
-  {code:"TZS",flag:"🇹🇿",country:"Tanzanie",label:"Shilling Tanzanien",tel:"+255",iso:"TZ"},
-  {code:"RWF",flag:"🇷🇼",country:"Rwanda",label:"Franc Rwandais",tel:"+250",iso:"RW"},
-  {code:"XOF",flag:"🇨🇮",country:"Côte d'Ivoire",label:"FCFA Ouest",tel:"+225",iso:"CI"},
-  {code:"NGN",flag:"🇳🇬",country:"Nigeria",label:"Naira",tel:"+234",iso:"NG"},
-  {code:"CDF",flag:"🇨🇩",country:"RD Congo",label:"Franc Congolais",tel:"+243",iso:"CD"},
-  {code:"XAF",flag:"🇨🇬",country:"Congo Brazzaville",label:"FCFA Central",tel:"+242",iso:"CG"},
-  {code:"XOF",flag:"🇸🇳",country:"Sénégal",label:"FCFA Ouest",tel:"+221",iso:"SN"},
-  {code:"GHS",flag:"🇬🇭",country:"Ghana",label:"Cedi",tel:"+233",iso:"GH"},
-  {code:"KES",flag:"🇰🇪",country:"Kenya",label:"Shilling Kenyan",tel:"+254",iso:"KE"},
-  {code:"ETB",flag:"🇪🇹",country:"Éthiopie",label:"Birr",tel:"+251",iso:"ET"},
-  {code:"MAD",flag:"🇲🇦",country:"Maroc",label:"Dirham",tel:"+212",iso:"MA"},
-  {code:"DZD",flag:"🇩🇿",country:"Algérie",label:"Dinar Algérien",tel:"+213",iso:"DZ"},
-  {code:"TND",flag:"🇹🇳",country:"Tunisie",label:"Dinar Tunisien",tel:"+216",iso:"TN"},
-  {code:"USD",flag:"🇺🇸",country:"États-Unis",label:"Dollar US",tel:"+1",iso:"US"},
-  {code:"EUR",flag:"🇪🇺",country:"Europe",label:"Euro",tel:"",iso:"EU"},
-  {code:"GBP",flag:"🇬🇧",country:"Royaume-Uni",label:"Livre Sterling",tel:"+44",iso:"GB"},
+  {code:"KMF",iso:"km",country:"Comores",       label:"Franc Comorien",    tel:"+269"},
+  {code:"MGA",iso:"mg",country:"Madagascar",     label:"Ariary Malgache",   tel:"+261"},
+  {code:"TZS",iso:"tz",country:"Tanzanie",       label:"Shilling Tanzanien",tel:"+255"},
+  {code:"RWF",iso:"rw",country:"Rwanda",         label:"Franc Rwandais",    tel:"+250"},
+  {code:"XOF",iso:"ci",country:"Côte d'Ivoire",  label:"FCFA Ouest",        tel:"+225"},
+  {code:"NGN",iso:"ng",country:"Nigeria",        label:"Naira",             tel:"+234"},
+  {code:"CDF",iso:"cd",country:"RD Congo",       label:"Franc Congolais",   tel:"+243"},
+  {code:"XAF",iso:"cg",country:"Congo Brazzaville",label:"FCFA Central",   tel:"+242"},
+  {code:"XOF",iso:"sn",country:"Sénégal",        label:"FCFA Ouest",        tel:"+221"},
+  {code:"GHS",iso:"gh",country:"Ghana",          label:"Cedi",              tel:"+233"},
+  {code:"KES",iso:"ke",country:"Kenya",          label:"Shilling Kenyan",   tel:"+254"},
+  {code:"ETB",iso:"et",country:"Éthiopie",       label:"Birr",              tel:"+251"},
+  {code:"MAD",iso:"ma",country:"Maroc",          label:"Dirham",            tel:"+212"},
+  {code:"DZD",iso:"dz",country:"Algérie",        label:"Dinar Algérien",    tel:"+213"},
+  {code:"TND",iso:"tn",country:"Tunisie",        label:"Dinar Tunisien",    tel:"+216"},
+  {code:"USD",iso:"us",country:"États-Unis",     label:"Dollar US",         tel:"+1"},
+  {code:"EUR",iso:"eu",country:"Europe",         label:"Euro",              tel:""},
+  {code:"GBP",iso:"gb",country:"Royaume-Uni",    label:"Livre Sterling",    tel:"+44"},
 ]
 
 const LANGUES = [
-  {code:"fr",flag:"🇫🇷",label:"Français"},
-  {code:"sw",flag:"🇹🇿",label:"Swahili"},
-  {code:"ar",flag:"🇸🇦",label:"العربية"},
-  {code:"en",flag:"🇬🇧",label:"English"},
-  {code:"pt",flag:"🇧🇷",label:"Português"},
-  {code:"yo",flag:"🇳🇬",label:"Yorùbà"},
+  {code:"fr",iso:"fr",label:"Français"},
+  {code:"sw",iso:"tz",label:"Swahili"},
+  {code:"ar",iso:"sa",label:"العربية"},
+  {code:"en",iso:"gb",label:"English"},
+  {code:"pt",iso:"br",label:"Português"},
+  {code:"yo",iso:"ng",label:"Yorùbà"},
 ]
 
-export default function DeviseModal({ open, onClose, current, onChange }) {
+// ── AJOUT : devise par défaut selon pays ISO ──
+const ISO_TO_CURRENCY = {
+  km:"KMF",mg:"MGA",tz:"TZS",rw:"RWF",ci:"XOF",ng:"NGN",
+  cd:"CDF",cg:"XAF",sn:"XOF",gh:"GHS",ke:"KES",et:"ETB",
+  ma:"MAD",dz:"DZD",tn:"TND",us:"USD",eu:"EUR",gb:"GBP",
+  fr:"EUR",re:"EUR",mu:"MUR",
+}
+
+export default function DeviseModal({ open, onClose, current, onChange, userIso }) {
   const [search, setSearch] = useState("")
   const [langue, setLangue] = useState("fr")
 
@@ -41,6 +61,14 @@ export default function DeviseModal({ open, onClose, current, onChange }) {
     p.code.toLowerCase().includes(search.toLowerCase())
   )
   const currentPays = PAYS.find(p => p.code === current) || PAYS[0]
+
+  // ── AJOUT : bouton reset vers devise du pays ──
+  const userIsoLow = (userIso || "km").toLowerCase()
+  const defaultCode = ISO_TO_CURRENCY[userIsoLow] || "KMF"
+  const defaultPays = PAYS.find(p => p.code === defaultCode && p.iso === userIsoLow)
+    || PAYS.find(p => p.code === defaultCode)
+    || PAYS[0]
+  const isOnDefault = current === defaultCode
 
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",zIndex:400,
@@ -68,7 +96,8 @@ export default function DeviseModal({ open, onClose, current, onChange }) {
           background:"rgba(245,166,35,.04)",flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:24}}>{currentPays.flag}</span>
+              {/* MODIFIÉ : image au lieu d'emoji */}
+              <FlagImg iso={currentPays.iso} size={28} />
               <div>
                 <div style={{fontWeight:700,fontSize:14}}>{currentPays.country}</div>
                 <div style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace"}}>
@@ -78,14 +107,28 @@ export default function DeviseModal({ open, onClose, current, onChange }) {
             </div>
             <div style={{fontSize:11,color:"var(--text3)",textAlign:"right"}}>
               Langue affichée<br/>
-              <span style={{color:"var(--gold)",fontWeight:600}}>
-                {LANGUES.find(l=>l.code===langue)?.flag} {LANGUES.find(l=>l.code===langue)?.label}
+              <span style={{color:"var(--gold)",fontWeight:600,display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}}>
+                <FlagImg iso={LANGUES.find(l=>l.code===langue)?.iso} size={14}/>
+                {LANGUES.find(l=>l.code===langue)?.label}
               </span>
             </div>
           </div>
+
+          {/* ── AJOUT : bouton reset devise pays ── */}
+          {!isOnDefault && defaultPays && (
+            <button onClick={()=>{ onChange(defaultPays); onClose() }}
+              style={{marginTop:10,width:"100%",padding:"7px 14px",borderRadius:50,
+                background:"rgba(245,166,35,.12)",border:"1px solid var(--gold)",
+                color:"var(--gold)",fontSize:12,fontWeight:700,cursor:"pointer",
+                fontFamily:"Plus Jakarta Sans,sans-serif",display:"flex",alignItems:"center",
+                justifyContent:"center",gap:6}}>
+              🔄 Revenir à ma devise (<FlagImg iso={defaultPays.iso} size={14}/> {defaultCode})
+            </button>
+          )}
         </div>
 
         <div style={{overflowY:"auto",flex:1,padding:"16px 20px"}}>
+
           {/* Langue interface */}
           <div style={{marginBottom:18}}>
             <div style={{fontSize:11,color:"var(--text3)",fontFamily:"Space Mono,monospace",
@@ -101,7 +144,8 @@ export default function DeviseModal({ open, onClose, current, onChange }) {
                     borderColor:langue===l.code?"var(--gold)":"var(--border)",
                     background:langue===l.code?"var(--gold)":"var(--card)",
                     color:langue===l.code?"#000":"var(--text2)"}}>
-                  <span>{l.flag}</span> {l.label}
+                  {/* MODIFIÉ : image au lieu d'emoji */}
+                  <FlagImg iso={l.iso} size={14}/> {l.label}
                 </button>
               ))}
             </div>
@@ -126,27 +170,29 @@ export default function DeviseModal({ open, onClose, current, onChange }) {
               />
             </div>
 
-            {/* Grille pays */}
+            {/* Grille pays — MODIFIÉ : FlagImg au lieu d'emoji */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-              {filtered.map(p=>(
-                <div key={p.iso+p.code} onClick={()=>{onChange(p);onClose()}}
-                  style={{display:"flex",alignItems:"center",gap:8,padding:"10px 10px",
-                    borderRadius:"var(--radius-sm)",cursor:"pointer",transition:"all .15s",
-                    border:`1px solid ${current===p.code&&p.iso===currentPays.iso?"var(--gold)":"var(--border)"}`,
-                    background:current===p.code&&p.iso===currentPays.iso?"rgba(245,166,35,.08)":"var(--card)"}}
-                  onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"}
-                  onMouseLeave={e=>e.currentTarget.style.borderColor=current===p.code&&p.iso===currentPays.iso?"var(--gold)":"var(--border)"}>
-                  <span style={{fontSize:18,flexShrink:0}}>{p.flag}</span>
-                  <div style={{minWidth:0}}>
-                    <div style={{fontWeight:600,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.country}</div>
-                    <div style={{fontSize:10,color:"var(--text3)",fontFamily:"Space Mono,monospace"}}>
-                      {p.code} {p.tel}
+              {filtered.map(p=>{
+                const isActive = current===p.code && currentPays.iso===p.iso
+                return(
+                  <div key={p.iso+p.code} onClick={()=>{onChange(p);onClose()}}
+                    style={{display:"flex",alignItems:"center",gap:8,padding:"10px 10px",
+                      borderRadius:"var(--radius-sm)",cursor:"pointer",transition:"all .15s",
+                      border:`1px solid ${isActive?"var(--gold)":"var(--border)"}`,
+                      background:isActive?"rgba(245,166,35,.08)":"var(--card)"}}
+                    onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"}
+                    onMouseLeave={e=>e.currentTarget.style.borderColor=isActive?"var(--gold)":"var(--border)"}>
+                    <FlagImg iso={p.iso} size={20}/>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontWeight:600,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.country}</div>
+                      <div style={{fontSize:10,color:"var(--text3)",fontFamily:"Space Mono,monospace"}}>
+                        {p.code} {p.tel}
+                      </div>
                     </div>
+                    {isActive && <span style={{color:"var(--gold)",fontSize:12,marginLeft:"auto",flexShrink:0}}>✓</span>}
                   </div>
-                  {current===p.code&&p.iso===currentPays.iso&&
-                    <span style={{color:"var(--gold)",fontSize:12,marginLeft:"auto",flexShrink:0}}>✓</span>}
-                </div>
-              ))}
+                )
+              })}
               {!filtered.length&&<div style={{gridColumn:"1/-1",textAlign:"center",color:"var(--text3)",padding:20,fontSize:13}}>Aucun pays trouvé</div>}
             </div>
           </div>

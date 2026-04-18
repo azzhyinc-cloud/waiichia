@@ -1,6 +1,43 @@
 import { supabase } from '../config.js'
+import { Notify } from '../utils/notify.js'
 
 export default async function paymentsRoutes(app) {
+
+  // ── GET /api/payments/methods (public) : retourne les méthodes actives ──
+  app.get('/methods', async (req, reply) => {
+    try {
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('key', 'payment_methods')
+        .single()
+
+      if (error || !data) {
+        return reply.send({ methods: [] })
+      }
+
+      const raw = data.value || {}
+      // On filtre uniquement les méthodes où enabled === true
+      const methods = Object.entries(raw)
+        .filter(([, v]) => v && v.enabled === true)
+        .map(([key, v]) => ({
+          key,
+          name:         v.name || key,
+          type:         v.type || 'other',
+          phone:        v.phone        || null,
+          iban:         v.iban         || null,
+          swift:        v.swift        || null,
+          bank_name:    v.bank_name    || null,
+          client_id:    v.client_id    || null,
+          // On ne renvoie PAS client_secret / api_secret — sécurité
+        }))
+
+      return reply.send({ methods })
+    } catch (err) {
+      app.log.error(err)
+      return reply.send({ methods: [] })
+    }
+  })
 
   // ── ACHAT / LOCATION TRACK ──
   app.post('/track', { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -43,6 +80,13 @@ export default async function paymentsRoutes(app) {
       track_id, user_id: request.user.id, type, expires_at, transaction_id: tx?.id
     }, { onConflict: 'track_id,user_id' })
 
+    // ── NOTIFICATION ──
+    if (type === 'purchase') {
+      Notify.purchase(request.user.id, track.user_id, request.user.username, track.title, amount, track.currency || 'KMF')
+    } else {
+      Notify.rental(request.user.id, track.user_id, request.user.username, track.title, period)
+    }
+
     return { status: 'completed', message: track.title + ' ' + (type === 'purchase' ? 'achete' : 'loue'), new_balance: buyer.wallet_balance - amount }
   })
 
@@ -71,6 +115,10 @@ export default async function paymentsRoutes(app) {
 
     if (event.is_free || !event.ticket_price) {
       await supabase.from('event_tickets').insert({ event_id, user_id: request.user.id, quantity, amount_paid: 0, status: 'confirmed' })
+
+      // ── NOTIFICATION (gratuit) ──
+      Notify.ticket(request.user.id, event.creator_id, request.user.username, event.title, quantity)
+
       return { status: 'completed', message: 'Inscription gratuite confirmee', free: true }
     }
 
@@ -93,13 +141,21 @@ export default async function paymentsRoutes(app) {
 
     await supabase.from('event_tickets').insert({ event_id, user_id: request.user.id, quantity, amount_paid: amount, status: 'confirmed', transaction_id: tx?.id })
     await supabase.from('events').update({ tickets_sold: (event.tickets_sold || 0) + quantity }).eq('id', event_id)
+
+    // ── NOTIFICATION (payant) ──
+    Notify.ticket(request.user.id, event.creator_id, request.user.username, event.title, quantity)
+
     return { status: 'completed', message: quantity + ' billet(s) pour ' + event.title, new_balance: buyer.wallet_balance - amount }
   })
 
   // ── SOLDE WALLET ──
   app.get('/wallet/balance', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { data } = await supabase.from('profiles').select('wallet_balance,currency').eq('id', request.user.id).single()
-    return { balance: data?.wallet_balance || 0, currency: data?.currency || 'KMF' }
+    // Lire depuis wallets table (source de verite, meme que la page Portefeuille)
+    const { data: wallet } = await supabase.from('wallets').select('balance,currency').eq('user_id', request.user.id).single()
+    if (wallet) return { balance: wallet.balance || 0, currency: wallet.currency || 'KMF' }
+    // Fallback sur profiles si wallet n'existe pas
+    const { data: profile } = await supabase.from('profiles').select('wallet_balance,currency').eq('id', request.user.id).single()
+    return { balance: profile?.wallet_balance || 0, currency: profile?.currency || 'KMF' }
   })
 
   // ── HISTORIQUE TRANSACTIONS ──
@@ -152,6 +208,10 @@ export default async function paymentsRoutes(app) {
       user_id: request.user.id, recipient_id: recipient.id, type: 'transfer', amount, fee, net_amount: net,
       currency: 'KMF', description: 'Transfert → @' + to_username + (message ? ' · ' + message : ''), status: 'completed', gateway: 'wallet'
     })
+
+    // ── NOTIFICATION ──
+    Notify.transfer(request.user.id, recipient.id, request.user.username, net, 'KMF', message)
+
     return reply.send({ message: net + ' KMF transférés à @' + to_username, fee, new_balance: sender.balance - amount })
   })
 

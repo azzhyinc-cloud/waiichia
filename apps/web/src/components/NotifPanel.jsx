@@ -3,8 +3,8 @@ import { usePageStore, useAuthStore } from "../stores/index.js"
 import api from "../services/api.js"
 
 const TABS = ["Tout","Social","Musique","Dons","Live"]
-const TYPE_ICONS = {like:"❤️",comment:"💬",follow:"👥",tip:"🎁",play:"🎵",live:"🔴",mention:"@",purchase:"🛒",upload:"⬆️",system:"🔔"}
-const TYPE_BG = {like:"var(--red)",comment:"var(--blue)",follow:"#2dc653",tip:"var(--gold)",play:"var(--gold)",live:"var(--red)",mention:"var(--blue)",purchase:"var(--green)",upload:"var(--purple)",system:"var(--text3)"}
+const TYPE_ICONS = {like:"❤️",comment:"💬",follow:"👥",tip:"🎁",play:"🎵",live:"🔴",mention:"@",purchase:"🛒",upload:"⬆️",system:"🔔",message:"✉️",ticket:"🎫",transfer:"💸",rent:"⏳"}
+const TYPE_BG = {like:"var(--red)",comment:"var(--blue)",follow:"#2dc653",tip:"var(--gold)",play:"var(--gold)",live:"var(--red)",mention:"var(--blue)",purchase:"var(--green)",upload:"var(--purple)",system:"var(--text3)",message:"var(--blue)",ticket:"var(--purple)",transfer:"var(--green)",rent:"var(--gold)"}
 const CAT_MAP = {"Tout":"all","Social":"social","Musique":"music","Dons":"tips","Live":"live"}
 
 function timeAgo(date) {
@@ -19,8 +19,8 @@ function timeAgo(date) {
 function getCat(title) {
   if (!title) return 'social'
   const t = title.toLowerCase()
-  if (t.includes('don') || t.includes('tip') || t.includes('pourboire')) return 'tips'
-  if (t.includes('écoute') || t.includes('play') || t.includes('son') || t.includes('track')) return 'music'
+  if (t.includes('don') || t.includes('tip') || t.includes('pourboire') || t.includes('transfert')) return 'tips'
+  if (t.includes('écoute') || t.includes('play') || t.includes('son') || t.includes('track') || t.includes('location') || t.includes('achat') || t.includes('acheté')) return 'music'
   if (t.includes('live') || t.includes('radio') || t.includes('direct')) return 'live'
   return 'social'
 }
@@ -28,14 +28,18 @@ function getCat(title) {
 function getType(title) {
   if (!title) return 'system'
   const t = title.toLowerCase()
-  if (t.includes('aimé') || t.includes('like')) return 'like'
+  if (t.includes('message')) return 'message'
+  if (t.includes('aimé') || t.includes('like') || t.includes('réagi')) return 'like'
   if (t.includes('commenté') || t.includes('comment')) return 'comment'
-  if (t.includes('suiv') || t.includes('follow')) return 'follow'
+  if (t.includes('suiv') || t.includes('follow') || t.includes('abonné')) return 'follow'
   if (t.includes('don') || t.includes('tip') || t.includes('pourboire')) return 'tip'
   if (t.includes('écoute') || t.includes('play')) return 'play'
   if (t.includes('live') || t.includes('direct')) return 'live'
   if (t.includes('mention')) return 'mention'
-  if (t.includes('achat') || t.includes('acheté')) return 'purchase'
+  if (t.includes('billet') || t.includes('ticket') || t.includes('réserv')) return 'ticket'
+  if (t.includes('transfert') || t.includes('transféré')) return 'transfer'
+  if (t.includes('location') || t.includes('loué')) return 'rent'
+  if (t.includes('achat') || t.includes('acheté') || t.includes('vendu') || t.includes('produit')) return 'purchase'
   if (t.includes('publié') || t.includes('upload')) return 'upload'
   return 'system'
 }
@@ -60,13 +64,15 @@ export default function NotifPanel({ open, onClose }) {
         type: getType(n.title),
         cat: getCat(n.title),
         name: n.from?.display_name || n.from?.username || 'Waiichia',
+        username: n.from?.username || null,
         ava: (n.from?.display_name || n.from?.username || 'W')[0].toUpperCase(),
         avatar_url: n.from?.avatar_url,
         bg: 'linear-gradient(135deg,var(--gold),var(--kente2))',
         text: n.body || n.title,
+        title: n.title || '',
         time: timeAgo(n.created_at),
         unread: !n.is_read,
-        data: n.data
+        data: n.data || {}
       }))
       setNotifs(mapped)
     } catch(e) { console.error('Notif error:', e.message) }
@@ -78,6 +84,57 @@ export default function NotifPanel({ open, onClose }) {
       await api.social.markRead?.() || await fetch((import.meta.env.VITE_API_URL||'')+'/api/social/notifications/read',{method:'PATCH',headers:{'Authorization':'Bearer '+localStorage.getItem('waiichia_token')}})
       setNotifs(ns => ns.map(n => ({...n, unread: false})))
     } catch(e) {}
+  }
+
+  // ===== Navigation intelligente par type de notification =====
+  const handleNotifClick = (n) => {
+    onClose()
+    switch(n.type) {
+      case 'follow':
+        // Aller au profil de celui qui nous a suivi
+        if (n.username) setPage('profile', { profileUsername: n.username })
+        else setPage('feed')
+        break
+      case 'message':
+        // Aller à la messagerie
+        setPage('messagerie')
+        break
+      case 'comment':
+      case 'like':
+      case 'mention':
+        // Aller au contenu concerné ou au feed
+        if (n.data?.target_type === 'track' && n.data?.target_id) setPage('music')
+        else if (n.data?.target_type === 'event') setPage('events')
+        else if (n.data?.target_type === 'product') setPage('shop')
+        else setPage('feed')
+        break
+      case 'purchase':
+      case 'rent':
+        // Achat/location — aller au wallet pour voir la transaction
+        setPage('wallet')
+        break
+      case 'tip':
+      case 'transfer':
+        // Don/transfert — aller au wallet
+        setPage('wallet')
+        break
+      case 'ticket':
+        // Billet événement — aller aux événements
+        setPage('events')
+        break
+      case 'play':
+      case 'upload':
+        // Écoute/publication — aller à la musique
+        setPage('music')
+        break
+      case 'live':
+        // Live/radio
+        setPage('radio')
+        break
+      default:
+        // Système ou inconnu — aller au feed
+        setPage('feed')
+    }
   }
 
   const filtered = tab === "Tout" ? notifs : notifs.filter(n => n.cat === CAT_MAP[tab])
@@ -119,7 +176,11 @@ export default function NotifPanel({ open, onClose }) {
             <div style={{fontSize:12,color:"var(--text3)"}}>Vous êtes à jour !</div>
           </div>
         ) : filtered.map((n, i) => (
-          <div key={n.id || i} style={{display:"flex",gap:12,padding:"12px 18px",cursor:"pointer",transition:"background .15s",borderLeft:n.unread?"3px solid var(--gold)":"3px solid transparent",background:n.unread?"rgba(245,166,35,.04)":"transparent"}} onMouseEnter={e=>e.currentTarget.style.background="var(--card)"} onMouseLeave={e=>e.currentTarget.style.background=n.unread?"rgba(245,166,35,.04)":"transparent"}>
+          <div key={n.id || i}
+            onClick={() => handleNotifClick(n)}
+            style={{display:"flex",gap:12,padding:"12px 18px",cursor:"pointer",transition:"background .15s",borderLeft:n.unread?"3px solid var(--gold)":"3px solid transparent",background:n.unread?"rgba(245,166,35,.04)":"transparent"}}
+            onMouseEnter={e=>e.currentTarget.style.background="var(--card)"}
+            onMouseLeave={e=>e.currentTarget.style.background=n.unread?"rgba(245,166,35,.04)":"transparent"}>
             {/* Avatar */}
             <div style={{width:40,height:40,borderRadius:"50%",background:n.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden"}}>
               {n.avatar_url ? <img src={n.avatar_url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/> : n.ava}
@@ -132,6 +193,15 @@ export default function NotifPanel({ open, onClose }) {
               <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
                 <span style={{fontSize:10,color:"var(--text3)"}}>{n.time}</span>
                 <span style={{fontSize:12}}>{TYPE_ICONS[n.type] || '🔔'}</span>
+                <span style={{fontSize:10,color:"var(--text3)",fontStyle:"italic"}}>{
+                  n.type==='follow'?'Voir le profil →':
+                  n.type==='message'?'Ouvrir la conversation →':
+                  n.type==='purchase'||n.type==='rent'?'Voir le wallet →':
+                  n.type==='tip'||n.type==='transfer'?'Voir le wallet →':
+                  n.type==='ticket'?'Voir les événements →':
+                  n.type==='comment'||n.type==='like'?'Voir le contenu →':
+                  ''
+                }</span>
               </div>
             </div>
             {n.unread && <div style={{width:8,height:8,borderRadius:"50%",background:"var(--gold)",flexShrink:0,marginTop:4}}/>}

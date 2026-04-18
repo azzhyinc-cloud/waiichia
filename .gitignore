@@ -1,9 +1,34 @@
 node_modules/
 .pnpm-store/
+
+# Env files - TOUTES les variantes
 .env
-.env.local
+.env.*
+env
+!.env.example
+!.env.template
+
+# Build artifacts
 dist/
 build/
 *.log
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Supabase
 supabase/.temp/
+
+# Backups
+backups/
+*.bak
+*.backup
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Waiichia specific
+/opt/waiichia/apps/api/env

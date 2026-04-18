@@ -1,5 +1,6 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuthStore, usePageStore } from "../stores/index.js"
+import api from "../services/api.js"
 
 const fmtK=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
 const FORMATS=[{id:'audio',icon:'🎵',name:'Audio Ad',desc:'15–30s entre les sons'},{id:'banner',icon:'🖼️',name:'Banner',desc:'Bandeau visuel'},{id:'interstitial',icon:'📱',name:'Interstitiel',desc:'Plein écran mobile'},{id:'sponsored',icon:'🎙️',name:'Son Sponsorisé',desc:'Mis en avant dans le feed'},{id:'podcast',icon:'🎧',name:'Podcast Ad',desc:'Pré-roll ou mid-roll'},{id:'event',icon:'🎪',name:'Event Boost',desc:'Boost événement'}]
@@ -12,10 +13,26 @@ export default function Regie(){
   const [createStep,setCreateStep]=useState(1)
   const [selFormat,setSelFormat]=useState('audio')
   const [campFilter,setCampFilter]=useState('Toutes')
+  const [campaigns,setCampaigns]=useState([])
+  const [loading,setLoading]=useState(true)
+
+  useEffect(()=>{
+    if(!user)return
+    api.campaigns.list()
+      .then(d=>setCampaigns(d.campaigns||d||[]))
+      .catch(()=>setCampaigns([]))
+      .finally(()=>setLoading(false))
+  },[user])
 
   if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>📢</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
 
   const TABS=[{id:'overview',icon:'📊',l:'Vue d\'ensemble'},{id:'campaigns',icon:'📋',l:'Mes Campagnes'},{id:'create',icon:'➕',l:'Créer Campagne'},{id:'analytics',icon:'📈',l:'Analytics'},{id:'billing',icon:'💳',l:'Facturation'}]
+
+  // Compute real stats from campaigns
+  const totalImpressions=campaigns.reduce((a,c)=>a+(c.impressions||0),0)
+  const totalClicks=campaigns.reduce((a,c)=>a+(c.clicks||0),0)
+  const totalSpent=campaigns.reduce((a,c)=>a+(c.budget_spent||0),0)
+  const avgCTR=totalImpressions>0?((totalClicks/totalImpressions)*100).toFixed(1)+'%':'—'
 
   return(
     <div style={{paddingBottom:60}}>
@@ -29,45 +46,42 @@ export default function Regie(){
       {/* OVERVIEW */}
       {tab==='overview'&&<div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(155px,1fr))',gap:12,marginBottom:20}}>
-          {[{icon:'👁️',num:'153K',l:'Impressions',d:'▲ +12%',c:'var(--gold)'},{icon:'🖱️',num:'6.4K',l:'Clics',d:'▲ +8%',c:'var(--blue)'},{icon:'💰',num:'142K KMF',l:'Dépensé',d:'70% du budget',c:'var(--red)'},{icon:'📊',num:'4.2%',l:'CTR moyen',d:'▲ +0.3%',c:'var(--green)'}].map(k=>(
+          {[
+            {icon:'👁️',num:fmtK(totalImpressions),l:'Impressions',c:'var(--gold)'},
+            {icon:'🖱️',num:fmtK(totalClicks),l:'Clics',c:'var(--blue)'},
+            {icon:'💰',num:fmtK(totalSpent)+' KMF',l:'Dépensé',c:'var(--red)'},
+            {icon:'📊',num:avgCTR,l:'CTR moyen',c:'var(--green)'}
+          ].map(k=>(
             <div key={k.l} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'16px 18px',borderLeft:`3px solid ${k.c}`}}>
               <div style={{fontSize:22,marginBottom:6}}>{k.icon}</div>
               <div style={{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:800}}>{k.num}</div>
               <div style={{fontSize:11,color:'var(--text2)',marginBottom:4}}>{k.l}</div>
-              <div style={{fontSize:10,fontFamily:'Space Mono,monospace',color:'var(--green)'}}>{k.d}</div>
             </div>
           ))}
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}}>
-          {[{title:'📊 Impressions — 30 jours',data:[65,72,58,80,92,75,88,95,70,82,90,78,85,92,68,74,89,96,72,80,88,76,84,91,79,86,94,72,80,88]},{title:'🖱️ Clics — 30 jours',data:[12,18,14,22,28,19,24,32,16,20,26,18,22,28,14,18,24,30,16,20,26,18,22,28,20,24,30,16,22,26]}].map(ch=>(
-            <div key={ch.title} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
-              <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>{ch.title}</div>
-              <div style={{display:'flex',alignItems:'flex-end',gap:2,height:100}}>
-                {ch.data.map((v,i)=><div key={i} style={{flex:1,background:'var(--gold)',borderRadius:'2px 2px 0 0',height:v+'%',opacity:0.4+v/150,transition:'height .3s'}}/>)}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
-            <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>🌍 Audience par pays</div>
-            {[{c:'🇰🇲 Comores',pct:48},{c:'🇲🇬 Madagascar',pct:22},{c:'🇫🇷 France',pct:14},{c:'🇳🇬 Nigeria',pct:10},{c:'Autres',pct:6}].map(g=>(
-              <div key={g.c} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,fontSize:12}}>
-                <span style={{width:90,color:'var(--text2)',flexShrink:0}}>{g.c}</span>
-                <div style={{flex:1,height:6,background:'var(--border2)',borderRadius:4,overflow:'hidden'}}><div style={{height:'100%',width:g.pct+'%',background:'var(--gold)',borderRadius:4}}/></div>
-                <span style={{width:30,textAlign:'right',fontFamily:'Space Mono,monospace',fontSize:11}}>{g.pct}%</span>
-              </div>
-            ))}
+
+        {campaigns.length>0
+          ?<div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
+            <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>📋 Campagnes récentes</div>
+            {campaigns.slice(0,5).map(cp=>{
+              const st=STATUS_STYLE[cp.status]||STATUS_STYLE.draft
+              return(
+                <div key={cp.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid var(--border)',fontSize:12}}>
+                  <span style={{fontSize:20}}>{FORMATS.find(f=>f.id===cp.format)?.icon||'📢'}</span>
+                  <div style={{flex:1}}><div style={{fontWeight:600}}>{cp.name}</div></div>
+                  <span style={{color:'var(--text2)',fontFamily:'Space Mono,monospace'}}>{fmtK(cp.impressions||0)} imp</span>
+                  <span style={{padding:'3px 8px',borderRadius:20,fontSize:10,fontWeight:700,background:st.bg,color:st.c}}>{st.l}</span>
+                </div>
+              )
+            })}
           </div>
-          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
-            <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>🎵 Performance par format</div>
-            {[{f:'Audio Ad',imp:'89K',ctr:'4.8%'},{f:'Banner',imp:'42K',ctr:'2.1%'},{f:'Son Sponsorisé',imp:'15K',ctr:'6.2%'},{f:'Event Boost',imp:'7K',ctr:'12.4%'}].map(p=>(
-              <div key={p.f} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid var(--border)',fontSize:12}}>
-                <span>{p.f}</span><span style={{color:'var(--text2)'}}>{p.imp} imp</span><span style={{fontFamily:'Space Mono,monospace',color:'var(--gold)',fontWeight:700}}>{p.ctr}</span>
-              </div>
-            ))}
+          :<div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:40,textAlign:'center'}}>
+            <div style={{fontSize:48,marginBottom:12}}>📢</div>
+            <div style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:700,marginBottom:6}}>Aucune campagne</div>
+            <div style={{fontSize:13,color:'var(--text3)',marginBottom:16}}>Créez votre première campagne publicitaire pour promouvoir vos sons sur Waiichia.</div>
+            <button className="btn btn-primary" onClick={()=>setTab('create')}>+ Créer une campagne</button>
           </div>
-        </div>
+        }
       </div>}
 
       {/* CAMPAIGNS */}
@@ -78,31 +92,40 @@ export default function Regie(){
           </div>
           <button className="btn btn-primary btn-sm" onClick={()=>setTab('create')}>+ Nouvelle campagne</button>
         </div>
-        <div style={{display:'flex',flexDirection:'column',gap:12}}>
-          {(campaigns||[]).map(cp=>{
-            const st=STATUS_STYLE[cp.status]||STATUS_STYLE.draft
-            const pct=cp.budget?Math.round(cp.spent/cp.budget*100):0
-            return(
-              <div key={cp.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:18}}>
-                <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
-                  <div style={{fontSize:28}}>{FORMATS.find(f=>f.id===cp.format)?.icon||'📢'}</div>
-                  <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,marginBottom:2}}>{cp.name}</div><div style={{fontSize:11,color:'var(--text2)'}}>{FORMATS.find(f=>f.id===cp.format)?.name}</div></div>
-                  <span style={{padding:'4px 10px',borderRadius:20,fontSize:10,fontWeight:700,background:st.bg,color:st.c,fontFamily:'Space Mono,monospace'}}>{st.l}</span>
-                </div>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
-                  {[{l:'Impressions',v:fmtK(cp.impressions)},{l:'Clics',v:fmtK(cp.clicks)},{l:'CTR',v:cp.ctr},{l:'Budget',v:fmtK(cp.budget)+' KMF'}].map(s=>(
-                    <div key={s.l}><div style={{fontSize:11,color:'var(--text3)',marginBottom:2}}>{s.l}</div><div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:13}}>{s.v}</div></div>
-                  ))}
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:8,fontSize:11}}>
-                  <span style={{color:'var(--text3)'}}>Budget utilisé</span>
-                  <div style={{flex:1,height:4,background:'var(--border2)',borderRadius:4,overflow:'hidden'}}><div style={{height:'100%',width:pct+'%',background:pct>80?'var(--red)':'var(--gold)',borderRadius:4}}/></div>
-                  <span style={{fontFamily:'Space Mono,monospace',color:'var(--text2)'}}>{pct}%</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        {loading
+          ?<div style={{display:'flex',flexDirection:'column',gap:12}}>{[...Array(3)].map((_,i)=><div key={i} style={{height:100,background:'var(--card)',borderRadius:'var(--radius)',border:'1px solid var(--border)',animation:'shimmer 1.5s infinite'}}/>)}</div>
+          :campaigns.length>0
+            ?<div style={{display:'flex',flexDirection:'column',gap:12}}>
+              {campaigns.map(cp=>{
+                const st=STATUS_STYLE[cp.status]||STATUS_STYLE.draft
+                const pct=cp.budget_amount?Math.round((cp.budget_spent||0)/cp.budget_amount*100):0
+                return(
+                  <div key={cp.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:18}}>
+                    <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
+                      <div style={{fontSize:28}}>{FORMATS.find(f=>f.id===cp.format)?.icon||'📢'}</div>
+                      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14,marginBottom:2}}>{cp.name}</div><div style={{fontSize:11,color:'var(--text2)'}}>{FORMATS.find(f=>f.id===cp.format)?.name||cp.format}</div></div>
+                      <span style={{padding:'4px 10px',borderRadius:20,fontSize:10,fontWeight:700,background:st.bg,color:st.c,fontFamily:'Space Mono,monospace'}}>{st.l}</span>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
+                      {[{l:'Impressions',v:fmtK(cp.impressions||0)},{l:'Clics',v:fmtK(cp.clicks||0)},{l:'CTR',v:cp.impressions>0?((cp.clicks/cp.impressions)*100).toFixed(1)+'%':'—'},{l:'Budget',v:fmtK(cp.budget_amount||0)+' KMF'}].map(s=>(
+                        <div key={s.l}><div style={{fontSize:11,color:'var(--text3)',marginBottom:2}}>{s.l}</div><div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:13}}>{s.v}</div></div>
+                      ))}
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:8,fontSize:11}}>
+                      <span style={{color:'var(--text3)'}}>Budget utilisé</span>
+                      <div style={{flex:1,height:4,background:'var(--border2)',borderRadius:4,overflow:'hidden'}}><div style={{height:'100%',width:Math.min(pct,100)+'%',background:pct>80?'var(--red)':'var(--gold)',borderRadius:4}}/></div>
+                      <span style={{fontFamily:'Space Mono,monospace',color:'var(--text2)'}}>{pct}%</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            :<div style={{textAlign:'center',padding:60,color:'var(--text3)'}}>
+              <div style={{fontSize:48,marginBottom:12}}>📋</div>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:700,marginBottom:6,color:'var(--text)'}}>Aucune campagne</div>
+              <div style={{fontSize:13}}>Vos campagnes publicitaires apparaîtront ici.</div>
+            </div>
+        }
       </div>}
 
       {/* CREATE CAMPAIGN */}
@@ -151,16 +174,13 @@ export default function Regie(){
           <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:18,marginBottom:18}}>Budget & Planification</div>
           <div className="form-row"><div className="form-group"><label className="label">Type de budget</label><select className="select-styled" style={{width:'100%'}}><option>Budget quotidien</option><option>Budget total</option></select></div><div className="form-group"><label className="label">Montant (KMF)</label><input className="input-field" type="number" placeholder="10000"/></div></div>
           <div className="form-row"><div className="form-group"><label className="label">Date de début</label><input className="input-field" type="date"/></div><div className="form-group"><label className="label">Date de fin</label><input className="input-field" type="date"/></div></div>
-          <div style={{background:'rgba(245,166,35,.06)',border:'1px solid rgba(245,166,35,.2)',borderRadius:'var(--radius-sm)',padding:14,marginTop:12}}>
-            <div style={{fontSize:12,color:'var(--text2)'}}>💡 Estimation : <strong>~15 000 impressions</strong> et <strong>~650 clics</strong> pour ce budget</div>
-          </div>
           <div style={{display:'flex',justifyContent:'space-between',marginTop:18}}><button className="btn btn-outline" onClick={()=>setCreateStep(3)}>← Retour</button><button className="btn btn-primary" onClick={()=>setCreateStep(5)}>Suivant → Confirmer</button></div>
         </div>}
 
         {createStep===5&&<div>
           <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:18,marginBottom:18}}>Résumé de la campagne</div>
           <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20,marginBottom:20}}>
-            {[['Format',FORMATS.find(f=>f.id===selFormat)?.name],['Ciblage','🇰🇲 Comores · 13-65 ans'],['Budget','10 000 KMF / jour'],['Durée estimée','7 jours'],['Impressions estimées','~15 000'],['Coût total estimé','~70 000 KMF']].map(([k,v])=>(
+            {[['Format',FORMATS.find(f=>f.id===selFormat)?.name]].map(([k,v])=>(
               <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)',fontSize:13}}>
                 <span style={{color:'var(--text2)'}}>{k}</span>
                 <span style={{fontWeight:600}}>{v}</span>
@@ -172,10 +192,115 @@ export default function Regie(){
       </div>}
 
       {/* ANALYTICS */}
-      {tab==='analytics'&&<div style={{textAlign:'center',padding:60,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>📈</div><div style={{fontSize:15}}>Analytics détaillées — Bientôt disponible</div><div style={{fontSize:12,marginTop:8}}>Les données détaillées seront visibles ici quand vos campagnes seront actives.</div></div>}
+      {tab==='analytics'&&<div>
+        <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:18,marginBottom:20}}>📈 Analytics des campagnes</div>
+        {campaigns.length===0
+          ?<div style={{textAlign:'center',padding:60,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>📈</div><div style={{fontSize:15}}>Aucune donnée analytics</div><div style={{fontSize:12,marginTop:8}}>Créez et lancez une campagne pour voir les statistiques ici.</div></div>
+          :<>
+            {/* Global stats */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:24}}>
+              {[
+                {icon:'📊',num:campaigns.length,l:'Campagnes',c:'var(--gold)'},
+                {icon:'👁️',num:fmtK(totalImpressions),l:'Impressions totales',c:'var(--blue)'},
+                {icon:'🖱️',num:fmtK(totalClicks),l:'Clics totaux',c:'var(--green)'},
+                {icon:'📊',num:avgCTR,l:'CTR moyen',c:'var(--purple)'},
+                {icon:'💰',num:fmtK(totalSpent)+' KMF',l:'Total dépensé',c:'var(--red)'},
+                {icon:'📢',num:campaigns.filter(c=>c.status==='active').length,l:'Actives',c:'var(--green)'},
+              ].map(k=>(
+                <div key={k.l} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'14px 16px',borderLeft:`3px solid ${k.c}`}}>
+                  <div style={{fontSize:18,marginBottom:4}}>{k.icon}</div>
+                  <div style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:800}}>{k.num}</div>
+                  <div style={{fontSize:11,color:'var(--text2)'}}>{k.l}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Per-campaign performance */}
+            <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:12}}>📋 Performance par campagne</div>
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              {campaigns.map(cp=>{
+                const ctr=cp.impressions>0?((cp.clicks||0)/cp.impressions*100).toFixed(1)+'%':'—'
+                const pct=cp.budget_amount?Math.round((cp.budget_spent||0)/cp.budget_amount*100):0
+                return(
+                  <div key={cp.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:18}}>
+                    <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
+                      <span style={{fontSize:24}}>{FORMATS.find(f=>f.id===cp.format)?.icon||'📢'}</span>
+                      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{cp.name}</div><div style={{fontSize:11,color:'var(--text2)'}}>{cp.format} · {cp.status}</div></div>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,fontSize:12}}>
+                      {[
+                        {l:'Impressions',v:fmtK(cp.impressions||0)},
+                        {l:'Clics',v:fmtK(cp.clicks||0)},
+                        {l:'CTR',v:ctr},
+                        {l:'Dépensé',v:fmtK(cp.budget_spent||0)+' KMF'},
+                        {l:'Budget',v:fmtK(cp.budget_amount||0)+' KMF'}
+                      ].map(s=>(
+                        <div key={s.l}><div style={{color:'var(--text3)',fontSize:10,marginBottom:2}}>{s.l}</div><div style={{fontFamily:'Space Mono,monospace',fontWeight:700}}>{s.v}</div></div>
+                      ))}
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:8,fontSize:11,marginTop:10}}>
+                      <span style={{color:'var(--text3)'}}>Budget</span>
+                      <div style={{flex:1,height:4,background:'var(--border2)',borderRadius:4,overflow:'hidden'}}><div style={{height:'100%',width:Math.min(pct,100)+'%',background:pct>80?'var(--red)':'var(--gold)',borderRadius:4}}/></div>
+                      <span style={{fontFamily:'Space Mono,monospace',color:'var(--text2)'}}>{pct}%</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        }
+      </div>}
 
       {/* BILLING */}
-      {tab==='billing'&&<div style={{textAlign:'center',padding:60,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>💳</div><div style={{fontSize:15}}>Facturation — Bientôt disponible</div><div style={{fontSize:12,marginTop:8}}>Historique des paiements et factures de vos campagnes.</div></div>}
+      {tab==='billing'&&<div>
+        <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:18,marginBottom:20}}>💳 Facturation</div>
+        {campaigns.length===0
+          ?<div style={{textAlign:'center',padding:60,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>💳</div><div style={{fontSize:15}}>Aucune facturation</div><div style={{fontSize:12,marginTop:8}}>L'historique de vos dépenses publicitaires apparaîtra ici.</div></div>
+          :<>
+            {/* Billing summary */}
+            <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20,marginBottom:20}}>
+              <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>📊 Résumé de facturation</div>
+              {[
+                ['Total des campagnes',campaigns.length],
+                ['Budget total alloué',campaigns.reduce((a,c)=>a+(c.budget_amount||0),0).toLocaleString()+' KMF'],
+                ['Total dépensé',totalSpent.toLocaleString()+' KMF'],
+                ['Budget restant',(campaigns.reduce((a,c)=>a+(c.budget_amount||0),0)-totalSpent).toLocaleString()+' KMF'],
+                ['Campagnes actives',campaigns.filter(c=>c.status==='active').length],
+                ['Campagnes terminées',campaigns.filter(c=>c.status==='completed').length],
+              ].map(([k,v])=>(
+                <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--border)',fontSize:13}}>
+                  <span style={{color:'var(--text2)'}}>{k}</span>
+                  <span style={{fontFamily:'Space Mono,monospace',fontWeight:700}}>{v}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Per-campaign billing */}
+            <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:12}}>📋 Détail par campagne</div>
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              {campaigns.map(cp=>{
+                const st=STATUS_STYLE[cp.status]||STATUS_STYLE.draft
+                return(
+                  <div key={cp.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:16,display:'flex',alignItems:'center',gap:14}}>
+                    <span style={{fontSize:24}}>{FORMATS.find(f=>f.id===cp.format)?.icon||'📢'}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,fontSize:13}}>{cp.name}</div>
+                      <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>
+                        {cp.starts_at?new Date(cp.starts_at).toLocaleDateString('fr'):'—'} → {cp.ends_at?new Date(cp.ends_at).toLocaleDateString('fr'):'En cours'}
+                      </div>
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontFamily:'Space Mono,monospace',fontWeight:700,fontSize:13}}>{(cp.budget_spent||0).toLocaleString()} KMF</div>
+                      <div style={{fontSize:10,color:'var(--text3)'}}>sur {(cp.budget_amount||0).toLocaleString()} KMF</div>
+                    </div>
+                    <span style={{padding:'3px 8px',borderRadius:20,fontSize:10,fontWeight:700,background:st.bg,color:st.c}}>{st.l}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        }
+      </div>}
     </div>
   )
 }

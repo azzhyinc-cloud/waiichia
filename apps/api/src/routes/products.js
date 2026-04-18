@@ -1,4 +1,5 @@
 import { supabase } from '../config.js'
+import { Notify } from '../utils/notify.js'
 
 export default async function productsRoutes(fastify) {
 
@@ -18,7 +19,10 @@ export default async function productsRoutes(fastify) {
 
   // GET mes produits
   fastify.get('/mine', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const { data, error } = await supabase.from('products').select('*').eq('user_id', req.user.id).order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('products')
+      .select('*')
+      .or(`user_id.eq.${req.user.id},creator_id.eq.${req.user.id}`)
+      .order('created_at', { ascending: false })
     if (error) return reply.status(500).send({ error: error.message })
     return { products: data }
   })
@@ -50,19 +54,30 @@ export default async function productsRoutes(fastify) {
     return { product: data }
   })
 
-  // PATCH modifier produit
+  // PATCH modifier produit — FIX: use or() for user_id/creator_id + maybeSingle
   fastify.patch('/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const allowed = ['name','description','price','category','emoji','cover_url','background','stock','is_active','tags']
     const updates = {}
     allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k] })
-    const { data, error } = await supabase.from('products').update(updates).eq('id', req.params.id).eq('user_id', req.user.id).select().single()
+    const { data, error } = await supabase
+      .from('products')
+      .update(updates)
+      .eq('id', req.params.id)
+      .or(`user_id.eq.${req.user.id},creator_id.eq.${req.user.id}`)
+      .select()
+      .maybeSingle()
     if (error) return reply.status(500).send({ error: error.message })
+    if (!data) return reply.status(404).send({ error: 'Produit introuvable ou non autorisé' })
     return { product: data }
   })
 
-  // DELETE supprimer
+  // DELETE supprimer — FIX: use or() for user_id/creator_id
   fastify.delete('/:id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const { error } = await supabase.from('products').delete().eq('id', req.params.id).eq('user_id', req.user.id)
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', req.params.id)
+      .or(`user_id.eq.${req.user.id},creator_id.eq.${req.user.id}`)
     if (error) return reply.status(500).send({ error: error.message })
     return { success: true }
   })
@@ -73,21 +88,24 @@ export default async function productsRoutes(fastify) {
     if (pErr || !product) return reply.status(404).send({ error: 'Produit introuvable' })
     if (!product.is_active) return reply.status(400).send({ error: 'Produit indisponible' })
 
-    const { data: buyer, error: bErr } = await supabase.from('profiles').select('wallet_balance').eq('id', req.user.id).single()
-    if (bErr) return reply.status(500).send({ error: bErr.message })
-    if (buyer.wallet_balance < product.price) return reply.status(400).send({ error: 'Solde insuffisant', balance: buyer.wallet_balance, required: product.price })
+    // Debiter wallet acheteur
+    const { data: wBuyer } = await supabase.from('wallets').select('balance').eq('user_id', req.user.id).maybeSingle()
+    const buyerBalance = wBuyer?.balance || 0
+    if (buyerBalance < product.price) return reply.status(400).send({ error: 'Solde insuffisant', balance: buyerBalance, required: product.price })
 
-    // Debiter acheteur
-    await supabase.from('profiles').update({ wallet_balance: buyer.wallet_balance - product.price }).eq('id', req.user.id)
+    await supabase.from('wallets').update({ balance: buyerBalance - product.price }).eq('user_id', req.user.id)
 
     // Crediter vendeur (90%)
+    const sellerId = product.creator_id || product.user_id
     const net = Math.floor(product.price * 0.9)
-    const { data: seller } = await supabase.from('profiles').select('wallet_balance').eq('id', product.user_id).single()
-    if (seller) await supabase.from('profiles').update({ wallet_balance: (seller.wallet_balance||0) + net }).eq('id', product.user_id)
+    const { data: wSeller } = await supabase.from('wallets').select('balance').eq('user_id', sellerId).maybeSingle()
+    if (wSeller) {
+      await supabase.from('wallets').update({ balance: (wSeller.balance || 0) + net }).eq('user_id', sellerId)
+    }
 
     // Transaction
     const { data: tx } = await supabase.from('transactions').insert({
-      user_id: req.user.id, recipient_id: product.user_id,
+      user_id: req.user.id, recipient_id: sellerId,
       type: 'purchase', amount: product.price, net_amount: net,
       currency: product.currency || 'KMF',
       description: 'Achat: ' + product.name,
@@ -97,13 +115,16 @@ export default async function productsRoutes(fastify) {
     // Enregistrer achat
     await supabase.from('product_purchases').insert({
       product_id: product.id, buyer_id: req.user.id,
-      seller_id: product.user_id, transaction_id: tx?.id,
+      seller_id: sellerId, transaction_id: tx?.id,
       amount: product.price, currency: product.currency || 'KMF'
     })
 
     // Incrementer sold_count
-    await supabase.from('products').update({ sold_count: (product.sold_count||0) + 1 }).eq('id', product.id)
+    await supabase.from('products').update({ sold_count: (product.sold_count || 0) + 1 }).eq('id', product.id)
 
-    return { status: 'completed', message: `${product.name} achete avec succes`, new_balance: buyer.wallet_balance - product.price }
+    // Notification
+    Notify.purchase(req.user.id, sellerId, req.user.username, product.name, product.price, product.currency || 'KMF')
+
+    return { status: 'completed', message: `${product.name} achete avec succes`, new_balance: buyerBalance - product.price }
   })
 }

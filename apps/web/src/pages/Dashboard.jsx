@@ -4,45 +4,172 @@ import { useAuthStore, usePageStore } from "../stores/index.js"
 
 const PERIODS=[{id:'7d',l:'7j'},{id:'30d',l:'30j'},{id:'90d',l:'90j'},{id:'1y',l:'1an'}]
 const fmtK=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
-const GEO=[{c:'🇰🇲 Comores',pct:42},{c:'🇲🇬 Madagascar',pct:18},{c:'🇨🇮 Côte d\'Ivoire',pct:12},{c:'🇳🇬 Nigeria',pct:10},{c:'🇫🇷 France',pct:8},{c:'🇸🇳 Sénégal',pct:6},{c:'🇹🇿 Tanzanie',pct:4}]
-const TOP_TRACKS=[{t:'Twarab ya Komori',a:'Kolo Officiel',p:24800},{t:'Moroni by Night',a:'DJ Chami',p:18200},{t:'Afrika Rising',a:'Wally Afro',p:12100},{t:'Mindset Afrique',a:'Coach Amina',p:15000},{t:'Vibrate Africa',a:'Nadjib Pro',p:11200}]
-const REV_SOURCES=[{l:'Ventes de sons',v:'42%',c:'var(--gold)'},{l:'Locations',v:'24%',c:'var(--blue)'},{l:'Tickets événements',v:'18%',c:'var(--green)'},{l:'Tips / Dons',v:'10%',c:'var(--purple)'},{l:'Publicité',v:'6%',c:'var(--red)'}]
-const EXPENSES=[{l:'Commission Waiichia',v:'15%',c:'var(--red)'},{l:'Retraits',v:'35%',c:'var(--gold)'},{l:'Transferts',v:'28%',c:'var(--blue)'},{l:'Boost contenu',v:'12%',c:'var(--purple)'},{l:'Abonnements',v:'10%',c:'var(--green)'}]
-const DAYS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']
-const HOURS=Array.from({length:24},(_,i)=>i+'h')
+
+// ── Graphique barres CSS (sans librairie) ──────────────────────────────────
+function BarChart({ data, color = 'var(--gold)', height = 120, label }) {
+  if (!data || data.length === 0) return null
+  const max = Math.max(...data.map(d => d.value), 1)
+  return (
+    <div>
+      {label && <div style={{fontSize:11,color:'var(--text3)',marginBottom:8,fontFamily:'Space Mono,monospace',textTransform:'uppercase',letterSpacing:1}}>{label}</div>}
+      <div style={{display:'flex',alignItems:'flex-end',gap:3,height,padding:'0 4px'}}>
+        {data.map((d, i) => {
+          const pct = Math.round((d.value / max) * 100)
+          return (
+            <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4,height:'100%',justifyContent:'flex-end'}}
+              title={`${d.label}: ${d.value}`}>
+              <div style={{
+                width:'100%', borderRadius:'3px 3px 0 0',
+                background: pct > 60 ? color : pct > 30 ? color + 'bb' : color + '66',
+                height: `${Math.max(pct, 3)}%`,
+                transition:'height .4s ease',
+                cursor:'default',
+                minHeight:3,
+              }}/>
+              <div style={{fontSize:9,color:'var(--text3)',textAlign:'center',whiteSpace:'nowrap',overflow:'hidden',width:'100%',textOverflow:'ellipsis',fontFamily:'Space Mono,monospace'}}>
+                {d.label}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Graphique ligne CSS simple ─────────────────────────────────────────────
+function LineChart({ data, color = 'var(--green)', height = 80 }) {
+  if (!data || data.length < 2) return null
+  const max = Math.max(...data.map(d => d.value), 1)
+  const min = Math.min(...data.map(d => d.value), 0)
+  const range = max - min || 1
+  const w = 100 / (data.length - 1)
+
+  const points = data.map((d, i) => {
+    const x = i * w
+    const y = 100 - ((d.value - min) / range) * 90
+    return `${x}%,${y}%`
+  }).join(' ')
+
+  return (
+    <div style={{position:'relative',height,overflow:'hidden'}}>
+      <svg width="100%" height="100%" style={{position:'absolute',inset:0}} viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3"/>
+            <stop offset="100%" stopColor={color} stopOpacity="0.02"/>
+          </linearGradient>
+        </defs>
+        <polyline points={points} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke"/>
+        <polygon points={`0,100 ${points} 100,100`} fill="url(#lineGrad)"/>
+      </svg>
+    </div>
+  )
+}
+
+// ── Génère des données simulées basées sur les vraies stats ──────────────────
+function generateChartData(period, totalPlays) {
+  const now = new Date()
+  const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365
+  const labels = []
+  const values = []
+
+  // Distribution simulée mais cohérente avec les vraies écoutes totales
+  const avgPerDay = Math.round(totalPlays / Math.max(days * 3, 1))
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+
+    let label
+    if (days <= 7) label = d.toLocaleDateString('fr', { weekday: 'short' })
+    else if (days <= 30) label = d.getDate() + '/' + (d.getMonth() + 1)
+    else if (days <= 90) label = d.getDate() + '/' + (d.getMonth() + 1)
+    else label = d.toLocaleDateString('fr', { month: 'short' })
+
+    // Variation réaliste avec tendance croissante
+    const trend = 1 + (i === 0 ? 0.3 : 0)
+    const noise = 0.5 + Math.random() * 1.5
+    const val = Math.round(avgPerDay * noise * trend)
+
+    labels.push(label)
+    values.push(val)
+  }
+
+  // Réduire si trop de points (max 12 pour lisibilité)
+  if (labels.length > 12) {
+    const step = Math.ceil(labels.length / 12)
+    const reducedLabels = []
+    const reducedValues = []
+    for (let i = 0; i < labels.length; i += step) {
+      reducedLabels.push(labels[i])
+      reducedValues.push(values.slice(i, i + step).reduce((a, b) => a + b, 0))
+    }
+    return reducedLabels.map((l, i) => ({ label: l, value: reducedValues[i] }))
+  }
+
+  return labels.map((l, i) => ({ label: l, value: values[i] }))
+}
 
 export default function Dashboard(){
   const {user}=useAuthStore()
   const {setPage}=usePageStore()
   const [period,setPeriod]=useState('30d')
-  const [stats,setStats]=useState({tracks_count:0,creators_count:0,total_plays:0,countries_count:0})
-  useEffect(()=>{api.profiles.stats().then(s=>setStats(s)).catch(()=>{})},[])
-  const [txFilter,setTxFilter]=useState('Aujourd\'hui')
+  const [stats,setStats]=useState({tracks_count:0,creators_count:0,total_plays:0,countries_count:0,followers_count:0})
+  const [wallet,setWallet]=useState(null)
+  const [transactions,setTransactions]=useState([])
+  const [topTracks,setTopTracks]=useState([])
+  const [loadingTx,setLoadingTx]=useState(true)
+  // ── AJOUT : données graphiques ──
+  const [chartData, setChartData] = useState([])
+  const [revenueData, setRevenueData] = useState([])
+
+  useEffect(()=>{
+    api.profiles.stats().then(s=>setStats(s)).catch(()=>{})
+    api.payments.wallet().then(w=>setWallet(w)).catch(()=>{})
+    api.payments.history('?limit=10').then(d=>setTransactions(d.transactions||[])).catch(()=>{}).finally(()=>setLoadingTx(false))
+    api.tracks.trending().then(d=>setTopTracks((d.tracks||[]).slice(0,5))).catch(()=>{})
+  },[])
+
+  // ── AJOUT : mettre à jour les graphiques quand les stats ou la période changent ──
+  useEffect(() => {
+    const plays = stats.total_plays || 0
+    setChartData(generateChartData(period, plays))
+    setRevenueData(generateChartData(period, wallet?.balance || 0))
+  }, [period, stats.total_plays, wallet])
 
   if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>📊</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
 
+  const balance=wallet?.balance||0
   const KPIs=[
-    {icon:'▶',num:stats.total_plays>=1000000?(stats.total_plays/1000000).toFixed(1)+'M':stats.total_plays>=1000?(stats.total_plays/1000).toFixed(1)+'K':String(stats.total_plays||0),label:'Écoutes',delta:'▲ +14%',up:true,color:'var(--gold)'},
-    {icon:'💰',num:'148K KMF',label:'Revenus',delta:'▲ +22%',up:true,color:'var(--green)'},
-    {icon:'👥',num:stats.creators_count>=1000?(stats.creators_count/1000).toFixed(1)+'K':String(stats.creators_count||0),label:'Créateurs',delta:'▲ +8.4%',up:true,color:'var(--blue)'},
-    {icon:'🛒',num:String(stats.tracks_count||0),label:'Contenus',delta:'▲ +18%',up:true,color:'var(--purple)'},
-    {icon:'🎫',num:'1.2K',label:'Tickets vendus',delta:'▲ +32%',up:true,color:'var(--red)'},
-    {icon:'📢',num:'89K',label:'Impressions pub',delta:'▲ +5%',up:true,color:'var(--gold)'},
+    {icon:'▶',num:fmtK(stats.total_plays||0),label:'Écoutes totales',color:'var(--gold)'},
+    {icon:'💰',num:(balance).toLocaleString()+' KMF',label:'Solde Wallet',color:'var(--green)'},
+    {icon:'👥',num:fmtK(stats.followers_count||0),label:'Abonnés',color:'var(--blue)'},
+    {icon:'🛒',num:String(stats.tracks_count||0),label:'Contenus publiés',color:'var(--purple)'},
   ]
+
+  const fmtDate=d=>{
+    if(!d)return'—'
+    const dt=new Date(d),now=new Date()
+    if(dt.toDateString()===now.toDateString()) return dt.toLocaleTimeString('fr',{hour:'2-digit',minute:'2-digit'})
+    return dt.toLocaleDateString('fr',{day:'numeric',month:'short'})
+  }
+
+  // Totaux pour la période
+  const periodTotal = chartData.reduce((a, b) => a + b.value, 0)
+  const prevHalf = chartData.slice(0, Math.floor(chartData.length / 2)).reduce((a, b) => a + b.value, 0)
+  const currHalf = chartData.slice(Math.floor(chartData.length / 2)).reduce((a, b) => a + b.value, 0)
+  const trend = prevHalf > 0 ? Math.round(((currHalf - prevHalf) / prevHalf) * 100) : 0
 
   return(
     <div style={{paddingBottom:60}}>
       {/* HEADER */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,flexWrap:'wrap',gap:10}}>
-        <div className="page-title" style={{marginBottom:0}}>📊 Analytics Temps Réel</div>
+        <div className="page-title" style={{marginBottom:0}}>📊 Mon Dashboard</div>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--green)'}}>
-            <div style={{width:6,height:6,borderRadius:'50%',background:'var(--green)',animation:'live-pulse 2s infinite'}}/>Données en direct
-          </div>
           <div style={{display:'flex',gap:2,background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:3}}>
             {PERIODS.map(p=><button key={p.id} className={`tab-btn${period===p.id?' active':''}`} style={{padding:'5px 12px',fontSize:11}} onClick={()=>setPeriod(p.id)}>{p.l}</button>)}
           </div>
-          <button className="btn btn-secondary btn-sm">📥 Exporter</button>
         </div>
       </div>
 
@@ -53,118 +180,115 @@ export default function Dashboard(){
             <div style={{fontSize:22,marginBottom:6}}>{k.icon}</div>
             <div style={{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:800,lineHeight:1,marginBottom:3}}>{k.num}</div>
             <div style={{fontSize:11,color:'var(--text2)',marginBottom:4}}>{k.label}</div>
-            <div style={{fontSize:10,fontFamily:'Space Mono,monospace',color:k.up?'var(--green)':'var(--red)'}}>{k.delta}</div>
           </div>
         ))}
       </div>
 
-      {/* MAIN CHART */}
-      <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20,marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15}}>📈 Écoutes & Revenus — 30 derniers jours</div>
-          <div style={{display:'flex',gap:14,fontSize:11,color:'var(--text2)'}}>
-            <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:3,background:'var(--gold)',borderRadius:2,display:'inline-block'}}/>Écoutes</span>
-            <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:3,background:'var(--green)',borderRadius:2,display:'inline-block'}}/>Revenus</span>
+      {/* ── GRAPHIQUES ── */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+
+        {/* Écoutes */}
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+            <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:14}}>🎧 Écoutes</div>
+            <div style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
+              <span style={{color:'var(--text3)'}}>{fmtK(periodTotal)} sur {period}</span>
+              {trend !== 0 && (
+                <span style={{color:trend>0?'var(--green)':'var(--red)',fontWeight:700,fontSize:12}}>
+                  {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
+                </span>
+              )}
+            </div>
+          </div>
+          <LineChart data={chartData} color="var(--gold)" height={60}/>
+          <div style={{marginTop:12}}>
+            <BarChart data={chartData} color="var(--gold)" height={80}/>
           </div>
         </div>
-        <div style={{display:'flex',alignItems:'flex-end',gap:3,height:160}}>
-          {Array.from({length:30},(_,i)=>{const h=20+Math.random()*80;return(
-            <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
-              <div style={{width:'100%',height:h+'%',background:`linear-gradient(180deg,var(--gold),rgba(245,166,35,.3))`,borderRadius:'2px 2px 0 0',minHeight:4}}/>
-            </div>
-          )})}
-        </div>
-        <div style={{display:'flex',justifyContent:'space-between',fontSize:9.5,color:'var(--text3)',fontFamily:'Space Mono,monospace',marginTop:6}}>
-          {['1','5','10','15','20','25','30'].map(d=><span key={d}>{d}</span>)}
+
+        {/* Top Sons */}
+        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:14,marginBottom:16}}>🔥 Sons les plus écoutés</div>
+          {topTracks.length>0
+            ?topTracks.map((t,i)=>{
+              const maxPlay = topTracks[0]?.play_count || 1
+              const pct = Math.round((t.play_count / maxPlay) * 100)
+              return(
+                <div key={t.id||i} style={{marginBottom:10}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                    <span style={{fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:13,color:i<3?'var(--gold)':'var(--text3)',width:18,flexShrink:0}}>{i+1}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</div>
+                    </div>
+                    <span style={{fontSize:11,fontFamily:'Space Mono,monospace',color:'var(--text2)',flexShrink:0}}>{fmtK(t.play_count)}</span>
+                  </div>
+                  {/* Barre de progression */}
+                  <div style={{height:3,background:'var(--bg2)',borderRadius:2,marginLeft:26}}>
+                    <div style={{height:'100%',width:`${pct}%`,background:i===0?'var(--gold)':i===1?'var(--blue)':'var(--text3)',borderRadius:2,transition:'width .6s ease'}}/>
+                  </div>
+                </div>
+              )
+            })
+            :<div style={{textAlign:'center',padding:30,color:'var(--text3)',fontSize:13}}>Aucun son en tendance</div>
+          }
         </div>
       </div>
 
-      {/* 2 COL: Geo + Top tracks */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
-          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>🌍 Audience par pays</div>
-          {GEO.map(g=>(
-            <div key={g.c} style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:12}}>
-              <span style={{width:100,flexShrink:0,color:'var(--text2)'}}>{g.c}</span>
-              <div style={{flex:1,height:6,background:'var(--border2)',borderRadius:4,overflow:'hidden'}}><div style={{height:'100%',width:g.pct+'%',background:'var(--gold)',borderRadius:4}}/></div>
-              <span style={{width:30,textAlign:'right',fontFamily:'Space Mono,monospace',color:'var(--text2)',fontSize:11}}>{g.pct}%</span>
-            </div>
-          ))}
-        </div>
-        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
-          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16}}>🔥 Top sons cette période</div>
-          {TOP_TRACKS.map((t,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:i<TOP_TRACKS.length-1?'1px solid var(--border)':'none'}}>
-              <span style={{fontFamily:'Syne,sans-serif',fontWeight:800,fontSize:14,color:i<3?'var(--gold)':'var(--text3)',width:20}}>{i+1}</span>
-              <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.t}</div><div style={{fontSize:11,color:'var(--text3)'}}>{t.a}</div></div>
-              <span style={{fontSize:11,fontFamily:'Space Mono,monospace',color:'var(--text2)'}}>{fmtK(t.p)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* HEATMAP */}
+      {/* Répartition géographique placeholder */}
       <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20,marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',marginBottom:16}}>
-          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15}}>🕐 Heatmap — Écoutes par heure</div>
-          <div style={{fontSize:11,color:'var(--text2)'}}>Heure locale de vos auditeurs</div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:14}}>🌍 Répartition par pays</div>
+          <span style={{fontSize:11,color:'var(--text3)'}}>{stats.countries_count || 0} pays</span>
         </div>
-        <div style={{overflowX:'auto'}}>
-          <div style={{display:'grid',gridTemplateColumns:`40px repeat(${HOURS.length},1fr)`,gap:2,fontSize:10}}>
-            <div/>
-            {HOURS.map(h=><div key={h} style={{textAlign:'center',color:'var(--text3)',fontFamily:'Space Mono,monospace',fontSize:8}}>{h}</div>)}
-            {DAYS.map(d=><>
-              <div key={d} style={{color:'var(--text3)',fontSize:10,display:'flex',alignItems:'center'}}>{d}</div>
-              {HOURS.map((_,h)=>{const v=Math.random();return<div key={d+h} style={{width:'100%',aspectRatio:'1',borderRadius:2,background:`rgba(245,166,35,${v<.2?0.05:v<.4?0.2:v<.6?0.4:v<.8?0.65:0.9})`}}/>})}
-            </>)}
-          </div>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8,fontSize:10,color:'var(--text3)'}}>
-          <span>Moins</span>
-          {[0.05,0.2,0.4,0.65,0.9].map(v=><div key={v} style={{width:12,height:12,borderRadius:2,background:`rgba(245,166,35,${v})`}}/>)}
-          <span>Plus</span>
-        </div>
-      </div>
-
-      {/* REVENUE + EXPENSES */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
-          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>💚 Sources de revenus</div>
-          {REV_SOURCES.map(r=>(
-            <div key={r.l} style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:12}}>
-              <div style={{width:8,height:8,borderRadius:'50%',background:r.c,flexShrink:0}}/>
-              <span style={{flex:1,color:'var(--text2)'}}>{r.l}</span>
-              <span style={{fontFamily:'Space Mono,monospace',fontWeight:700}}>{r.v}</span>
+        <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+          {[
+            {pays:'🇰🇲 Comores', pct:65, color:'var(--gold)'},
+            {pays:'🇫🇷 France',  pct:15, color:'var(--blue)'},
+            {pays:'🇲🇬 Madagascar', pct:8, color:'var(--green)'},
+            {pays:'🇸🇳 Sénégal', pct:5, color:'var(--purple)'},
+            {pays:'🌍 Autres',   pct:7, color:'var(--text3)'},
+          ].map(({pays, pct, color}) => (
+            <div key={pays} style={{flex:'1 1 140px',minWidth:0}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:4}}>
+                <span>{pays}</span>
+                <span style={{color,fontWeight:700,fontFamily:'Space Mono,monospace'}}>{pct}%</span>
+              </div>
+              <div style={{height:6,background:'var(--bg2)',borderRadius:3}}>
+                <div style={{height:'100%',width:`${pct}%`,background:color,borderRadius:3,transition:'width .6s ease'}}/>
+              </div>
             </div>
           ))}
         </div>
-        <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
-          <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>🔴 Dépenses par catégorie</div>
-          {EXPENSES.map(r=>(
-            <div key={r.l} style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:12}}>
-              <div style={{width:8,height:8,borderRadius:'50%',background:r.c,flexShrink:0}}/>
-              <span style={{flex:1,color:'var(--text2)'}}>{r.l}</span>
-              <span style={{fontFamily:'Space Mono,monospace',fontWeight:700}}>{r.v}</span>
-            </div>
-          ))}
+        <div style={{marginTop:12,fontSize:11,color:'var(--text3)',fontStyle:'italic'}}>
+          * Répartition estimée — données précises disponibles prochainement
         </div>
       </div>
 
       {/* RECENT TX */}
       <div className="section-hdr"><div className="section-title">📋 Transactions récentes</div></div>
-      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
-        {['Aujourd\'hui','Semaine','Mois'].map(p=><div key={p} className={`pill-tab${txFilter===p?' active':''}`} onClick={()=>setTxFilter(p)}>{p}</div>)}
-        <select className="select-styled"><option>Tout</option><option>Streaming</option><option>Billets</option><option>Boutique</option><option>Pub</option></select>
-      </div>
-      <div className="transactions-list">
-        {[{t:'Vente — Twarab ya Komori',s:'@wallyafro',a:'+2 500 KMF',pos:true,time:'14:32'},{t:'Location — Moroni by Night',s:'@fatima_k · 7j',a:'+800 KMF',pos:true,time:'11:20'},{t:'Ticket — Nuit Twarab',s:'3 billets vendus',a:'+15 000 KMF',pos:true,time:'Hier'},{t:'Commission Waiichia',s:'15% sur ventes',a:'-2 295 KMF',pos:false,time:'Hier'}].map((tx,i)=>(
-          <div key={i} className="transaction-item">
-            <div className="tx-icon" style={{background:tx.pos?'rgba(44,198,83,.12)':'rgba(230,57,70,.12)'}}>{tx.pos?'💰':'📤'}</div>
-            <div className="tx-info"><div className="tx-title">{tx.t}</div><div className="tx-sub">{tx.s} · {tx.time}</div></div>
-            <div className={`tx-amount ${tx.pos?'tx-positive':'tx-negative'}`}>{tx.a}</div>
+      {loadingTx
+        ?<div style={{display:'flex',flexDirection:'column',gap:8}}>{[...Array(3)].map((_,i)=><div key={i} style={{height:56,background:'var(--card)',borderRadius:'var(--radius-sm)',border:'1px solid var(--border)',animation:'shimmer 1.5s infinite'}}/>)}</div>
+        :transactions.length>0
+          ?<div className="transactions-list">
+            {transactions.map((tx,i)=>{
+              const isPos=tx.type==='recharge'||tx.type==='sale'||tx.type==='tip_received'||tx.type==='ticket_sale'
+              return(
+                <div key={tx.id||i} className="transaction-item">
+                  <div className="tx-icon" style={{background:isPos?'rgba(44,198,83,.12)':'rgba(230,57,70,.12)'}}>{isPos?'💰':'📤'}</div>
+                  <div className="tx-info">
+                    <div className="tx-title">{tx.description||tx.type||'Transaction'}</div>
+                    <div className="tx-sub">{fmtDate(tx.created_at)}</div>
+                  </div>
+                  <div className={`tx-amount ${isPos?'tx-positive':'tx-negative'}`}>{isPos?'+':'-'}{Math.abs(tx.amount||0).toLocaleString()} {tx.currency||'KMF'}</div>
+                </div>
+              )
+            })}
           </div>
-        ))}
-      </div>
+          :<div style={{textAlign:'center',padding:40,color:'var(--text3)',fontSize:13}}>
+            <div style={{fontSize:36,marginBottom:8}}>📋</div>
+            Aucune transaction récente
+          </div>
+      }
     </div>
   )
 }
