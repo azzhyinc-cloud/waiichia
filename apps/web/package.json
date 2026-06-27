@@ -8,9 +8,13 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "vite build && cp -r dist/* /home/admin/web/waiichia.com/public_html/"
+    "deploy": "vite build && cp -r www/* /home/admin/web/waiichia.com/public_html/",
+    "cap:sync": "vite build && npx cap sync android",
+    "cap:build": "vite build && npx cap sync android && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "@supabase/supabase-js": "^2.98.0",
     "axios": "^1.13.6",
     "howler": "^2.2.4",
@@ -21,6 +25,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.7",
     "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

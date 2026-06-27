@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">waiichia</string>
+    <string name="title_activity_main">waiichia</string>
+    <string name="package_name">com.waiichia.app</string>
+    <string name="custom_url_scheme">com.waiichia.app</string>
+</resources>
