@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore, usePageStore } from '../stores/index.js'
 import api from '../services/api.js'
+import EditProductModal from '../components/EditProductModal.jsx'
 
 const CATS = [['merch','👕','Merch'],['digital','💿','Digital'],['coaching','🎓','Coaching'],['beats','🎵','Beats/Instru'],['autre','📦','Autre']]
 const CAT_BG = { merch:'linear-gradient(135deg,#0d2a3a,#1a5060)', digital:'linear-gradient(135deg,#1a0020,#5a0060)', coaching:'linear-gradient(135deg,#002a10,#007040)', beats:'linear-gradient(135deg,#1a1000,#5a3800)', autre:'linear-gradient(135deg,#1a1a2e,#16213e)' }
@@ -12,12 +13,15 @@ export default function MyShop() {
   const { setPage } = usePageStore()
   const [products, setProducts] = useState([])
   const [myTracks, setMyTracks] = useState([])
+  const [myAlbums, setMyAlbums] = useState([])
+  const [myEmissions, setMyEmissions] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploadingImg, setUploadingImg] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
   const [deleting, setDeleting] = useState(null)
+  const [editingProduct, setEditingProduct] = useState(null)
   const [form, setForm] = useState({ name:'', description:'', category:'digital', price:'', currency:'KMF', emoji:'🛍️', stock:'-1', content_id:'', content_type:'track' })
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
@@ -39,7 +43,11 @@ export default function MyShop() {
   }
 
   useEffect(() => { if(user) { loadProducts(); loadTracks() } }, [user])
+
+  useEffect(()=>{if(products.length===0)return;try{const f=sessionStorage.getItem('focus_product_id');if(f){const pr=products.find(p=>p.id===f);if(pr){setEditingProduct(pr);sessionStorage.removeItem('focus_product_id')}}}catch(e){}},[products])
   const loadTracks = async () => {
+    try { const da = await api.get('/api/albums/?mine=true'); setMyAlbums(da.albums||[]) } catch(e) {}
+    try { const de = await api.get('/api/emissions/?mine=true'); setMyEmissions(de.emissions||[]) }  catch(e) {}
     try {
       const data = await api.tracks.myTracks()
       setMyTracks(data.tracks || [])
@@ -64,13 +72,6 @@ export default function MyShop() {
     setSaving(false)
   }
 
-  const toggleActive = async (p) => {
-    try {
-      await api.products.update(p.id, { is_active: !p.is_active })
-      setProducts(ps => ps.map(x => x.id===p.id ? {...x, is_active: !x.is_active} : x))
-    } catch(e) { console.error('TOGGLE ERROR:', e.message); alert('Erreur: ' + e.message) }
-  }
-
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ce produit ?')) return
     setDeleting(id)
@@ -79,6 +80,11 @@ export default function MyShop() {
       setProducts(ps => ps.filter(x => x.id!==id))
     } catch(e) { console.error('DELETE ERROR:', e.message); alert('Erreur suppression: ' + e.message) }
     setDeleting(null)
+  }
+
+  const handleEditSuccess = (updated) => {
+    if (!updated) return
+    setProducts(ps => ps.map(x => x.id === updated.id ? { ...x, ...updated } : x))
   }
 
   const totalRevenue = products.reduce((a,p) => a + ((p.sold_count||0)*p.price), 0)
@@ -143,13 +149,13 @@ export default function MyShop() {
                 </button>
               ))}
             </div>
-            {myTracks.length===0 ? (
+            {( form.content_type==='album'?myAlbums:form.content_type==='podcast'||form.content_type==='emission'?myEmissions:myTracks).length===0 ? (
               <div style={{fontSize:12,color:'var(--text3)',padding:'10px 0'}}>⚠️ Aucun contenu publie — publiez d abord un son pour vendre un produit.</div>
             ) : (
               <select style={inp} value={form.content_id} onChange={e=>set('content_id',e.target.value)}>
                 <option value="">-- Choisir un contenu --</option>
-                {myTracks.map(t=>(
-                  <option key={t.id} value={t.id}>{t.title} · {(t.play_count||0).toLocaleString()} ecoutes</option>
+                {(form.content_type==='album'?myAlbums:form.content_type==='podcast'||form.content_type==='emission'?myEmissions:myTracks).map(t=>(
+                  <option key={t.id} value={t.id}>{t.title||t.name}</option>
                 ))}
               </select>
             )}
@@ -196,6 +202,7 @@ export default function MyShop() {
             <div><label style={lbl}>EMOJI</label><input style={inp} value={form.emoji} onChange={e=>set('emoji',e.target.value)} placeholder="🛍️"/></div>
             <div><label style={lbl}>STOCK (-1 = illimite)</label><input type="number" style={inp} value={form.stock} onChange={e=>set('stock',e.target.value)}/></div>
           </div>
+          <div style={{marginBottom:10}}>{ form.content_id===''&&<div style={{fontSize:12,color:'var(--gold)',background:'rgba(245,166,35,.08)',border:'1px solid rgba(245,166,35,.2)',borderRadius:6,padding:'8px 12px'}}>⚠️ Liez ce produit a un contenu publie (son, album, podcast ou emission) avant de publier.</div>}</div>
           <div style={{display:'flex',gap:10}}>
             <button onClick={()=>setShowForm(false)} style={{background:'var(--card)',border:'1px solid var(--border)',color:'var(--text)',borderRadius:8,padding:'10px 20px',cursor:'pointer',fontWeight:600}}>Annuler</button>
             <button onClick={handleCreate} disabled={saving||!form.name||!form.price||!form.content_id}
@@ -233,9 +240,9 @@ export default function MyShop() {
                 <div style={{fontSize:15,fontWeight:800,color:'#2cc653',fontFamily:'monospace',marginBottom:6}}>{(p.price||0).toLocaleString()} {p.currency||'KMF'}</div>
                 <div style={{fontSize:11,color:'var(--text3)',marginBottom:10}}>🛒 {p.sold_count||0} vendus · {p.stock<0?'Illimite':p.stock+' en stock'}</div>
                 <div style={{display:'flex',gap:6}}>
-                  <button onClick={()=>toggleActive(p)}
-                    style={{flex:1,background:p.is_active?'rgba(230,57,70,0.1)':'rgba(44,198,83,0.1)',border:`1px solid ${p.is_active?'rgba(230,57,70,0.3)':'rgba(44,198,83,0.3)'}`,borderRadius:7,padding:'6px',cursor:'pointer',fontSize:12,fontWeight:600,color:p.is_active?'#e74c3c':'#2cc653'}}>
-                    {p.is_active?'⏸ Pause':'▶ Activer'}
+                  <button onClick={()=>setEditingProduct(p)}
+                    style={{flex:1,background:'rgba(245,166,35,0.1)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:7,padding:'6px',cursor:'pointer',fontSize:12,fontWeight:600,color:'var(--gold)'}}>
+                    ✏️ Modifier
                   </button>
                   <button onClick={()=>handleDelete(p.id)} disabled={deleting===p.id}
                     style={{background:'rgba(230,57,70,0.1)',border:'1px solid rgba(230,57,70,0.3)',borderRadius:7,padding:'6px 10px',cursor:'pointer',fontSize:12,color:'#e74c3c'}}>
@@ -246,6 +253,15 @@ export default function MyShop() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* MODAL EDITION */}
+      {editingProduct && (
+        <EditProductModal
+          product={editingProduct}
+          onClose={() => setEditingProduct(null)}
+          onSuccess={handleEditSuccess}
+        />
       )}
     </div>
   )

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { usePrice } from "../hooks/usePrice.js"
 import { usePlayerStore, usePageStore } from "../stores/index.js"
 import { ReactionBar } from "../components/ReactionBar.jsx"
 import api from "../services/api.js"
@@ -18,8 +19,9 @@ function fmtDuration(sec) {
 }
 
 export default function Albums() {
-  const { toggle, currentTrack, isPlaying } = usePlayerStore()
+  const { toggle, play, setQueue, currentTrack, isPlaying } = usePlayerStore()
   const { setPage } = usePageStore()
+  const { format } = usePrice()
   const [typeFilter, setTypeFilter] = useState('Tous')
   const [albums, setAlbums] = useState([])
   const [loading, setLoading] = useState(true)
@@ -28,7 +30,7 @@ export default function Albums() {
   const [loadingDetail, setLoadingDetail] = useState(false)
 
   useEffect(() => {
-    api.get('/api/albums?limit=30')
+    api.albums.list('?limit=30')
       .then(d => setAlbums(d.albums || []))
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -42,9 +44,9 @@ export default function Albums() {
     setSelected(album)
     setLoadingDetail(true)
     try {
-      const d = await api.get('/api/albums/' + album.id)
-      if (d.album?.tracks) setAlbumTracks(d.album.tracks)
-      else setAlbumTracks([])
+      const d = await api.albums.get(album.id)
+      const list = d.album_tracks || d.tracks || []
+      setAlbumTracks(list.map(at => at.tracks ? { ...at.tracks, position: at.position } : at))
     } catch { setAlbumTracks([]) }
     setLoadingDetail(false)
   }
@@ -111,9 +113,11 @@ export default function Albums() {
               </div>
             )}
             {albumTracks.length > 0 && (
-              <button onClick={() => toggle({
-                ...albumTracks[0], profiles: creator, cover_url: albumTracks[0].cover_url || a.cover_url
-              })} style={{
+              <button onClick={() => {
+                const fmt = albumTracks.map(t => ({ ...t, profiles: creator, cover_url: t.cover_url || a.cover_url }))
+                setQueue(fmt)
+                play(fmt[0])
+              }} style={{
                 padding: '10px 24px', borderRadius: 50, border: 'none',
                 background: 'linear-gradient(135deg,var(--gold),#e8920a)', color: '#000',
                 fontSize: 13, fontWeight: 700, cursor: 'pointer',
@@ -153,7 +157,11 @@ export default function Albums() {
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--card2)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       onClick={() => {
-                        if (t.audio_url_128) toggle({ ...t, profiles: creator, cover_url: t.cover_url || a.cover_url })
+                        if (t.audio_url_128) {
+                          const fmt = albumTracks.map(x => ({ ...x, profiles: creator, cover_url: x.cover_url || a.cover_url }))
+                          setQueue(fmt)
+                          toggle({ ...t, profiles: creator, cover_url: t.cover_url || a.cover_url })
+                        }
                       }}>
                       <div style={{
                         width: 24, textAlign: 'center', flexShrink: 0,
@@ -180,7 +188,7 @@ export default function Albums() {
                               fontSize: 9, color: 'var(--gold)', fontFamily: 'Space Mono,monospace',
                               background: 'rgba(245,166,35,.12)', border: '1px solid rgba(245,166,35,.3)',
                               borderRadius: 20, padding: '2px 7px', flexShrink: 0
-                            }}>{t.sale_price?.toLocaleString()} KMF</div>
+                            }}>{format(t.sale_price)}</div>
                           : <div style={{
                               fontSize: 9, color: 'var(--text3)', fontFamily: 'Space Mono,monospace',
                               background: 'rgba(0,0,0,.2)', border: '1px solid var(--border)',

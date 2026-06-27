@@ -5,6 +5,7 @@ const NAV = [
     { id:'trending', icon:'🔥', label:'Tendances', badge:'HOT', badgeColor:'gold' },
     { id:'radio',    icon:'📻', label:'Radio & Live', live:true },
     { id:'feed',     icon:'⚡', label:'Mon Activité' },
+    { id:'explore',  icon:'🔭', label:'Explorer' },
   ]},
   { section: 'Contenu', items: [
     { id:'music',     icon:'🎵', label:'Musique' },

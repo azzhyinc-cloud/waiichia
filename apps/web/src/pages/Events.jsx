@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { usePrice } from "../hooks/usePrice.js"
 import { useAuthStore, usePageStore } from "../stores/index.js"
 import ShareModal from "../components/ShareModal.jsx"
 import api from "../services/api.js"
@@ -21,6 +22,7 @@ export default function Events(){
   const {user}=useAuthStore()
   const token=localStorage.getItem('waiichia_token')
   const {setPage}=usePageStore()
+  const { format } = usePrice()
   const [type,setType]=useState('Tous')
   const [pays,setPays]=useState('')
   const [events,setEvents]=useState([])
@@ -83,7 +85,7 @@ export default function Events(){
             const day=d.getDate()
             const month=MONTHS[d.getMonth()]
             const isFree=ev.is_free||ev.ticket_price===0
-            const price=isFree?'Gratuit':(ev.ticket_price?.toLocaleString()+' '+(ev.currency||'KMF'))
+            const price=isFree?'Gratuit':(format(ev.ticket_price))
             const flag=FLAGS[ev.country]||'🌍'
             const pct=ev.capacity?Math.round((ev.tickets_sold||0)/ev.capacity*100):0
 
@@ -158,7 +160,7 @@ export default function Events(){
                 <div>📅 {formatDate(selected.event_date||selected.start_date)}</div>
                 <div>📍 {selected.location} {FLAGS[selected.country]||'🌍'}</div>
                 <div>🏷️ {selected.category||'Événement'}</div>
-                <div>💰 {selected.is_free||selected.ticket_price===0?'Gratuit':((selected.ticket_price?.toLocaleString())+' '+(selected.currency||'KMF'))}</div>
+                <div>💰 {selected.is_free||selected.ticket_price===0?'Gratuit':(format(selected.ticket_price))}</div>
                 {selected.capacity&&<div>🎫 {selected.tickets_sold||0} / {selected.capacity} places ({Math.round((selected.tickets_sold||0)/selected.capacity*100)}% rempli)</div>}
               </div>
 

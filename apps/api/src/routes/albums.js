@@ -4,14 +4,21 @@ export default async function albumRoutes(fastify, options) {
   // ─── List albums ───
   fastify.get('/', async (req, reply) => {
     try {
-      const { user_id, limit = 50 } = req.query
+      const { user_id, creator_id, limit = 50 } = req.query
       let query = supabase
         .from('albums')
-        .select('*, profiles(id, username, display_name, avatar_url)')
+        .select('*, profiles:creator_id(id, username, display_name, avatar_url)')
         .order('created_at', { ascending: false })
         .limit(Number(limit))
 
-      if (user_id) query = query.eq('user_id', user_id)
+      // Support des 2 params pour rétrocompatibilité (user_id ou creator_id)
+      const filterId = creator_id || user_id
+      if (filterId) {
+        query = query.eq('creator_id', filterId)
+      } else {
+        // v20: liste publique = exclure les brouillons (is_published=false)
+        query = query.eq('is_published', true)
+      }
 
       const { data, error } = await query
       if (error) throw error
@@ -20,7 +27,7 @@ export default async function albumRoutes(fastify, options) {
       const albums = await Promise.all((data || []).map(async (album) => {
         const { count } = await supabase
           .from('album_tracks')
-          .select('id', { count: 'exact', head: true })
+          .select('track_id', { count: 'exact', head: true })
           .eq('album_id', album.id)
         return { ...album, track_count: count || 0 }
       }))
@@ -37,7 +44,7 @@ export default async function albumRoutes(fastify, options) {
     try {
       const { data: album, error } = await supabase
         .from('albums')
-        .select('*, profiles(id, username, display_name, avatar_url)')
+        .select('*, profiles:creator_id(id, username, display_name, avatar_url)')
         .eq('id', req.params.id)
         .single()
 
@@ -59,7 +66,7 @@ export default async function albumRoutes(fastify, options) {
   // ─── Create album ───
   fastify.post('/', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     try {
-      const { title, description, cover_url, genre } = req.body
+      const { title, description, cover_url, genre, country, release_year, album_type, is_published, tags } = req.body
       if (!title) return reply.code(400).send({ error: 'Titre requis' })
 
       const { data, error } = await supabase
@@ -69,12 +76,19 @@ export default async function albumRoutes(fastify, options) {
           description: description || null,
           cover_url: cover_url || null,
           genre: genre || null,
-          user_id: req.user.userId
+          country: country || null,
+          release_year: release_year || null,
+          album_type: album_type || 'album',
+          is_published: is_published === true,
+          tags: Array.isArray(tags) ? tags : [],
+          creator_id: req.user.id
         })
         .select()
         .single()
 
       if (error) throw error
+      // Update tracks_count
+      await supabase.from('playlists').update({ tracks_count: position }).eq('id', req.params.id)
       return reply.code(201).send(data)
     } catch (e) {
       fastify.log.error(e)
@@ -91,11 +105,11 @@ export default async function albumRoutes(fastify, options) {
       // Verify album ownership
       const { data: album } = await supabase
         .from('albums')
-        .select('user_id')
+        .select('creator_id')
         .eq('id', req.params.id)
         .single()
 
-      if (!album || album.user_id !== req.user.userId) {
+      if (!album || album.creator_id !== req.user.id) {
         return reply.code(403).send({ error: 'Accès refusé' })
       }
 
@@ -104,7 +118,7 @@ export default async function albumRoutes(fastify, options) {
       if (!pos) {
         const { count } = await supabase
           .from('album_tracks')
-          .select('id', { count: 'exact', head: true })
+          .select('track_id', { count: 'exact', head: true })
           .eq('album_id', req.params.id)
         pos = (count || 0) + 1
       }
@@ -142,13 +156,13 @@ export default async function albumRoutes(fastify, options) {
       const { data, error } = await query
       if (error) throw error
 
-      // Add track count
+      // Add track count (compatible avec colonne BDD tracks_count + recalcul)
       const playlists = await Promise.all((data || []).map(async (pl) => {
         const { count } = await supabase
           .from('playlist_tracks')
-          .select('id', { count: 'exact', head: true })
+          .select('track_id', { count: 'exact', head: true })
           .eq('playlist_id', pl.id)
-        return { ...pl, track_count: count || 0 }
+        return { ...pl, track_count: count || 0, tracks_count: count || 0 }
       }))
 
       return reply.send({ playlists })
@@ -194,7 +208,7 @@ export default async function albumRoutes(fastify, options) {
           title,
           description: description || null,
           is_public,
-          user_id: req.user.userId
+          user_id: req.user.id
         })
         .select()
         .single()
@@ -220,14 +234,14 @@ export default async function albumRoutes(fastify, options) {
         .eq('id', req.params.id)
         .single()
 
-      if (!playlist || playlist.user_id !== req.user.userId) {
+      if (!playlist || playlist.user_id !== req.user.id) {
         return reply.code(403).send({ error: 'Accès refusé' })
       }
 
       // Get next position
       const { count } = await supabase
         .from('playlist_tracks')
-        .select('id', { count: 'exact', head: true })
+        .select('track_id', { count: 'exact', head: true })
         .eq('playlist_id', req.params.id)
       const position = (count || 0) + 1
 
@@ -236,8 +250,8 @@ export default async function albumRoutes(fastify, options) {
         .insert({ playlist_id: req.params.id, track_id, position })
         .select()
         .single()
-
       if (error) throw error
+      await supabase.from('playlists').update({ tracks_count: position }).eq('id', req.params.id)
       return reply.code(201).send(data)
     } catch (e) {
       fastify.log.error(e)

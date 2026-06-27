@@ -11,12 +11,6 @@ const REACT_BTNS = [
   { key:"clap", emoji:"👏", cls:"active-clap", bg:"rgba(44,198,83,.12)",  border:"rgba(44,198,83,.35)",  color:"var(--green)" },
 ]
 
-const SAMPLE_COMMENTS = [
-  { ava:"WA", bg:"linear-gradient(135deg,#f5a623,#e63946)", name:"Wally Afro",    text:"🔥 Ce son est incroyable ! Le Twarab moderne c'est vraiment votre style.", time:"2h"  },
-  { ava:"DC", bg:"linear-gradient(135deg,#9b59f5,#6c3483)", name:"DJ Chami",     text:"Production de qualité ! On voit que vous maîtrisez le genre. 👏",           time:"5h"  },
-  { ava:"CA", bg:"linear-gradient(135deg,#2dc653,#00bfa5)", name:"Coach Amina",  text:"Mashallah ! Ça donne envie de danser 🌊",                                    time:"1j"  },
-]
-
 const FUN_PLACEHOLDERS = [
   "Votre avis sur ce son ?", "Laissez un commentaire 🎵", "Comment vous sentez ce son ?",
   "Réagissez ! 🔥", "Dites quelque chose de cool 😎",
@@ -24,38 +18,137 @@ const FUN_PLACEHOLDERS = [
 
 const rndK = mul => ((Math.floor(Math.random()*9+1)*mul*100) + Math.floor(Math.random()*100)).toLocaleString()
 
+/* ══ Helpers ══ */
+// Palette de gradients déterministe à partir du user_id ou username
+const AVATAR_GRADIENTS = [
+  "linear-gradient(135deg,#f5a623,#e63946)",
+  "linear-gradient(135deg,#9b59f5,#6c3483)",
+  "linear-gradient(135deg,#2dc653,#00bfa5)",
+  "linear-gradient(135deg,#1e88e5,#6c3483)",
+  "linear-gradient(135deg,#ff6b35,#f5a623)",
+  "linear-gradient(135deg,#00bfa5,#1e88e5)",
+  "linear-gradient(135deg,#e63946,#9b59f5)",
+  "linear-gradient(135deg,#f5a623,#2dc653)",
+]
+function gradientFor(seed) {
+  if (!seed) return AVATAR_GRADIENTS[0]
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length]
+}
+
+// Formatage temps relatif (style prototype : "2h", "5min", "1j")
+function formatRelativeTime(isoDate) {
+  if (!isoDate) return ""
+  const now = Date.now()
+  const then = new Date(isoDate).getTime()
+  const diff = Math.max(0, now - then)
+  const s = Math.floor(diff / 1000)
+  if (s < 60)       return "maintenant"
+  const m = Math.floor(s / 60)
+  if (m < 60)       return m + "min"
+  const h = Math.floor(m / 60)
+  if (h < 24)       return h + "h"
+  const d = Math.floor(h / 24)
+  if (d < 7)        return d + "j"
+  const w = Math.floor(d / 7)
+  if (w < 4)        return w + "sem"
+  const mo = Math.floor(d / 30)
+  if (mo < 12)      return mo + "mois"
+  return Math.floor(d / 365) + "an"
+}
+
+// Mapping BDD → format UI (ajout avatarUrl)
+function mapCommentFromDB(c) {
+  const profile = c.profiles || {}
+  const name = profile.display_name || profile.username || "Utilisateur"
+  const initials = (profile.username || name).slice(0, 2).toUpperCase()
+  return {
+    id:   c.id,
+    ava:  initials,
+    bg:   gradientFor(profile.username || profile.id || c.id),
+    avatarUrl: profile.avatar_url || null,
+    name,
+    text: c.content,
+    time: formatRelativeTime(c.created_at),
+  }
+}
+
+/* ══ Petit composant avatar (image réelle OU pastille fallback) ══ */
+function CommentAvatar({ url, bg, initials, size = 28 }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const common = {
+    width:size, height:size, borderRadius:"50%",
+    flexShrink:0, overflow:"hidden",
+    display:"flex", alignItems:"center", justifyContent:"center",
+  }
+  if (url && !imgFailed) {
+    return (
+      <div style={{...common, background: bg || "var(--card2)"}}>
+        <img src={url} alt="" style={{width:"100%", height:"100%", objectFit:"cover"}}
+          onError={()=>setImgFailed(true)}/>
+      </div>
+    )
+  }
+  return (
+    <div style={{
+      ...common,
+      background: bg,
+      fontSize: Math.round(size * 0.36), fontWeight:800, color:"#000",
+      fontFamily:"Syne,sans-serif",
+    }}>
+      {initials}
+    </div>
+  )
+}
+
 /* ══ REACTION BAR — fidèle au prototype v7.2 ══ */
 export function ReactionBar({ targetType, targetId, showComments = true, externalPanel, onPanelToggle }) {
   const { user } = useAuthStore()
 
-  // Compteurs locaux (optimistic UI)
+  // Compteurs locaux (optimistic UI) — fallback random, remplacés par vrais chiffres dans useEffect
   const [counts,    setCounts]    = useState({ like: rndK(5), fire: rndK(3), love: rndK(2), clap: rndK(1) })
   const [active,    setActive]    = useState(null)         // clé de la réaction active
   const [panelOpen, setPanelOpen] = useState(false)
   const isPanelOpen = externalPanel !== undefined ? externalPanel : panelOpen
   const togglePanel = onPanelToggle !== undefined ? onPanelToggle : () => setPanelOpen(p=>!p)
-  const [comments,  setComments]  = useState(SAMPLE_COMMENTS.slice(0, Math.floor(Math.random()*2)+1))
+  const [comments,  setComments]  = useState([])
   const [newMsg,    setNewMsg]    = useState("")
   const [sending,   setSending]   = useState(false)
   const [reportOpen,setReportOpen]= useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [myImgFailed, setMyImgFailed] = useState(false)
   const inputRef = useRef(null)
 
-  /* Charger les vraies données si targetId disponible */
+  /* Charger réactions + commentaires (vraies données BDD) */
   useEffect(() => {
-    if (!targetId) return
+    if (!targetId || !targetType) return
+    let cancelled = false
+
+    // Réactions
     api.social.reactions?.(targetType, targetId)
       .then(r => {
-        if (!r?.reactions?.length) return
-        const agg = { like:0, fire:0, love:0, clap:0 }
-        r.reactions.forEach(rx => { if(agg[rx.emoji]!==undefined) agg[rx.emoji]++ })
-        setCounts({ like:agg.like||rndK(5), fire:agg.fire||rndK(3), love:agg.love||rndK(2), clap:agg.clap||rndK(1) })
-        if (user) {
-          const mine = r.reactions.find(rx => rx.user_id === user.id)
-          if (mine) setActive(mine.emoji)
-        }
+        if (cancelled || !r) return
+        const rx = r.reactions || {}
+        setCounts({
+          like: (rx.like || 0).toLocaleString(),
+          fire: (rx.fire || 0).toLocaleString(),
+          love: (rx.love || 0).toLocaleString(),
+          clap: (rx.clap || 0).toLocaleString(),
+        })
+        if (r.user_reaction) setActive(r.user_reaction)
       }).catch(()=>{})
-  }, [targetId])
+
+    // Commentaires
+    api.social.comments?.(targetType, targetId)
+      .then(r => {
+        if (cancelled) return
+        const list = Array.isArray(r?.comments) ? r.comments : []
+        setComments(list.map(mapCommentFromDB))
+      }).catch(()=>{})
+
+    return () => { cancelled = true }
+  }, [targetType, targetId])
 
   const handleReact = (key, e) => {
     e?.stopPropagation()
@@ -88,21 +181,45 @@ export function ReactionBar({ targetType, targetId, showComments = true, externa
 
   const handleSend = async (e) => {
     if (e?.key && e.key !== "Enter") return
-    if (!newMsg.trim()) return
-    setSending(true)
-    const fakeComment = {
-      ava: user?.username?.slice(0,2)?.toUpperCase()||"??",
-      bg: "linear-gradient(135deg,var(--gold),var(--red))",
-      name: user?.username || "Vous",
-      text: newMsg.trim(),
-      time: "maintenant"
+    if (!newMsg.trim() || sending) return
+    const text = newMsg.trim()
+
+    // Optimistic UI : ajouter un commentaire temporaire immédiatement
+    const tempId = "temp-" + Date.now()
+    const tempComment = {
+      id:   tempId,
+      ava:  user?.username?.slice(0,2)?.toUpperCase() || "??",
+      bg:   gradientFor(user?.username || user?.id || "me"),
+      avatarUrl: user?.avatar_url || null,
+      name: user?.display_name || user?.username || "Vous",
+      text,
+      time: "maintenant",
     }
-    setComments(prev => [fakeComment, ...prev])
+    setComments(prev => [tempComment, ...prev])
     setNewMsg("")
-    if (user) api.social.comment?.({ target_type: targetType, target_id: targetId, content: newMsg.trim() }).catch(()=>{})
+    setSending(true)
+
+    // API call : remplacer le temp par le vrai retour serveur
+    if (user) {
+      try {
+        const res = await api.social.comment?.({ target_type: targetType, target_id: targetId, content: text })
+        if (res?.comment) {
+          const real = mapCommentFromDB(res.comment)
+          setComments(prev => prev.map(c => c.id === tempId ? real : c))
+        }
+      } catch(err) {
+        // En cas d'échec, retirer le commentaire temp
+        setComments(prev => prev.filter(c => c.id !== tempId))
+      }
+    }
+
     setSending(false)
     inputRef.current?.focus()
   }
+
+  // Avatar de l'utilisateur courant pour la zone d'input
+  const myInitials = user?.username?.slice(0,2)?.toUpperCase() || "🎵"
+  const myAvatarUrl = user?.avatar_url || null
 
   return (
     <>
@@ -169,9 +286,15 @@ export function ReactionBar({ targetType, targetId, showComments = true, externa
 
           {/* Liste commentaires */}
           <div style={{maxHeight:260,overflowY:"auto"}}>
-            {comments.map((c, i) => (
-              <FunCommentItem key={i} comment={c} />
-            ))}
+            {comments.length === 0 ? (
+              <div style={{textAlign:"center",padding:"22px 12px",fontSize:12,color:"var(--text3)"}}>
+                Aucun commentaire pour le moment. Soyez le premier ! 🎵
+              </div>
+            ) : (
+              comments.map((c) => (
+                <FunCommentItem key={c.id} comment={c} />
+              ))
+            )}
           </div>
           {comments.length > 2 && (
             <div style={{textAlign:"center",padding:8,fontSize:12,color:"var(--text3)",cursor:"pointer",transition:"color .15s"}}
@@ -183,10 +306,17 @@ export function ReactionBar({ targetType, targetId, showComments = true, externa
 
           {/* Zone de saisie */}
           <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderTop:"1px solid var(--border)"}}>
-            {/* Avatar */}
-            <div style={{width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,var(--gold),#e63946)",color:"#000",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"Syne,sans-serif"}}>
-              {user?.username?.slice(0,2)?.toUpperCase()||"🎵"}
-            </div>
+            {/* Avatar utilisateur courant (vraie photo si dispo, sinon pastille gradient) */}
+            {myAvatarUrl && !myImgFailed ? (
+              <div style={{width:30,height:30,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:"var(--card2)"}}>
+                <img src={myAvatarUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}
+                  onError={()=>setMyImgFailed(true)}/>
+              </div>
+            ) : (
+              <div style={{width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,var(--gold),#e63946)",color:"#000",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"Syne,sans-serif"}}>
+                {myInitials}
+              </div>
+            )}
             {/* Input wrap */}
             <div style={{flex:1,display:"flex",alignItems:"center",background:"var(--card)",border:"1.5px solid var(--border)",borderRadius:50,padding:"0 6px 0 14px",gap:4,transition:"border-color .2s"}}
               onFocusCapture={e=>e.currentTarget.style.borderColor="var(--gold)"}
@@ -226,9 +356,7 @@ function FunCommentItem({ comment: c }) {
     <div style={{display:"flex",gap:9,padding:"9px 12px",transition:"background .15s",alignItems:"flex-start"}}
       onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.02)"}
       onMouseLeave={e=>e.currentTarget.style.background="none"}>
-      <div style={{width:28,height:28,borderRadius:"50%",background:c.bg,fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#000",fontFamily:"Syne,sans-serif"}}>
-        {c.ava}
-      </div>
+      <CommentAvatar url={c.avatarUrl} bg={c.bg} initials={c.ava} size={28} />
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
           <span style={{fontSize:12,fontWeight:700}}>{c.name}</span>

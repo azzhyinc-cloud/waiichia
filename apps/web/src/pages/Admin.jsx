@@ -2,38 +2,54 @@ import { useState, useEffect } from "react"
 import { useAuthStore, usePageStore } from "../stores/index.js"
 import api from "../services/api.js"
 import { getFlag, getFlagName } from "../services/flags.js"
+import EditRadioModal from "../components/EditRadioModal.jsx"
 
 const API=import.meta.env.VITE_API_URL||''
+const getToken=()=>localStorage.getItem('waiichia_token')
 const adminApi={
   get:async(path)=>{
-    const r=await fetch(API+path,{headers:{'Authorization':'Bearer '+localStorage.getItem('waiichia_token')}})
+    const r=await fetch(API+path,{headers:{'Authorization':'Bearer '+getToken()}})
     const d=await r.json()
     if(!r.ok) throw new Error(d.error||'Erreur '+r.status)
     return d
   },
   patch:async(path,body)=>{
-    const r=await fetch(API+path,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('waiichia_token')},body:JSON.stringify(body)})
+    const r=await fetch(API+path,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)})
     const d=await r.json()
     if(!r.ok) throw new Error(d.error||'Erreur '+r.status)
     return d
   },
   put:async(path,body)=>{
-    const r=await fetch(API+path,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('waiichia_token')},body:JSON.stringify(body)})
+    const r=await fetch(API+path,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},body:JSON.stringify(body)})
     const d=await r.json()
     if(!r.ok) throw new Error(d.error||'Erreur '+r.status)
     return d
   },
   del:async(path)=>{
-    const r=await fetch(API+path,{method:'DELETE',headers:{'Authorization':'Bearer '+localStorage.getItem('waiichia_token')}})
+    const r=await fetch(API+path,{method:'DELETE',headers:{'Authorization':'Bearer '+getToken()}})
     const d=await r.json()
     if(!r.ok) throw new Error(d.error||'Erreur '+r.status)
     return d
   },
 }
 const fmtS=n=>{if(!n||n===0)return'0';if(n>=1000000)return(n/1000000).toFixed(1)+'M';if(n>=1000)return(n/1000).toFixed(1)+'K';return String(n)}
+const fmtAmt=n=>new Intl.NumberFormat('fr-FR').format(Math.round(n||0))+' KMF'
+const fmtDate=d=>d?new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}):''
+
+const TX_META={
+  deposit:     {label:'Dépôt',        dir:'in',  icon:'💰'},
+  track_buy:   {label:'Vente track',  dir:'in',  icon:'🎵'},
+  purchase:    {label:'Achat produit',dir:'out', icon:'🛍️'},
+  ticket:      {label:'Billet event', dir:'out', icon:'🎟️'},
+  withdrawal:  {label:'Retrait',      dir:'out', icon:'🏦'},
+  transfer:    {label:'Transfert',    dir:null,  icon:'↔️'},
+  tip:         {label:'Tip radio',    dir:'in',  icon:'🎙️'},
+  subscription:{label:'Abonnement',  dir:'out', icon:'⭐'},
+}
+
 const NAV=[
   {g:'PRINCIPAL',items:[{id:'dashboard',icon:'📊',label:'Dashboard'}]},
-  {g:'GESTION',items:[{id:'users',icon:'👥',label:'Utilisateurs'},{id:'content',icon:'🎵',label:'Contenu'},{id:'verifications',icon:'✅',label:'Vérifications'},{id:'deposits',icon:'💰',label:'Dépôts / Recharges'},{id:'profile_requests',icon:'🔄',label:'Demandes Profil'}]},
+  {g:'GESTION',items:[{id:'users',icon:'👥',label:'Utilisateurs'},{id:'content',icon:'🎵',label:'Contenu'},{id:'verifications',icon:'✅',label:'Vérifications'},{id:'radios',icon:'📻',label:'Radios à valider'},{id:'radios_active',icon:'📡',label:'Radios actives'},{id:'deposits',icon:'💰',label:'Dépôts / Recharges'},{id:'withdrawals',icon:'🏧',label:'Retraits en attente'},{id:'profile_requests',icon:'🔄',label:'Demandes Profil'},{id:'reports',icon:'🚩',label:'Signalements'}]},
   {g:'REVENUS',items:[{id:'payment_config',icon:'💳',label:'Paiements'},{id:'finance',icon:'📊',label:'Finances'}]},
   {g:'SYSTÈME',items:[{id:'settings',icon:'⚙️',label:'Paramètres'},{id:'logs',icon:'📋',label:'Journaux'}]},
 ]
@@ -47,6 +63,12 @@ export default function Admin(){
   const [content,setContent]=useState([])
   const [verifs,setVerifs]=useState([])
   const [deposits,setDeposits]=useState([])
+  const [withdrawals,setWithdrawals]=useState([])
+  const [radioPending,setRadioPending]=useState([])
+  const [radioActive,setRadioActive]=useState([])
+  const [reports,setReports]=useState([])
+  const [reportFilter,setReportFilter]=useState('all')
+  const [editRadio,setEditRadio]=useState(null)
   const [profileReqs,setProfileReqs]=useState([])
   const [payConfig,setPayConfig]=useState({})
   const [socialConfig,setSocialConfig]=useState({
@@ -56,11 +78,21 @@ export default function Admin(){
     x:{enabled:false,client_id:'',client_secret:'',redirect_url:''}
   })
   const [savingSocial,setSavingSocial]=useState(false)
+  const [financeData,setFinanceData]=useState({transactions:[],stats:{}})
+  const [financePeriod,setFinancePeriod]=useState('30d')
   const [loading,setLoading]=useState(false)
   const [toast,setToast]=useState('')
   const [search,setSearch]=useState('')
 
   const showToast=m=>{setToast(m);setTimeout(()=>setToast(''),3000)}
+
+  const resolveReport=async(id,status,also_remove)=>{
+    try{
+      await adminApi.patch('/api/admin/reports/'+id,{status,also_remove:!!also_remove})
+      setReports(rs=>rs.filter(r=>r.id!==id))
+      showToast(also_remove?'Signalement traité + contenu retiré':'Signalement '+status)
+    }catch(e){showToast('Erreur : '+(e.message||'action échouée'))}
+  }
 
   useEffect(()=>{
     setLoading(true)
@@ -69,11 +101,50 @@ export default function Admin(){
     if(tab==='content') adminApi.get('/api/admin/content?limit=50').then(d=>setContent(d.content||[])).catch(()=>{})
     if(tab==='verifications') adminApi.get('/api/admin/verifications').then(d=>setVerifs(d.verifications||[])).catch(()=>{})
     if(tab==='deposits') adminApi.get('/api/admin/deposits').then(d=>setDeposits(d.deposits||[])).catch(()=>{})
+    if(tab==='withdrawals') adminApi.get('/api/admin/withdrawals').then(d=>setWithdrawals(d.withdrawals||[])).catch(()=>{})
+    if(tab==='radios') adminApi.get('/api/admin/radio-pending').then(d=>setRadioPending(d.stations||[])).catch(()=>{})
+    if(tab==='radios_active') api.radio.list('?limit=100').then(d=>setRadioActive(d.stations||[])).catch(()=>{})
+    if(tab==='reports') adminApi.get('/api/admin/reports').then(d=>setReports(d.reports||[])).catch(()=>{})
     if(tab==='profile_requests') adminApi.get('/api/admin/profile-requests').then(d=>setProfileReqs(d.requests||[])).catch(()=>{})
     if(tab==='payment_config') adminApi.get('/api/admin/payment-config').then(d=>setPayConfig(d.config||{})).catch(()=>{})
-    if(tab==='settings') adminApi.get('/api/auth/social-config/full').then(d=>{if(d?.config)setSocialConfig(d.config)}).catch(()=>{})
+    if(tab==='settings') adminApi.get('/api/auth/social-config/full').then(d=>{if(d?.providers)setSocialConfig(d.providers)}).catch(()=>{})
+    if(tab==='finance') loadFinance(financePeriod)
     setLoading(false)
   },[tab])
+
+  const loadFinance=async(period)=>{
+    try{
+      const days=period==='7d'?7:period==='30d'?30:period==='90d'?90:365
+      const from=new Date(Date.now()-days*86400000).toISOString()
+      const d=await adminApi.get('/api/payments/history?limit=500&from='+from).catch(()=>({transactions:[]}))
+      const txs=d.transactions||[]
+      // Calculs
+      const totalIn=txs.filter(t=>TX_META[t.type]?.dir==='in').reduce((s,t)=>s+(t.amount||0),0)
+      const totalOut=txs.filter(t=>TX_META[t.type]?.dir==='out').reduce((s,t)=>s+(t.amount||0),0)
+      const deposits=txs.filter(t=>t.type==='deposit').reduce((s,t)=>s+(t.amount||0),0)
+      const sales=txs.filter(t=>t.type==='track_buy').reduce((s,t)=>s+(t.amount||0),0)
+      const tickets=txs.filter(t=>t.type==='ticket').reduce((s,t)=>s+(t.amount||0),0)
+      const withdrawals=txs.filter(t=>t.type==='withdrawal').reduce((s,t)=>s+(t.amount||0),0)
+      // Commission estimée (15% sur ventes, 2.5% retraits)
+      const commission=sales*0.15+withdrawals*0.025
+      // Par type
+      const byType={}
+      for(const tx of txs){
+        const k=tx.type||'other'
+        if(!byType[k])byType[k]={count:0,total:0}
+        byType[k].count++;byType[k].total+=tx.amount||0
+      }
+      // Par jour (7 derniers jours pour le graphique)
+      const byDay={}
+      for(const tx of txs){
+        const d=new Date(tx.created_at).toISOString().slice(0,10)
+        if(!byDay[d])byDay[d]={in:0,out:0}
+        if(TX_META[tx.type]?.dir==='in')byDay[d].in+=tx.amount||0
+        else byDay[d].out+=tx.amount||0
+      }
+      setFinanceData({transactions:txs.slice(0,100),stats:{totalIn,totalOut,deposits,sales,tickets,withdrawals,commission,byType,byDay,count:txs.length}})
+    }catch(e){}
+  }
 
   const userAction=async(id,action)=>{
     const r=await adminApi.patch('/api/admin/users/'+id+'/status',{action})
@@ -96,6 +167,12 @@ export default function Admin(){
     showToast(r.message||'✅ Fait')
     setDeposits(d=>d.filter(x=>x.id!==id))
   }
+  const radioAction=async(id,action)=>{
+    const r=await adminApi.patch('/api/admin/radio/'+id,{action})
+    if(r&&r.error){showToast('❌ '+r.error);return}
+    setRadioPending(prev=>prev.filter(s=>s.id!==id))
+    showToast(action==='approve'?'✅ Station approuvée':'❌ Station rejetée')
+  }
   const changeRole=async(id,newType)=>{
     const r=await adminApi.patch('/api/admin/users/'+id+'/role',{profile_type:newType})
     showToast(r.user?'Profil changé en '+newType:'Erreur')
@@ -109,7 +186,6 @@ export default function Admin(){
   const savePayConfig=async()=>{
     try{
       await adminApi.put('/api/admin/payment-config',{config:payConfig})
-      // Relire pour vérifier la persistance
       const fresh=await adminApi.get('/api/admin/payment-config')
       if(fresh?.config) setPayConfig(fresh.config)
       showToast('✅ Configuration paiements sauvegardée')
@@ -118,14 +194,20 @@ export default function Admin(){
   const saveSocialConfig=async()=>{
     setSavingSocial(true)
     try{
-      const res=await adminApi.patch('/api/auth/social-config',socialConfig)
-      // Relire pour vérifier la persistance
+      await adminApi.patch('/api/auth/social-config',{providers:socialConfig})
       const fresh=await adminApi.get('/api/auth/social-config/full')
-      if(fresh?.config) setSocialConfig(fresh.config)
+      if(fresh?.providers) setSocialConfig(fresh.providers)
       showToast('✅ Configuration sociale sauvegardée')
     }catch(e){showToast('❌ Erreur sociale: '+e.message)}
     setSavingSocial(false)
   }
+
+  // Filtres signalements
+  const filteredReports=reports.filter(r=>{
+    if(reportFilter==='all') return true
+    if(reportFilter==='critical') return r.severity==='critical'||r.severity==='high'
+    return r.target_type===reportFilter
+  })
 
   if(!user)return(<div style={{textAlign:'center',padding:60}}><div style={{fontSize:48,marginBottom:16}}>🛡️</div><h2 style={{fontFamily:'Syne,sans-serif'}}>Connectez-vous en admin</h2><button className="btn btn-primary" onClick={()=>setPage('login')} style={{marginTop:16}}>Se connecter</button></div>)
 
@@ -153,7 +235,7 @@ export default function Admin(){
 
         {/* ═══ DASHBOARD ═══ */}
         {tab==='dashboard'&&<div>
-          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:20}}>📊 Dashboard — Données réelles</h2>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:20}}>📊 Dashboard</h2>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:24}}>
             {[
               {icon:'👥',num:fmtS(stats.users_count||stats.creators_count),label:'Utilisateurs',color:'var(--green)'},
@@ -188,7 +270,7 @@ export default function Admin(){
                     <td style={{padding:'10px 12px'}}><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),#e63946)',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{(u.display_name||'?')[0]}</div><div><div style={{fontWeight:600}}>{u.display_name||'Sans nom'}</div><div style={{fontSize:10,color:'var(--text3)'}}>{u.email}</div></div></div></td>
                     <td style={{padding:'10px 12px'}}><span style={{padding:'2px 8px',borderRadius:12,fontSize:10,background:'var(--bg2)',fontFamily:'Space Mono,monospace'}}>{u.profile_type||'listener'}</span></td>
                     <td style={{padding:'10px 12px'}}>{u.country?getFlagName(u.country):'—'}</td>
-                    <td style={{padding:'10px 12px',fontSize:11,color:'var(--text3)'}}>{u.created_at?new Date(u.created_at).toLocaleDateString('fr'):'—'}</td>
+                    <td style={{padding:'10px 12px',fontSize:11,color:'var(--text3)'}}>{u.created_at?new Date(u.created_at).toLocaleDateString('fr'):''}</td>
                     <td style={{padding:'10px 12px'}}>{u.is_verified?<span style={{color:'var(--green)'}}>✅</span>:<span style={{color:'var(--text3)'}}>❌</span>}</td>
                     <td style={{padding:'10px 12px'}}>{u.is_active===false?<span style={{color:'var(--red)',fontSize:10,fontWeight:700}}>SUSPENDU</span>:<span style={{color:'var(--green)',fontSize:10,fontWeight:700}}>ACTIF</span>}</td>
                     <td style={{padding:'10px 12px'}}><div style={{display:'flex',gap:4}}>
@@ -242,8 +324,8 @@ export default function Admin(){
               <div style={{width:48,height:48,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),#e63946)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:18}}>{(v.display_name||'?')[0]}</div>
               <div style={{flex:1}}>
                 <div style={{fontWeight:700,fontSize:14}}>{v.display_name} <span style={{fontSize:11,color:'var(--text3)'}}>@{v.username}</span></div>
-                <div style={{fontSize:12,color:'var(--text2)'}}>Profil demandé : {v.requested_profile_type||v.profile_type||'artiste'} · Pays : {v.country?getFlagName(v.country):'—'}</div>
-                <div style={{fontSize:11,color:'var(--text3)'}}>Email : {v.email} · Inscrit le {v.created_at?new Date(v.created_at).toLocaleDateString('fr'):''}</div>
+                <div style={{fontSize:12,color:'var(--text2)'}}>Profil : {v.requested_profile_type||v.profile_type||'artiste'} · {v.country?getFlagName(v.country):'—'}</div>
+                <div style={{fontSize:11,color:'var(--text3)'}}>{v.email} · {fmtDate(v.created_at)}</div>
               </div>
               <div style={{display:'flex',gap:8}}>
                 <button className="btn btn-primary btn-sm" onClick={()=>verifAction(v.id,'approve')}>✅ Approuver</button>
@@ -253,7 +335,96 @@ export default function Admin(){
           )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>✅</div>Aucune demande en attente</div>}
         </div>}
 
-        {/* ═══ DÉPÔTS / RECHARGES ═══ */}
+        {/* ═══ RADIOS À VALIDER ═══ */}
+        {tab==='radios'&&<div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>📻 Radios soumises ({radioPending.length})</h2>
+          {radioPending.length?radioPending.map(s=>(
+            <div key={s.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:18,marginBottom:12,display:'flex',alignItems:'center',gap:16}}>
+              <div style={{width:60,height:60,borderRadius:8,background:'var(--card2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,overflow:'hidden',flexShrink:0}}>
+                {s.logo_url?<img src={s.logo_url} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:'📻'}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:15,marginBottom:3}}>{s.name}</div>
+                <div style={{fontSize:12,color:'var(--text2)',marginBottom:4,maxHeight:36,overflow:'hidden'}}>{s.description||'(pas de description)'}</div>
+                <div style={{fontSize:11,color:'var(--text3)',marginBottom:3}}>Pays : {s.country||'—'} · Genre : {s.genre||'—'} · Par : {s.profiles?.display_name||'?'}</div>
+                <a href={s.stream_url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'var(--gold)',textDecoration:'underline',wordBreak:'break-all'}}>🔗 {s.stream_url}</a>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:8,flexShrink:0}}>
+                <button className="btn btn-primary btn-sm" onClick={()=>radioAction(s.id,'approve')}>✅ Approuver</button>
+                <button className="btn btn-outline btn-sm" style={{color:'var(--red)',borderColor:'var(--red)'}} onClick={()=>{if(confirm('Supprimer « '+s.name+' » ?'))radioAction(s.id,'reject')}}>❌ Rejeter</button>
+              </div>
+            </div>
+          )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>📻</div>Aucune station en attente</div>}
+        </div>}
+
+        {/* ═══ SIGNALEMENTS ═══ */}
+        {tab==='reports'&&<div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:10}}>
+            <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,margin:0}}>🚩 Signalements ({filteredReports.length}/{reports.length})</h2>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {[
+                {key:'all',label:'Tous'},
+                {key:'critical',label:'🔴 Critiques'},
+                {key:'track',label:'🎵 Tracks'},
+                {key:'profile',label:'👤 Profils'},
+                {key:'recording',label:'🎤 Duets'},
+                {key:'event',label:'🎫 Events'},
+              ].map(f=>(
+                <button key={f.key} onClick={()=>setReportFilter(f.key)}
+                  style={{padding:'5px 12px',borderRadius:20,fontSize:11,fontWeight:600,cursor:'pointer',border:'1px solid '+(reportFilter===f.key?'var(--gold)':'var(--border)'),background:reportFilter===f.key?'rgba(245,166,35,.12)':'transparent',color:reportFilter===f.key?'var(--gold)':'var(--text3)'}}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {filteredReports.length?filteredReports.map(r=>(
+            <div key={r.id} style={{background:'var(--card)',border:'1px solid '+(r.severity==='critical'?'rgba(230,57,70,.4)':r.severity==='high'?'rgba(230,120,0,.3)':'var(--border)'),borderRadius:'var(--radius)',padding:18,marginBottom:12,display:'flex',alignItems:'center',gap:16}}>
+              <div style={{width:52,height:52,borderRadius:10,background:r.severity==='critical'?'rgba(230,57,70,.12)':r.severity==='high'?'rgba(230,120,0,.12)':'var(--card2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>
+                {r.severity==='critical'?'🔴':r.severity==='high'?'🟠':r.severity==='low'?'🟡':'🚩'}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                  <div style={{fontWeight:700,fontSize:14}}>{r.reason||'(raison non précisée)'}</div>
+                  <span style={{padding:'2px 8px',borderRadius:10,fontSize:9,fontWeight:700,fontFamily:'Space Mono,monospace',background:r.severity==='critical'?'rgba(230,57,70,.15)':r.severity==='high'?'rgba(230,120,0,.15)':'var(--bg2)',color:r.severity==='critical'?'var(--red)':r.severity==='high'?'#e67800':'var(--text3)'}}>{(r.severity||'medium').toUpperCase()}</span>
+                  <span style={{padding:'2px 8px',borderRadius:10,fontSize:9,fontWeight:700,background:'var(--bg2)',color:'var(--text3)'}}>{r.target_type||'?'}</span>
+                </div>
+                <div style={{fontSize:12,color:'var(--text2)',marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.details||'(pas de détail)'}</div>
+                <div style={{fontSize:11,color:'var(--text3)'}}>
+                  Signalé par : <strong>{r.reporter?.display_name||r.reporter?.username||'?'}</strong> · {fmtDate(r.created_at)}
+                </div>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6,flexShrink:0}}>
+                <button className="btn btn-primary btn-sm" onClick={()=>resolveReport(r.id,'resolved',false)}>✅ Résoudre</button>
+                <button className="btn btn-outline btn-sm" onClick={()=>resolveReport(r.id,'dismissed',false)}>🚫 Rejeter</button>
+                <button className="btn btn-outline btn-sm" style={{color:'var(--red)',borderColor:'var(--red)'}} onClick={()=>{if(confirm('Retirer ce contenu ET résoudre ?'))resolveReport(r.id,'resolved',true)}}>🗑️ + Retirer</button>
+              </div>
+            </div>
+          )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>🚩</div>Aucun signalement{reportFilter!=='all'?' dans cette catégorie':' en attente'}</div>}
+        </div>}
+
+        {/* ═══ RADIOS ACTIVES ═══ */}
+        {tab==='radios_active'&&<div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>📡 Radios actives ({radioActive.length})</h2>
+          {radioActive.length?radioActive.map(s=>(
+            <div key={s.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:18,marginBottom:12,display:'flex',alignItems:'center',gap:16}}>
+              <div style={{width:60,height:60,borderRadius:8,background:'var(--card2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,overflow:'hidden',flexShrink:0}}>
+                {s.logo_url?<img src={s.logo_url} alt={s.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:'📻'}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:15,marginBottom:3}}>{s.name}</div>
+                <div style={{fontSize:12,color:'var(--text2)',marginBottom:4}}>{s.description||'(pas de description)'}</div>
+                <div style={{fontSize:11,color:'var(--text3)',marginBottom:3}}>Pays : {s.country||'—'} · Genre : {s.genre||'—'} · Par : {s.profiles?.display_name||'?'}</div>
+                <a href={s.stream_url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'var(--gold)',textDecoration:'underline',wordBreak:'break-all'}}>🔗 {s.stream_url}</a>
+              </div>
+              <div style={{flexShrink:0}}>
+                <button className="btn btn-primary btn-sm" onClick={()=>setEditRadio(s)}>✏️ Modifier</button>
+              </div>
+            </div>
+          )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>📡</div>Aucune radio active</div>}
+          {editRadio&&<EditRadioModal station={editRadio} onClose={()=>setEditRadio(null)} onSaved={(u)=>setRadioActive(p=>p.map(r=>r.id===u.id?u:r))}/>}
+        </div>}
+
+        {/* ═══ DÉPÔTS ═══ */}
         {tab==='deposits'&&<div>
           <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>💰 Dépôts à valider ({deposits.length})</h2>
           {deposits.length?deposits.map(d=>(
@@ -262,7 +433,7 @@ export default function Admin(){
               <div style={{flex:1}}>
                 <div style={{fontWeight:700,fontSize:14}}>{d.amount?.toLocaleString()} {d.currency||'KMF'}</div>
                 <div style={{fontSize:12,color:'var(--text2)'}}>Par : {d.profiles?.display_name||'Utilisateur'} · Méthode : {d.method||'cash'}</div>
-                <div style={{fontSize:11,color:'var(--text3)'}}>Référence : {d.reference||'—'} · {d.created_at?new Date(d.created_at).toLocaleDateString('fr'):''}</div>
+                <div style={{fontSize:11,color:'var(--text3)'}}>Réf : {d.reference||'—'} · {fmtDate(d.created_at)}</div>
               </div>
               <div style={{display:'flex',gap:8}}>
                 <button className="btn btn-primary btn-sm" onClick={()=>depositAction(d.id,'approve')}>✅ Valider</button>
@@ -272,15 +443,39 @@ export default function Admin(){
           )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>✅</div>Aucun dépôt en attente</div>}
         </div>}
 
-        {/* ═══ DEMANDES DE PROFIL ═══ */}
+        {/* ═══ RETRAITS ═══ */}
+        {tab==='withdrawals'&&<div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>🏧 Retraits en attente ({withdrawals.length})</h2>
+          {withdrawals.length?withdrawals.map(w=>(
+            <div key={w.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:18,marginBottom:12,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+              <div style={{width:48,height:48,borderRadius:10,background:'rgba(231,76,60,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24}}>🏧</div>
+              <div style={{flex:1,minWidth:200}}>
+                <div style={{fontWeight:700,fontSize:14}}>{w.amount?.toLocaleString()} {w.currency||'KMF'}</div>
+                <div style={{fontSize:12,color:'var(--text2)'}}>@{w.profiles?.username||'—'} · {w.method||'mvola'} → {w.destination||'—'}</div>
+                <div style={{fontSize:11,color:'var(--text3)'}}>{fmtDate(w.created_at)}{w.notes?' · '+w.notes:''}</div>
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn btn-primary btn-sm" onClick={async()=>{
+                  try{await adminApi.patch('/api/admin/withdrawals/'+w.id,{action:'approve'});setWithdrawals(ws=>ws.filter(x=>x.id!==w.id));showToast('✅ Retrait approuvé, wallet débité')}
+                  catch(e){showToast('❌ '+(e.message||'Erreur'))}
+                }}>✅ Approuver</button>
+                <button className="btn btn-outline btn-sm" style={{color:'var(--red)',borderColor:'var(--red)'}} onClick={async()=>{
+                  try{await adminApi.patch('/api/admin/withdrawals/'+w.id,{action:'reject'});setWithdrawals(ws=>ws.filter(x=>x.id!==w.id));showToast('Retrait refusé')}
+                  catch(e){showToast('❌ '+(e.message||'Erreur'))}
+                }}>❌ Refuser</button>
+              </div>
+            </div>
+          )):<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>✅</div>Aucun retrait en attente</div>}
+        </div>}
+        {/* ═══ DEMANDES PROFIL ═══ */}
         {tab==='profile_requests'&&<div>
-          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>🔄 Demandes de changement de profil ({profileReqs.length})</h2>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>🔄 Demandes de profil ({profileReqs.length})</h2>
           {profileReqs.length?profileReqs.map(r=>(
             <div key={r.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:18,marginBottom:12,display:'flex',alignItems:'center',gap:16}}>
               <div style={{width:48,height:48,borderRadius:'50%',background:'linear-gradient(135deg,var(--gold),#e63946)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:18}}>{(r.display_name||'?')[0]}</div>
               <div style={{flex:1}}>
                 <div style={{fontWeight:700,fontSize:14}}>{r.display_name} <span style={{fontSize:11,color:'var(--text3)'}}>@{r.username}</span></div>
-                <div style={{fontSize:12,color:'var(--text2)'}}>Profil actuel : <strong>{r.profile_type}</strong> → Demandé : <strong style={{color:'var(--gold)'}}>{r.requested_profile_type}</strong></div>
+                <div style={{fontSize:12,color:'var(--text2)'}}>Actuel : <strong>{r.profile_type}</strong> → Demandé : <strong style={{color:'var(--gold)'}}>{r.requested_profile_type}</strong></div>
                 {r.profile_request_reason&&<div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>Raison : {r.profile_request_reason}</div>}
               </div>
               <div style={{display:'flex',gap:8}}>
@@ -294,7 +489,7 @@ export default function Admin(){
         {/* ═══ CONFIG PAIEMENT ═══ */}
         {tab==='payment_config'&&<div>
           <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:6}}>💳 Méthodes de paiement</h2>
-          <div style={{fontSize:12,color:'var(--text3)',marginBottom:16}}>Activez les modes de paiement et configurez les informations API. Les mêmes modes seront disponibles pour la recharge et le retrait.</div>
+          <div style={{fontSize:12,color:'var(--text3)',marginBottom:16}}>Activez les modes de paiement et configurez les informations API.</div>
           <div style={{display:'flex',flexDirection:'column',gap:14,marginBottom:20}}>
             {[
               {id:'mvola',icon:'📲',name:'Mvola (USSD)',desc:'Comores Telecom',fields:['phone']},
@@ -312,15 +507,9 @@ export default function Admin(){
                 <div key={m.id} style={{background:'var(--card)',border:`1px solid ${enabled?'rgba(44,198,83,.3)':'var(--border)'}`,borderRadius:'var(--radius)',overflow:'hidden'}}>
                   <div style={{padding:'14px 18px',display:'flex',alignItems:'center',gap:14}}>
                     <span style={{fontSize:28}}>{m.icon}</span>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:700,fontSize:13}}>{m.name}</div>
-                      <div style={{fontSize:11,color:'var(--text3)'}}>{m.desc}</div>
-                    </div>
+                    <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>{m.name}</div><div style={{fontSize:11,color:'var(--text3)'}}>{m.desc}</div></div>
                     <span style={{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'Space Mono,monospace',background:enabled?'rgba(44,198,83,.15)':'rgba(230,57,70,.1)',color:enabled?'var(--green)':'var(--red)'}}>{enabled?'ACTIF':'INACTIF'}</span>
-                    <button onClick={()=>setPayConfig(c=>({...c,[m.id]:{...c[m.id],enabled:!enabled}}))} style={{
-                      width:44,height:24,borderRadius:12,border:'none',cursor:'pointer',position:'relative',transition:'background .2s',
-                      background:enabled?'var(--green)':'var(--border)'
-                    }}>
+                    <button onClick={()=>setPayConfig(c=>({...c,[m.id]:{...c[m.id],enabled:!enabled}}))} style={{width:44,height:24,borderRadius:12,border:'none',cursor:'pointer',position:'relative',transition:'background .2s',background:enabled?'var(--green)':'var(--border)'}}>
                       <div style={{width:20,height:20,borderRadius:'50%',background:'#fff',position:'absolute',top:2,left:enabled?22:2,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.3)'}}/>
                     </button>
                   </div>
@@ -328,13 +517,7 @@ export default function Admin(){
                     {m.fields.map(field=>(
                       <div key={field} style={{flex:field==='iban'?'1 1 100%':'1 1 45%',minWidth:140}}>
                         <label style={{display:'block',fontSize:10,fontWeight:700,letterSpacing:1,color:'var(--text3)',marginBottom:4,textTransform:'uppercase'}}>{field.replace(/_/g,' ')}</label>
-                        <input
-                          type={field.includes('secret')?'password':'text'}
-                          value={cfg[field]||''}
-                          onChange={e=>setPayConfig(c=>({...c,[m.id]:{...c[m.id],[field]:e.target.value}}))}
-                          placeholder={field==='phone'?'ex: 3234567':field==='iban'?'KM46 ...':field==='swift'?'BDCMKMKC':'...'}
-                          style={{width:'100%',padding:'8px 12px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg2)',color:'var(--text)',fontSize:12,boxSizing:'border-box',fontFamily:'Space Mono,monospace'}}
-                        />
+                        <input type={field.includes('secret')?'password':'text'} value={cfg[field]||''} onChange={e=>setPayConfig(c=>({...c,[m.id]:{...c[m.id],[field]:e.target.value}}))} placeholder={field==='phone'?'ex: 3234567':field==='iban'?'KM46 ...':field==='swift'?'BDCMKMKC':'...'} style={{width:'100%',padding:'8px 12px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg2)',color:'var(--text)',fontSize:12,boxSizing:'border-box',fontFamily:'Space Mono,monospace'}}/>
                       </div>
                     ))}
                   </div>}
@@ -347,18 +530,99 @@ export default function Admin(){
 
         {/* ═══ FINANCES ═══ */}
         {tab==='finance'&&<div>
-          <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:16}}>📊 Finances</h2>
-          <div style={{textAlign:'center',padding:40,color:'var(--text3)'}}><div style={{fontSize:48,marginBottom:12}}>📊</div>Les statistiques financières détaillées seront disponibles avec plus de transactions.</div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,flexWrap:'wrap',gap:10}}>
+            <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,margin:0}}>📊 Finances</h2>
+            <div style={{display:'flex',gap:6}}>
+              {[{id:'7d',label:'7j'},{id:'30d',label:'30j'},{id:'90d',label:'90j'},{id:'1y',label:'1an'}].map(p=>(
+                <button key={p.id} onClick={()=>{setFinancePeriod(p.id);loadFinance(p.id)}}
+                  style={{padding:'6px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:'1px solid '+(financePeriod===p.id?'var(--gold)':'var(--border)'),background:financePeriod===p.id?'rgba(245,166,35,.12)':'transparent',color:financePeriod===p.id?'var(--gold)':'var(--text3)'}}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* KPIs financiers */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:20}}>
+            {[
+              {icon:'💰',label:'Revenus totaux',  value:fmtAmt(financeData.stats.totalIn),    color:'var(--green)'},
+              {icon:'💸',label:'Dépenses totales', value:fmtAmt(financeData.stats.totalOut),   color:'var(--red)'},
+              {icon:'🎵',label:'Ventes tracks',    value:fmtAmt(financeData.stats.sales),      color:'var(--gold)'},
+              {icon:'🎟️',label:'Billets events',  value:fmtAmt(financeData.stats.tickets),    color:'var(--purple)'},
+              {icon:'🏦',label:'Retraits',         value:fmtAmt(financeData.stats.withdrawals),color:'var(--red)'},
+              {icon:'📈',label:'Commission est.',  value:fmtAmt(financeData.stats.commission), color:'var(--gold)'},
+            ].map(k=>(
+              <div key={k.label} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'14px 16px',borderLeft:'3px solid '+k.color}}>
+                <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>{k.icon} {k.label}</div>
+                <div style={{fontSize:16,fontWeight:800,color:k.color,fontFamily:'Space Mono,monospace'}}>{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Graphique par type */}
+          {financeData.stats.byType&&Object.keys(financeData.stats.byType).length>0&&(
+            <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:16,marginBottom:20}}>
+              <div style={{fontSize:12,fontWeight:700,marginBottom:14,color:'var(--text2)'}}>📂 Répartition par type</div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {Object.entries(financeData.stats.byType).sort((a,b)=>b[1].total-a[1].total).map(([type,data])=>{
+                  const meta=TX_META[type]||{label:type,icon:'📌',dir:null}
+                  const maxTotal=Math.max(...Object.values(financeData.stats.byType).map(d=>d.total),1)
+                  const pct=Math.round((data.total/maxTotal)*100)
+                  return(
+                    <div key={type} style={{display:'flex',alignItems:'center',gap:10}}>
+                      <div style={{width:28,height:28,borderRadius:8,background:'var(--bg2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>{meta.icon}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                          <span style={{fontSize:12,fontWeight:600}}>{meta.label}</span>
+                          <span style={{fontSize:12,fontFamily:'Space Mono,monospace',color:'var(--gold)'}}>{fmtAmt(data.total)} <span style={{color:'var(--text3)',fontWeight:400}}>({data.count} op.)</span></span>
+                        </div>
+                        <div style={{height:4,background:'var(--bg2)',borderRadius:2}}>
+                          <div style={{height:'100%',width:pct+'%',background:meta.dir==='in'?'var(--green)':meta.dir==='out'?'var(--red)':'var(--gold)',borderRadius:2,transition:'width .4s'}}/>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Transactions récentes */}
+          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:16}}>
+            <div style={{fontSize:12,fontWeight:700,marginBottom:12,color:'var(--text2)'}}>📋 Transactions récentes ({financeData.stats.count||0})</div>
+            {financeData.transactions.length===0
+              ?<div style={{textAlign:'center',padding:30,color:'var(--text3)'}}>Aucune transaction sur cette période</div>
+              :<div style={{overflowX:'auto'}}>
+                <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+                  <thead><tr>{['Date','Type','Description','Montant','Statut'].map(h=><th key={h} style={{textAlign:'left',padding:'8px 10px',borderBottom:'2px solid var(--border)',fontSize:10,color:'var(--text3)',fontFamily:'Space Mono,monospace'}}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {financeData.transactions.map((tx,i)=>{
+                      const meta=TX_META[tx.type]||{label:tx.type,icon:'📌',dir:null}
+                      const isIn=meta.dir==='in'
+                      return(
+                        <tr key={tx.id||i} style={{borderBottom:'1px solid var(--border)'}}>
+                          <td style={{padding:'8px 10px',color:'var(--text3)',fontFamily:'Space Mono,monospace',whiteSpace:'nowrap'}}>{fmtDate(tx.created_at)}</td>
+                          <td style={{padding:'8px 10px'}}><span style={{padding:'2px 8px',borderRadius:10,fontSize:9,background:'var(--bg2)',fontFamily:'Space Mono,monospace'}}>{meta.icon} {meta.label}</span></td>
+                          <td style={{padding:'8px 10px',color:'var(--text2)',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.description||'—'}</td>
+                          <td style={{padding:'8px 10px',fontFamily:'Space Mono,monospace',fontWeight:700,color:isIn?'var(--green)':'var(--red)',whiteSpace:'nowrap'}}>{isIn?'+':'-'}{fmtAmt(tx.amount)}</td>
+                          <td style={{padding:'8px 10px'}}><span style={{padding:'2px 8px',borderRadius:10,fontSize:9,fontWeight:700,background:tx.status==='completed'?'rgba(44,198,83,.12)':tx.status==='pending'?'rgba(245,166,35,.12)':'rgba(230,57,70,.12)',color:tx.status==='completed'?'var(--green)':tx.status==='pending'?'var(--gold)':'var(--red)'}}>{tx.status||'—'}</span></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                {financeData.stats.count>100&&<div style={{textAlign:'center',fontSize:11,color:'var(--text3)',padding:8}}>Affichage des 100 premières transactions sur {financeData.stats.count}</div>}
+              </div>
+            }
+          </div>
         </div>}
 
         {/* ═══ PARAMÈTRES ═══ */}
         {tab==='settings'&&<div>
           <h2 style={{fontFamily:'Syne,sans-serif',fontSize:20,marginBottom:20}}>⚙️ Paramètres système</h2>
-
-          {/* ── Connexion sociale ── */}
           <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20,marginBottom:20}}>
             <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:4}}>🔑 Connexion sociale</div>
-            <div style={{fontSize:12,color:'var(--text3)',marginBottom:16}}>Configurez les clés API et activez chaque fournisseur. Les boutons activés apparaissent sur la page de connexion.</div>
+            <div style={{fontSize:12,color:'var(--text3)',marginBottom:16}}>Configurez les clés API et activez chaque fournisseur.</div>
             <div style={{display:'flex',flexDirection:'column',gap:14,marginBottom:16}}>
               {[
                 {id:'facebook',icon:'📘',name:'Facebook',fields:['client_id','client_secret','redirect_url']},
@@ -392,11 +656,9 @@ export default function Admin(){
               {savingSocial?'⏳ Sauvegarde...':'💾 Sauvegarder la configuration sociale'}
             </button>
           </div>
-
-          {/* ── Infos système ── */}
           <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:20}}>
             <div style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:15,marginBottom:12}}>📋 Informations système</div>
-            {[['Plateforme','Waiichia'],['Version','v7.2'],['Supabase','Connecté ✅'],['Profil par défaut','listener (utilisateur normal)'],['Commission ventes','15%'],['Commission locations','20%'],['Commission retraits','2.5%'],['Commission transferts','1%']].map(([k,v])=>(
+            {[['Plateforme','Waiichia'],['Version','v7.2'],['Supabase','Connecté ✅'],['Profil par défaut','listener'],['Commission ventes','15%'],['Commission locations','20%'],['Commission retraits','2.5%'],['Commission transferts','1%']].map(([k,v])=>(
               <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'12px 0',borderBottom:'1px solid var(--border)',fontSize:13}}>
                 <span style={{color:'var(--text2)'}}>{k}</span><span style={{fontFamily:'Space Mono,monospace'}}>{v}</span>
               </div>

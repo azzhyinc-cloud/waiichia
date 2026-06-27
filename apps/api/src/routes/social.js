@@ -13,6 +13,7 @@ async function resolveContentOwner(target_type, target_id) {
     event:    { table: 'events',         ownerCol: 'creator_id', titleCol: 'title' },
     product:  { table: 'products',       ownerCol: 'creator_id', titleCol: 'name' },
     radio:    { table: 'radio_stations', ownerCol: 'creator_id', titleCol: 'name' },
+    recording:{ table: 'karaoke_recordings', ownerCol: 'user_id', titleCol: 'title' },
   }
   const mapping = tableMap[target_type]
   if (!mapping) return { owner_id: null, title: null }
@@ -46,17 +47,32 @@ export default async function socialRoutes(app) {
     await supabase.from('reactions').insert({
       user_id: request.user.id, target_type, target_id, emoji
     })
+
+    // ── NOTIFICATION (seulement sur nouvelle réaction, pas sur update/remove) ──
+    const { owner_id, title } = await resolveContentOwner(target_type, target_id)
+    if (owner_id && owner_id !== request.user.id) {
+      Notify.react(request.user.id, owner_id, request.user.username, emoji, target_type, title, target_id)
+    }
+
     return reply.send({ action: 'added', emoji })
   })
 
-  // COMPTER LES REACTIONS
-  app.get('/reactions/:target_type/:target_id', async (request, reply) => {
+  // COMPTER LES REACTIONS (+ réaction du user courant si authentifié)
+  app.get('/reactions/:target_type/:target_id', { preHandler: app.authenticateOptional }, async (request, reply) => {
     const { target_type, target_id } = request.params
     const { data } = await supabase.from('reactions')
-      .select('emoji').eq('target_type', target_type).eq('target_id', target_id)
+      .select('emoji, user_id').eq('target_type', target_type).eq('target_id', target_id)
     const counts = {}
     data?.forEach(r => { counts[r.emoji] = (counts[r.emoji] || 0) + 1 })
-    return reply.send({ reactions: counts, total: data?.length || 0 })
+
+    // Si user loggé : trouver sa réaction active
+    let user_reaction = null
+    if (request.user?.id) {
+      const mine = data?.find(r => r.user_id === request.user.id)
+      if (mine) user_reaction = mine.emoji
+    }
+
+    return reply.send({ reactions: counts, total: data?.length || 0, user_reaction })
   })
 
   // AJOUTER UN COMMENTAIRE
@@ -79,13 +95,13 @@ export default async function socialRoutes(app) {
     if (parent_id) {
       // Réponse → notifier l'auteur du commentaire parent
       const { data: parent } = await supabase.from('comments').select('user_id').eq('id', parent_id).single()
-      if (parent) {
+      if (parent && parent.user_id !== request.user.id) {
         Notify.comment(request.user.id, parent.user_id, request.user.username, target_type, 'votre commentaire')
       }
     } else {
       // Commentaire racine → notifier le propriétaire du contenu
       const { owner_id, title } = await resolveContentOwner(target_type, target_id)
-      if (owner_id) {
+      if (owner_id && owner_id !== request.user.id) {
         Notify.comment(request.user.id, owner_id, request.user.username, target_type, title)
       }
     }

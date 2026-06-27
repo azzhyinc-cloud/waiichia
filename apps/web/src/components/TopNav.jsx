@@ -84,13 +84,17 @@ export default function TopNav({ onMenuToggle }) {
     const q=search.toLowerCase()
     const doSearch = async () => {
       try {
-        const [tracksRes, profilesRes] = await Promise.all([
-          api.tracks.list('?search=' + encodeURIComponent(q) + '&limit=4').catch(()=>({tracks:[]})),
-          api.profiles.list('?search=' + encodeURIComponent(q) + '&limit=4').catch(()=>({profiles:[]})),
+        const [tracksRes, profilesRes, emissionsRes, eventsRes] = await Promise.all([
+          api.tracks.list('?search=' + encodeURIComponent(q) + '&limit=3').catch(()=>({tracks:[]})),
+          api.profiles.list('?search=' + encodeURIComponent(q) + '&limit=3').catch(()=>({profiles:[]})),
+          api.emissions.list('?search=' + encodeURIComponent(q) + '&limit=2').catch(()=>({emissions:[]})),
+          api.events.list('?search=' + encodeURIComponent(q) + '&limit=2').catch(()=>({events:[]})),
         ])
         const mapped = [
           ...(tracksRes.tracks || []).map(t => ({type:"track",title:t.title,sub:t.profiles?.display_name||"Artiste",icon:"🎵",id:t.id})),
           ...(profilesRes.profiles || []).map(p => ({type:"artist",title:p.display_name,sub:"@"+p.username,icon:"👤",username:p.username})),
+          ...(emissionsRes.emissions || []).map(e => ({type:"emission",title:e.title,sub:e.channel||e.host||"Émission",icon:"🎙️",id:e.id})),
+          ...(eventsRes.events || []).map(e => ({type:"event",title:e.title,sub:e.location||"Événement",icon:"🎫",id:e.id})),
         ]
         setResults(mapped.length > 0 ? mapped : [])
         setShowRes(true)
@@ -118,6 +122,12 @@ export default function TopNav({ onMenuToggle }) {
     setShowRes(false)
     if (r.type === "artist" && r.username) {
       setPage("profile", { profileUsername: r.username })
+    } else if (r.type === "track" && r.id) {
+      setPage("music", { autoPlayId: r.id })
+    } else if (r.type === "emission" && r.id) {
+      setPage("emission", { emissionId: r.id })
+    } else if (r.type === "event" && r.id) {
+      setPage("events", { eventId: r.id })
     }
   }
 

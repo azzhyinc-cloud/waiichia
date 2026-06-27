@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useAuthStore, useDeviseStore, usePageStore, usePlayerStore } from "../stores/index.js"
 import BuyModal from "../components/BuyModal.jsx"
 import AddToPlaylistModal from "../components/AddToPlaylistModal.jsx"
+import EditRadioModal from "../components/EditRadioModal.jsx" // MyRadios tab v19
 import api from "../services/api.js"
 
 const TABS = [
@@ -10,6 +11,7 @@ const TABS = [
   {id:"albums",    label:"💿 Albums"},
   {id:"playlists", label:"📋 Playlists"},
   {id:"emissions", label:"📺 Émissions"},
+  {id:"radios",    label:"📻 Radios"},
   {id:"regie",     label:"📢 Régie Pub"},
 ]
 const STATUTS = ["Tous les statuts","Publié","Brouillon","Archivé"]
@@ -345,6 +347,8 @@ export default function MyContent(){
   const [loading,setLoading]=useState(true)
   const [buyModal,setBuyModal]=useState(null)
   const [playlistModal,setPlaylistModal]=useState(null)
+  const [myRadios,setMyRadios]=useState([])
+  const [editRadio,setEditRadio]=useState(null)
 
   useEffect(()=>{
     if(!user)return
@@ -352,6 +356,7 @@ export default function MyContent(){
       .then(d=>setSons(d.tracks||[]))
       .catch(()=>setSons([]))
       .finally(()=>setLoading(false))
+    api.radio.mine().then(d=>setMyRadios(d.stations||[])).catch(()=>{})
   },[user])
 
   if(!user)return(<div style={{textAlign:"center",padding:80}}><div style={{fontSize:48,marginBottom:12}}>🔒</div><div style={{fontFamily:"Syne,sans-serif",fontSize:18,fontWeight:800,marginBottom:8}}>Connectez-vous</div><button onClick={()=>setPage("login")} style={{padding:"9px 24px",borderRadius:50,border:"none",background:"var(--gold)",color:"#000",fontWeight:700,cursor:"pointer"}}>Se connecter</button></div>)
@@ -425,6 +430,34 @@ export default function MyContent(){
       {tab==="emissions"&&<TabEmissions user={user}/>}
 
       {/* RÉGIE */}
+      {tab==="radios"&&<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{fontFamily:"Syne,sans-serif",fontSize:16,margin:0}}>📻 Mes radios ({myRadios.length})</h3>
+          <button onClick={()=>setPage("upload")} style={{padding:"7px 16px",borderRadius:50,border:"none",background:"var(--gold)",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Nouvelle radio</button>
+        </div>
+        {myRadios.length?myRadios.map(s=>(
+          <div key={s.id} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"var(--radius)",padding:14,marginBottom:10,display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:48,height:48,borderRadius:8,background:"var(--card2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,overflow:"hidden",flexShrink:0}}>
+              {s.logo_url?<img src={s.logo_url} alt={s.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"📻"}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>{s.name}</div>
+              <div style={{fontSize:11,color:"var(--text3)"}}>
+                {s.is_active?<span style={{color:"var(--green)"}}>● En diffusion</span>:<span>○ En attente de validation</span>}
+                {s.genre?" · "+s.genre:""}
+                {s.country?" · "+s.country:""}
+              </div>
+            </div>
+            <button className="btn btn-outline btn-sm" onClick={()=>setEditRadio(s)}>✏️ Modifier</button>
+          </div>
+        )):<div style={{textAlign:"center",padding:40,color:"var(--text3)"}}>
+          <div style={{fontSize:48,marginBottom:12}}>📻</div>
+          <div style={{marginBottom:12}}>Vous n\'avez pas encore créé de radio.</div>
+          <button onClick={()=>setPage("upload")} style={{padding:"8px 20px",borderRadius:50,border:"none",background:"var(--gold)",color:"#000",fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Créer ma première radio</button>
+        </div>}
+        {editRadio&&<EditRadioModal station={editRadio} onClose={()=>setEditRadio(null)} onSaved={(u)=>setMyRadios(p=>p.map(r=>r.id===u.id?u:r))}/>}
+      </div>}
+
       {tab==="regie"&&<div>
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:20}}><button onClick={()=>setPage("regie")} style={{padding:"9px 22px",borderRadius:50,border:"none",background:"linear-gradient(135deg,var(--gold),#e8920a)",color:"#000",fontSize:13,fontWeight:700,cursor:"pointer"}}>📢 Nouvelle campagne</button></div>
         <EmptyTab icon="📢" title="Aucune campagne" desc="Créez une campagne publicitaire pour promouvoir vos sons." action="Créer une campagne" onAction={()=>setPage("regie")}/>

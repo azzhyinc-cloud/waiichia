@@ -5,6 +5,8 @@ import ShareModal from "../components/ShareModal.jsx"
 import AddToPlaylistModal from "../components/AddToPlaylistModal.jsx"
 import PlaylistCreateModal from "../components/PlaylistCreateModal.jsx"
 import api from "../services/api.js"
+import { usePrice } from "../hooks/usePrice.js"
+import MerchBanner from "../components/MerchBanner.jsx"
 
 const TABS=['Sons','Albums','Playlists']
 const GENRES=['Tout','🎵 Twarab','🥁 Sebene / Soukous','🌊 Afrobeats','🎶 Amapiano','🔥 Afrotrap','🌿 Coupé Décalé','🥁 Makossa','🌍 Afrohouse','🕌 Qasida','🎸 Reggae Afro','🏺 Traditionnel','🎤 Slam','🎹 RnB Africain']
@@ -17,6 +19,7 @@ export default function Music(){
   const { user } = useAuthStore()
   const token = localStorage.getItem('waiichia_token')
   const {toggle,currentTrack,isPlaying,play,setQueue}=usePlayerStore()
+  const { format } = usePrice()
   const [tab,setTab]=useState('Sons')
   const [genre,setGenre]=useState('Tout')
   const [activeTag,setActiveTag]=useState('#moroni')
@@ -118,7 +121,7 @@ export default function Music(){
                 </div>
                 <div className="track-purchase-row">
                   {(!t.sale_price||t.access_type==='free')?<span className="free-chip">✓ Gratuit</span>
-                    :<><button className="buy-chip buy-chip-buy">🛒 {t.sale_price?.toLocaleString()} KMF</button><button className="buy-chip buy-chip-rent">⏳ Louer</button></>}
+                    :<><button className="buy-chip buy-chip-buy">🛒 {format(t.sale_price)}</button><button className="buy-chip buy-chip-rent">⏳ Louer</button></>}
                 </div>
                 {/* Boutons playlist + partage */}
                 <div style={{display:'flex',gap:6,padding:'0 10px 8px'}}>
@@ -126,6 +129,7 @@ export default function Music(){
                   <button onClick={(e)=>{e.stopPropagation();openShare(t,'track')}} style={{background:'none',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontSize:'0.75rem',padding:'3px 8px',color:'var(--text-secondary)'}}>🔗 Partager</button>
                 </div>
                 <ReactionBar targetType="track" targetId={t.id} showComments={true}/>
+                <MerchBanner contentId={t.id} contentType="track"/>
               </div>
             ))}
           </div>

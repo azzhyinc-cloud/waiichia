@@ -5,13 +5,8 @@ const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || ''
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || ''
 const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:contact@waiichia.com'
 
-console.log('[Push init] VAPID_PUBLIC_KEY présent:', !!VAPID_PUBLIC_KEY, '| VAPID_PRIVATE_KEY présent:', !!VAPID_PRIVATE_KEY, '| EMAIL:', VAPID_EMAIL)
-
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
-  console.log('[Push init] ✅ VAPID configuré')
-} else {
-  console.warn('[Push init] ⚠️ VAPID non configuré — les clés manquent dans .env')
 }
 
 /**
@@ -22,28 +17,18 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
  * @returns {object} { sent, failed }
  */
 export async function sendPushToUser(supabase, userId, payload) {
-  console.log('[Push] 🚀 sendPushToUser appelé pour userId:', userId)
-
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    console.warn('[Push] ⚠️ VAPID keys non configurées, push ignoré')
+    console.warn('[Push] VAPID keys non configurées, push ignoré')
     return { sent: 0, failed: 0 }
   }
 
   try {
-    const { data: subs, error: selErr } = await supabase
+    const { data: subs } = await supabase
       .from('push_subscriptions')
       .select('*')
       .eq('user_id', userId)
 
-    if (selErr) {
-      console.error('[Push] ❌ Erreur SELECT push_subscriptions:', selErr.message)
-      return { sent: 0, failed: 0 }
-    }
-
-    console.log('[Push] 📦 Subscriptions trouvées pour', userId, ':', subs?.length || 0)
-
     if (!subs || subs.length === 0) {
-      console.log('[Push] ⚠️ Aucune subscription pour cet utilisateur → rien à envoyer')
       return { sent: 0, failed: 0 }
     }
 
@@ -55,8 +40,6 @@ export async function sendPushToUser(supabase, userId, payload) {
       url: payload.url || '/',
       timestamp: Date.now()
     })
-
-    console.log('[Push] 📤 Envoi de', subs.length, 'notification(s) — payload:', notification)
 
     let sent = 0
     let failed = 0
@@ -70,30 +53,27 @@ export async function sendPushToUser(supabase, userId, payload) {
         }
       }
 
-      console.log('[Push]   → Envoi vers endpoint:', sub.endpoint?.substring(0, 60) + '...')
-
       try {
-        const result = await webpush.sendNotification(pushSubscription, notification)
+        await webpush.sendNotification(pushSubscription, notification)
         sent++
-        console.log('[Push]   ✅ Envoyé ! statusCode:', result?.statusCode)
       } catch (err) {
         failed++
-        console.error('[Push]   ❌ Erreur envoi — statusCode:', err.statusCode, '| message:', err.message)
         // Si le subscription est expirée/invalide (410 Gone ou 404), la supprimer
         if (err.statusCode === 410 || err.statusCode === 404) {
           await supabase
             .from('push_subscriptions')
             .delete()
             .eq('id', sub.id)
-          console.log(`[Push]   🗑️ Subscription expirée supprimée: ${sub.id}`)
+          console.log(`[Push] Subscription expirée supprimée: ${sub.id}`)
+        } else {
+          console.error(`[Push] Erreur envoi à ${sub.endpoint}:`, err.message)
         }
       }
     }))
 
-    console.log('[Push] 🏁 Terminé → sent:', sent, '| failed:', failed)
     return { sent, failed }
   } catch (e) {
-    console.error('[Push] ❌ Erreur globale:', e)
+    console.error('[Push] Erreur globale:', e)
     return { sent: 0, failed: 0 }
   }
 }

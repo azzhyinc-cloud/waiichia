@@ -7,12 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "vite build && cp -r dist/* /home/admin/web/waiichia.com/public_html/"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
     "axios": "^1.13.6",
     "howler": "^2.2.4",
+    "jspdf": "^4.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",

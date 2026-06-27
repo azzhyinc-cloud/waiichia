@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useAuthStore, usePlayerStore, usePageStore } from "../stores/index.js"
 import { ReactionBar } from "../components/ReactionBar.jsx"
+import CommentSection from "../components/CommentSection.jsx"
 import api from "../services/api.js"
 
 const API_URL=import.meta.env.VITE_API_URL||''
@@ -26,6 +27,23 @@ function timeAgo(date){
   return Math.floor(d/30)+' mois'
 }
 
+// ─── Parser LRC côté front ────────────────────────────────────────────────
+// Retourne [{time (secondes), text}] trié par time
+function parseLRC(lrc){
+  if(!lrc)return[]
+  const lines=lrc.split('\n')
+  const result=[]
+  const re=/\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/
+  for(const line of lines){
+    const m=line.match(re)
+    if(m){
+      const time=parseInt(m[1])*60+parseInt(m[2])+parseInt(m[3].padEnd(3,'0'))/1000
+      result.push({time,text:m[4].trim()})
+    }
+  }
+  return result.sort((a,b)=>a.time-b.time)
+}
+
 export default function Karaoke(){
   const {user}=useAuthStore()
   const {toggle,currentTrack,isPlaying}=usePlayerStore()
@@ -42,9 +60,27 @@ export default function Karaoke(){
   const [editTitle,setEditTitle]=useState('')
   const [confirmDelete,setConfirmDelete]=useState(null)
   const [toast,setToast]=useState('')
+  const [highlightedId,setHighlightedId]=useState(null)
+  const recordingRefs=useRef({})
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(''),3000)}
 
   useEffect(()=>{loadData()},[])
+
+  useEffect(()=>{
+    let focusId=null
+    try{ focusId=sessionStorage.getItem('focus_recording_id') }catch(e){}
+    if(!focusId)return
+    const inPublic=publicDuets.some(d=>d.id===focusId)
+    const inMine=myRecordings.some(r=>r.id===focusId)
+    if(!inPublic&&!inMine)return
+    if(inPublic)setSection("🌍 Communauté")
+    else if(inMine){setSection("🎤 Mes enregistrements");setRecFilter('tous')}
+    try{ sessionStorage.removeItem('focus_recording_id') }catch(e){}
+    setTimeout(()=>{
+      const el=recordingRefs.current[focusId]
+      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});setHighlightedId(focusId);setTimeout(()=>setHighlightedId(null),3000)}
+    },300)
+  },[publicDuets,myRecordings])
 
   const loadData=async()=>{
     try{
@@ -57,7 +93,8 @@ export default function Karaoke(){
         emoji:EMOJIS[i%EMOJIS.length],bg:BG_COLORS[i%BG_COLORS.length],
         plays:t.play_count||0,
         audio_url:t.audio_url_320||t.audio_url_128,
-        cover_url:t.cover_url
+        cover_url:t.cover_url,
+        creator_id:t.creator_id||null
       }))
       setTracks([...karaokeT,...platformT].filter(t=>t.audio_url))
       const pd=await fetch(API_URL+'/api/karaoke/recordings/public',{headers:{'Authorization':'Bearer '+getToken()}}).then(r=>r.json()).catch(()=>({}))
@@ -104,13 +141,9 @@ export default function Karaoke(){
   }
 
   const filteredTracks=genreFilter==='Tout'?tracks:tracks.filter(t=>t.genre?.toLowerCase().includes(genreFilter.toLowerCase().slice(0,5)))
-
-  // Filtered recordings based on recFilter
-  const publicCount = myRecordings.filter(r => r.status === 'public').length
-  const privateCount = myRecordings.filter(r => r.status !== 'public').length
-  const filteredRecordings = recFilter === 'tous' ? myRecordings
-    : recFilter === 'publies' ? myRecordings.filter(r => r.status === 'public')
-    : myRecordings.filter(r => r.status !== 'public')
+  const publicCount=myRecordings.filter(r=>r.status==='public').length
+  const privateCount=myRecordings.filter(r=>r.status!=='public').length
+  const filteredRecordings=recFilter==='tous'?myRecordings:recFilter==='publies'?myRecordings.filter(r=>r.status==='public'):myRecordings.filter(r=>r.status!=='public')
 
   return(
     <div style={{paddingBottom:40}}>
@@ -140,26 +173,22 @@ export default function Karaoke(){
       {section==="🌍 Communauté"&&(
         <div>
           <div className="section-hdr"><div className="section-title">🌍 Duets de la communauté</div><span style={{fontSize:12,color:'var(--text3)',fontFamily:'Space Mono,monospace'}}>{publicDuets.length} duets</span></div>
-
           {loading?<div style={{display:'flex',flexDirection:'column',gap:12}}>{[...Array(3)].map((_,i)=><div key={i} style={{height:100,background:'var(--card)',borderRadius:'var(--radius)',border:'1px solid var(--border)',animation:'shimmer 1.5s infinite'}}/>)}</div>
           :publicDuets.length>0
             ?<div style={{display:'flex',flexDirection:'column',gap:12}}>
               {publicDuets.map((d,i)=>{
                 const isPlayingThis=isPlaying&&currentTrack?.id===d.id
+                const isHighlighted=highlightedId===d.id
                 return(
-                <div key={d.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',overflow:'hidden',transition:'border-color .2s'}}
-                  onMouseEnter={e=>e.currentTarget.style.borderColor='rgba(245,166,35,.3)'}
-                  onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
-
-                  {/* Header */}
+                <div key={d.id} ref={el=>{ if(el) recordingRefs.current[d.id]=el }}
+                  style={{background:'var(--card)',border:'1px solid '+(isHighlighted?'var(--gold)':'var(--border)'),borderRadius:'var(--radius)',overflow:'hidden',transition:'border-color .2s, box-shadow .3s',boxShadow:isHighlighted?'0 0 0 3px rgba(245,166,35,.4)':'none'}}
+                  onMouseEnter={e=>{ if(!isHighlighted) e.currentTarget.style.borderColor='rgba(245,166,35,.3)' }}
+                  onMouseLeave={e=>{ if(!isHighlighted) e.currentTarget.style.borderColor='var(--border)' }}>
                   <div style={{display:'flex',alignItems:'center',gap:12,padding:16}}>
-                    {/* Avatar */}
                     <div onClick={()=>{if(d.profiles?.username)setPage('profile',{profileUsername:d.profiles.username})}}
                       style={{width:44,height:44,borderRadius:'50%',background:BG_COLORS[i%6],display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:700,color:'#fff',flexShrink:0,overflow:'hidden',cursor:'pointer'}}>
                       {d.profiles?.avatar_url?<img src={d.profiles.avatar_url} style={{width:'100%',height:'100%',objectFit:'cover'}} alt=""/>:(d.profiles?.display_name?.[0]||'🎤')}
                     </div>
-
-                    {/* Info */}
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:14,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.title||'Duet 🎤'}</div>
                       <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>
@@ -168,14 +197,10 @@ export default function Karaoke(){
                         <span> · {timeAgo(d.created_at)}</span>
                       </div>
                     </div>
-
-                    {/* Play button — fixed: no duplicate border */}
                     {d.audio_url&&<button onClick={()=>playDuet(d)} style={{width:44,height:44,borderRadius:'50%',background:isPlayingThis?'var(--card)':'linear-gradient(135deg,var(--gold),#e8920a)',color:isPlayingThis?'var(--text)':'#000',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:isPlayingThis?'none':'0 3px 12px rgba(245,166,35,.3)',border:isPlayingThis?'2px solid var(--border)':'none'}}>
                       {isPlayingThis?'⏸':'▶'}
                     </button>}
                   </div>
-
-                  {/* Track original reference */}
                   {d.tracks&&(
                     <div style={{margin:'0 16px 12px',padding:'8px 12px',background:'var(--bg2)',borderRadius:'var(--radius-sm)',display:'flex',alignItems:'center',gap:8,fontSize:11,color:'var(--text3)'}}>
                       <div style={{width:28,height:28,borderRadius:6,background:BG_COLORS[i%6],display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0,overflow:'hidden'}}>
@@ -185,8 +210,6 @@ export default function Karaoke(){
                       {d.duration&&<span style={{marginLeft:'auto',fontFamily:'Space Mono,monospace'}}>{Math.floor(d.duration/60)}:{String(Math.floor(d.duration%60)).padStart(2,'0')}</span>}
                     </div>
                   )}
-
-                  {/* Reactions */}
                   <div style={{padding:'0 16px 14px'}}>
                     <ReactionBar targetType="recording" targetId={d.id} showComments={true}/>
                   </div>
@@ -209,14 +232,11 @@ export default function Karaoke(){
       {section==="🎵 Chanter"&&(
         <div>
           <div className="section-hdr"><div className="section-title">🎵 Choisir un son</div><span style={{fontSize:12,color:'var(--text3)',fontFamily:'Space Mono,monospace'}}>{filteredTracks.length} sons</span></div>
-
-          {/* Genre filter */}
           <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
             {GENRE_FILTERS.map(g=>(
               <button key={g} onClick={()=>setGenreFilter(g)} style={{padding:'6px 14px',borderRadius:20,border:'1px solid '+(genreFilter===g?'var(--gold)':'var(--border)'),background:genreFilter===g?'rgba(245,166,35,.12)':'transparent',color:genreFilter===g?'var(--gold)':'var(--text3)',fontSize:11,fontWeight:600,cursor:'pointer'}}>{g}</button>
             ))}
           </div>
-
           {loading?<div style={{textAlign:'center',padding:40,color:'var(--text3)'}}>Chargement...</div>
           :filteredTracks.length>0
             ?<div className="karaoke-grid">
@@ -224,6 +244,7 @@ export default function Karaoke(){
                 <div key={t.id||i} className="karaoke-card" onClick={()=>setStudio(t)}>
                   <div className="karaoke-cover" style={{background:t.bg||BG_COLORS[i%6]}}>
                     {t.cover_url?<img src={t.cover_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover',opacity:.7}}/>:<span style={{fontSize:40}}>{t.emoji||'🎵'}</span>}
+                    {t.lyrics_lrc&&<div style={{position:'absolute',bottom:6,right:6,background:'rgba(0,0,0,.6)',borderRadius:10,padding:'2px 8px',fontSize:10,fontWeight:700,color:'var(--gold)'}}>🎵 Lyrics</div>}
                   </div>
                   <div className="karaoke-info">
                     <div className="karaoke-name">{t.title}</div>
@@ -258,44 +279,31 @@ export default function Karaoke(){
                   {myRecordings.length} duet{myRecordings.length>1?'s':''} · {publicCount} public{publicCount>1?'s':''} · {privateCount} privé{privateCount>1?'s':''}
                 </span>
               </div>
-
-              {/* ── Filtres publiés / non publiés ── */}
               <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
                 {REC_FILTERS.map(f=>{
-                  const count = f.key==='tous'?myRecordings.length:f.key==='publies'?publicCount:privateCount
+                  const count=f.key==='tous'?myRecordings.length:f.key==='publies'?publicCount:privateCount
                   return(
-                    <button key={f.key} onClick={()=>setRecFilter(f.key)} style={{
-                      padding:'7px 16px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',
-                      transition:'all .18s',fontFamily:'Plus Jakarta Sans,sans-serif',
-                      border:'1px solid '+(recFilter===f.key?'var(--gold)':'var(--border)'),
-                      background:recFilter===f.key?'rgba(245,166,35,.12)':'transparent',
-                      color:recFilter===f.key?'var(--gold)':'var(--text3)'
-                    }}>
+                    <button key={f.key} onClick={()=>setRecFilter(f.key)} style={{padding:'7px 16px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .18s',fontFamily:'Plus Jakarta Sans,sans-serif',border:'1px solid '+(recFilter===f.key?'var(--gold)':'var(--border)'),background:recFilter===f.key?'rgba(245,166,35,.12)':'transparent',color:recFilter===f.key?'var(--gold)':'var(--text3)'}}>
                       {f.label} ({count})
                     </button>
                   )
                 })}
               </div>
-
               {filteredRecordings.length>0
                 ?<div style={{display:'flex',flexDirection:'column',gap:12}}>
                   {filteredRecordings.map((r,i)=>{
                     const isPlayingThis=isPlaying&&currentTrack?.id===r.id
+                    const isHighlighted=highlightedId===r.id
                     return(
-                    <div key={r.id} style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius)',overflow:'hidden',transition:'border-color .2s'}}
-                      onMouseEnter={e=>e.currentTarget.style.borderColor='rgba(245,166,35,.3)'}
-                      onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
-
+                    <div key={r.id} ref={el=>{ if(el) recordingRefs.current[r.id]=el }}
+                      style={{background:'var(--card)',border:'1px solid '+(isHighlighted?'var(--gold)':'var(--border)'),borderRadius:'var(--radius)',overflow:'hidden',transition:'border-color .2s, box-shadow .3s',boxShadow:isHighlighted?'0 0 0 3px rgba(245,166,35,.4)':'none'}}
+                      onMouseEnter={e=>{ if(!isHighlighted) e.currentTarget.style.borderColor='rgba(245,166,35,.3)' }}
+                      onMouseLeave={e=>{ if(!isHighlighted) e.currentTarget.style.borderColor='var(--border)' }}>
                       <div style={{display:'flex',alignItems:'center',gap:14,padding:16}}>
-                        {/* Cover */}
                         <div style={{width:56,height:56,borderRadius:12,background:BG_COLORS[i%6],display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0,overflow:'hidden',position:'relative',cursor:r.audio_url?'pointer':'default'}} onClick={()=>{if(r.audio_url)playDuet(r)}}>
                           {r.tracks?.cover_url?<img src={r.tracks.cover_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover',opacity:.7}}/>:'🎤'}
-                          {r.audio_url&&<div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.3)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                            <span style={{fontSize:20,color:'#fff'}}>{isPlayingThis?'⏸':'▶'}</span>
-                          </div>}
+                          {r.audio_url&&<div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.3)',display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:20,color:'#fff'}}>{isPlayingThis?'⏸':'▶'}</span></div>}
                         </div>
-
-                        {/* Info */}
                         <div style={{flex:1,minWidth:0}}>
                           {editingId===r.id?(
                             <div style={{display:'flex',gap:6,alignItems:'center'}}>
@@ -314,16 +322,12 @@ export default function Karaoke(){
                             </>
                           )}
                         </div>
-
-                        {/* Status badge */}
                         <button onClick={()=>toggleVisibility(r)} style={{padding:'4px 12px',borderRadius:12,fontSize:10,fontWeight:700,border:'1px solid '+(r.status==='public'?'var(--green)':'var(--border)'),background:r.status==='public'?'rgba(44,198,83,.12)':'rgba(255,255,255,.05)',color:r.status==='public'?'var(--green)':'var(--text3)',cursor:'pointer',flexShrink:0,transition:'all .2s'}}>
                           {r.status==='public'?'📢 Public':'🔒 Privé'}
                         </button>
                       </div>
-
-                      {/* Actions bar */}
                       {editingId!==r.id&&(
-                        <div style={{display:'flex',alignItems:'center',gap:8,padding:'0 16px 14px',borderTop:'1px solid var(--border)',marginTop:0,paddingTop:12}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,padding:'0 16px 14px',borderTop:'1px solid var(--border)',paddingTop:12}}>
                           {r.audio_url&&<button onClick={()=>playDuet(r)} style={{display:'flex',alignItems:'center',gap:4,padding:'6px 14px',borderRadius:20,border:isPlayingThis?'1px solid var(--gold)':'1px solid var(--border)',background:isPlayingThis?'rgba(245,166,35,.12)':'var(--card)',color:isPlayingThis?'var(--gold)':'var(--text2)',fontSize:11,fontWeight:600,cursor:'pointer'}}>
                             {isPlayingThis?'⏸ En cours':'▶ Écouter'}
                           </button>}
@@ -342,8 +346,6 @@ export default function Karaoke(){
                           )}
                         </div>
                       )}
-
-                      {/* ReactionBar for public recordings */}
                       {r.status==='public'&&(
                         <div style={{padding:'0 16px 14px'}}>
                           <ReactionBar targetType="recording" targetId={r.id} showComments={true}/>
@@ -360,7 +362,7 @@ export default function Karaoke(){
                   <div style={{fontSize:12,marginBottom:16}}>
                     {recFilter==='publies'?'Publiez vos duets pour les partager avec la communauté !':recFilter==='prives'?'Tous vos duets sont déjà publics 🎉':'Choisissez un son et commencez à chanter !'}
                   </div>
-                  {recFilter==='tous'&&<button className="btn btn-primary" onClick={()=>{setSection("🎵 Chanter")}}>🎵 Choisir un son</button>}
+                  {recFilter==='tous'&&<button className="btn btn-primary" onClick={()=>setSection("🎵 Chanter")}>🎵 Choisir un son</button>}
                   {recFilter!=='tous'&&<button className="btn btn-secondary" onClick={()=>setRecFilter('tous')}>📋 Voir tous les duets</button>}
                 </div>
               }
@@ -374,9 +376,122 @@ export default function Karaoke(){
   )
 }
 
-// ═══════════════════════════════════════
-// STUDIO MODAL (inchangé)
-// ═══════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// LYRICS DISPLAY — affiché dans le studio pendant l'enreg.
+// ═══════════════════════════════════════════════════════════
+function LyricsDisplay({ lrcLines, currentTime, show }){
+  const containerRef=useRef(null)
+  const activeRef=useRef(null)
+
+  // Trouver la ligne active : dernière ligne dont time <= currentTime
+  let activeIdx=-1
+  for(let i=0;i<lrcLines.length;i++){
+    if(lrcLines[i].time<=currentTime) activeIdx=i
+    else break
+  }
+
+  // Auto-scroll vers la ligne active
+  useEffect(()=>{
+    if(activeRef.current && containerRef.current){
+      activeRef.current.scrollIntoView({behavior:'smooth',block:'center'})
+    }
+  },[activeIdx])
+
+  if(!show||lrcLines.length===0) return null
+
+  return(
+    <div ref={containerRef} style={{maxHeight:160,overflowY:'auto',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'12px 0',marginBottom:16,scrollbarWidth:'none'}}>
+      {lrcLines.map((line,i)=>{
+        const isActive=i===activeIdx
+        const isPast=i<activeIdx
+        return(
+          <div key={i} ref={isActive?activeRef:null}
+            style={{padding:'5px 16px',fontSize:isActive?14:12,fontWeight:isActive?700:400,color:isActive?'var(--gold)':isPast?'var(--text3)':'var(--text2)',textAlign:'center',lineHeight:1.5,transition:'all .2s',opacity:isPast?0.5:1,transform:isActive?'scale(1.04)':'scale(1)'}}>
+            {line.text||'♪'}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
+// LYRICS EDITOR — pour créateurs/admins
+// ═══════════════════════════════════════════════════════════
+function LyricsEditor({ track, user, onClose, onSaved }){
+  const [lrc, setLrc]=useState(track.lyrics_lrc||'')
+  const [saving, setSaving]=useState(false)
+  const [preview, setPreview]=useState(false)
+  const parsed=parseLRC(lrc)
+
+  const save=async()=>{
+    setSaving(true)
+    try{
+      const res=await fetch(API_URL+'/api/karaoke/tracks/'+track.id+'/lyrics',{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
+        body:JSON.stringify({lyrics_lrc:lrc})
+      })
+      const data=await res.json()
+      if(data.error){alert('Erreur: '+data.error);setSaving(false);return}
+      onSaved(lrc)
+    }catch(e){alert('Erreur réseau')}
+    setSaving(false)
+  }
+
+  return(
+    <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:16,marginBottom:16}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <div style={{fontSize:13,fontWeight:700}}>✍️ Paroles synchronisées (LRC)</div>
+        <div style={{display:'flex',gap:6}}>
+          <button onClick={()=>setPreview(p=>!p)} style={{padding:'4px 10px',borderRadius:8,border:'1px solid var(--border)',background:preview?'rgba(245,166,35,.12)':'var(--card)',color:preview?'var(--gold)':'var(--text3)',fontSize:11,cursor:'pointer'}}>
+            {preview?'✏️ Éditer':'👁 Aperçu'}
+          </button>
+          <button onClick={onClose} style={{padding:'4px 8px',borderRadius:8,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text3)',fontSize:11,cursor:'pointer'}}>✕</button>
+        </div>
+      </div>
+
+      {!preview?(
+        <>
+          <div style={{fontSize:11,color:'var(--text3)',marginBottom:8,lineHeight:1.6}}>
+            Format : <code style={{background:'var(--bg)',padding:'1px 6px',borderRadius:4,color:'var(--gold)'}}>[mm:ss.xx]Paroles</code><br/>
+            Exemple : <code style={{background:'var(--bg)',padding:'1px 6px',borderRadius:4,color:'var(--text2)'}}>[00:12.50]Ya salama komori</code>
+          </div>
+          <textarea
+            value={lrc}
+            onChange={e=>setLrc(e.target.value)}
+            placeholder={'[00:05.00]Première ligne\n[00:09.50]Deuxième ligne\n[00:14.00]...'}
+            style={{width:'100%',minHeight:140,padding:'10px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--bg)',color:'var(--text)',fontSize:12,fontFamily:'Space Mono,monospace',resize:'vertical',outline:'none',boxSizing:'border-box',lineHeight:1.7}}
+          />
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8}}>
+            <span style={{fontSize:11,color:'var(--text3)'}}>{parsed.length} ligne{parsed.length>1?'s':''} parsée{parsed.length>1?'s':''}</span>
+            <button onClick={save} disabled={saving} style={{padding:'7px 18px',borderRadius:20,border:'none',background:'var(--gold)',color:'#000',fontSize:12,fontWeight:700,cursor:'pointer',opacity:saving?.6:1}}>
+              {saving?'⏳ Sauvegarde...':'💾 Sauvegarder'}
+            </button>
+          </div>
+        </>
+      ):(
+        <div style={{maxHeight:200,overflowY:'auto',background:'var(--bg)',borderRadius:8,padding:12}}>
+          {parsed.length===0
+            ?<div style={{textAlign:'center',color:'var(--text3)',fontSize:12,padding:20}}>Aucune ligne parsée — vérifiez le format LRC</div>
+            :parsed.map((line,i)=>(
+              <div key={i} style={{display:'flex',gap:10,padding:'4px 0',borderBottom:'1px solid var(--border)',fontSize:12}}>
+                <span style={{color:'var(--gold)',fontFamily:'Space Mono,monospace',flexShrink:0}}>
+                  {String(Math.floor(line.time/60)).padStart(2,'0')}:{String(Math.floor(line.time%60)).padStart(2,'0')}.{String(Math.round((line.time%1)*100)).padStart(2,'0')}
+                </span>
+                <span style={{color:'var(--text2)'}}>{line.text||'♪'}</span>
+              </div>
+            ))
+          }
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
+// STUDIO MODAL
+// ═══════════════════════════════════════════════════════════
 function StudioModal({track:initialTrack,allTracks=[],user,onClose,onSaved}){
   const [track,setTrack]=useState(initialTrack?.picking?null:initialTrack)
   const [trackSearch,setTrackSearch]=useState('')
@@ -394,9 +509,15 @@ function StudioModal({track:initialTrack,allTracks=[],user,onClose,onSaved}){
   const [muteOriginalVoice,setMuteOriginalVoice]=useState(false)
   const [waveData,setWaveData]=useState(new Array(40).fill(5))
   const [isPlaying,setIsPlaying]=useState(false)
-  const filteredTracks=allTracks.filter(t=>{if(!trackSearch)return true;const q=trackSearch.toLowerCase();return t.title?.toLowerCase().includes(q)||t.artist?.toLowerCase().includes(q)})
   const [duetTitle,setDuetTitle]=useState(track?'Duet_'+track.title?.replace(/[^a-zA-Z0-9]/g,'_')+'_'+(user?.username||'moi'):'')
 
+  // ── Lyrics state ──
+  const [lrcLines,setLrcLines]=useState([])
+  const [instrTime,setInstrTime]=useState(0)
+  const [showLyricsEditor,setShowLyricsEditor]=useState(false)
+  const lyricsIntervalRef=useRef(null)
+
+  const filteredTracks=allTracks.filter(t=>{if(!trackSearch)return true;const q=trackSearch.toLowerCase();return t.title?.toLowerCase().includes(q)||t.artist?.toLowerCase().includes(q)})
   const timerRef=useRef(null)
   const mediaRef=useRef(null)
   const chunksRef=useRef([])
@@ -406,10 +527,57 @@ function StudioModal({track:initialTrack,allTracks=[],user,onClose,onSaved}){
   const audioCtxRef=useRef(null)
   const animRef=useRef(null)
 
+  // Vérifier si l'user peut éditer les lyrics (créateur ou admin)
+  const canEditLyrics = user && track && (
+    track.creator_id === user.id ||
+    ['admin','superadmin','moderator'].includes(user.role)
+  )
+
+  // Charger les lyrics quand le track change
+  useEffect(()=>{
+    if(!track?.id) return
+    // D'abord utiliser lyrics_lrc déjà dans l'objet track si présent
+    if(track.lyrics_lrc){
+      setLrcLines(parseLRC(track.lyrics_lrc))
+      return
+    }
+    // Sinon fetch depuis l'API
+    fetch(API_URL+'/api/karaoke/tracks/'+track.id+'/lyrics')
+      .then(r=>r.json())
+      .then(d=>{ if(d.lrc) setLrcLines(parseLRC(d.lrc)) })
+      .catch(()=>{})
+  },[track?.id])
+
+  // Suivre la position de l'instrumental pour sync lyrics
+  useEffect(()=>{
+    if(phase==='recording'){
+      lyricsIntervalRef.current=setInterval(()=>{
+        if(instrRef.current) setInstrTime(instrRef.current.currentTime||0)
+      },100)
+    } else {
+      clearInterval(lyricsIntervalRef.current)
+      if(phase!=='review') setInstrTime(0)
+    }
+    return()=>clearInterval(lyricsIntervalRef.current)
+  },[phase])
+
+  // Sync lyrics pendant la review aussi
+  useEffect(()=>{
+    if(isPlaying && phase==='review'){
+      lyricsIntervalRef.current=setInterval(()=>{
+        if(instrRef.current) setInstrTime(instrRef.current.currentTime||0)
+      },100)
+    } else {
+      clearInterval(lyricsIntervalRef.current)
+    }
+    return()=>clearInterval(lyricsIntervalRef.current)
+  },[isPlaying,phase])
+
   useEffect(()=>{return()=>stopAll()},[])
 
   const stopAll=()=>{
     if(timerRef.current)clearInterval(timerRef.current)
+    if(lyricsIntervalRef.current)clearInterval(lyricsIntervalRef.current)
     if(animRef.current)cancelAnimationFrame(animRef.current)
     if(mediaRef.current&&mediaRef.current.state==='recording')mediaRef.current.stream.getTracks().forEach(t=>t.stop())
     if(instrRef.current){instrRef.current.pause();instrRef.current.currentTime=0}
@@ -427,6 +595,7 @@ function StudioModal({track:initialTrack,allTracks=[],user,onClose,onSaved}){
       instrRef.current.pause()
       instrRef.current.currentTime=0
     }
+    setInstrTime(0)
     setPhase('countdown');setCountdown(3)
     let c=3
     const ci=setInterval(()=>{c--;setCountdown(c);if(c<=0){clearInterval(ci);startRecording()}},1000)
@@ -469,7 +638,7 @@ function StudioModal({track:initialTrack,allTracks=[],user,onClose,onSaved}){
     if(audioCtxRef.current){audioCtxRef.current.close().catch(()=>{});audioCtxRef.current=null}
   }
 
-  const reset=()=>{stopAll();setPhase('ready');setTime(0);setVoiceBlob(null);setVoiceUrl(null);setWaveData(new Array(40).fill(5))}
+  const reset=()=>{stopAll();setPhase('ready');setTime(0);setInstrTime(0);setVoiceBlob(null);setVoiceUrl(null);setWaveData(new Array(40).fill(5))}
 
   const playReview=()=>{
     if(isPlaying){instrRef.current?.pause();voiceAudioRef.current?.pause();setIsPlaying(false);return}
@@ -522,13 +691,16 @@ function StudioModal({track:initialTrack,allTracks=[],user,onClose,onSaved}){
             <input value={trackSearch} onChange={e=>setTrackSearch(e.target.value)} placeholder="Rechercher un son..." className="input-field" style={{fontSize:13,padding:'10px 14px',marginBottom:10}}/>
             <div style={{maxHeight:250,overflowY:'auto',display:'flex',flexDirection:'column',gap:4}}>
               {filteredTracks.slice(0,20).map((t,i)=>(
-                <div key={t.id||i} onClick={()=>{setTrack(t);setShowPicker(false);setDuetTitle('Duet_'+t.title?.replace(/[^a-zA-Z0-9]/g,'_')+'_'+(user?.username||'moi'))}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',cursor:'pointer',borderRadius:10,transition:'background .15s',border:'1px solid transparent'}} onMouseEnter={e=>{e.currentTarget.style.background='var(--bg2)';e.currentTarget.style.borderColor='var(--gold)'}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent'}}>
+                <div key={t.id||i} onClick={()=>{setTrack(t);setShowPicker(false);setDuetTitle('Duet_'+t.title?.replace(/[^a-zA-Z0-9]/g,'_')+'_'+(user?.username||'moi'));setLrcLines(t.lyrics_lrc?parseLRC(t.lyrics_lrc):[]);setInstrTime(0)}}
+                  style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',cursor:'pointer',borderRadius:10,transition:'background .15s',border:'1px solid transparent'}}
+                  onMouseEnter={e=>{e.currentTarget.style.background='var(--bg2)';e.currentTarget.style.borderColor='var(--gold)'}}
+                  onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent'}}>
                   <div style={{width:42,height:42,borderRadius:10,background:t.bg||BG_COLORS[i%6],display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0,overflow:'hidden'}}>
                     {t.cover_url?<img src={t.cover_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:(t.emoji||'🎵')}
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:700,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</div>
-                    <div style={{fontSize:11,color:'var(--text3)'}}>{t.artist} · {fmtK(t.plays)} écoutes</div>
+                    <div style={{fontSize:11,color:'var(--text3)'}}>{t.artist} · {fmtK(t.plays)} écoutes {t.lyrics_lrc&&<span style={{color:'var(--gold)'}}>· 🎵 Lyrics</span>}</div>
                   </div>
                 </div>
               ))}
@@ -536,105 +708,136 @@ function StudioModal({track:initialTrack,allTracks=[],user,onClose,onSaved}){
             </div>
           </div>
         ):(
-        <div style={{display:"flex",alignItems:"center",gap:12,background:"var(--card)",borderRadius:"var(--radius-sm)",padding:12,marginBottom:16}}>
-          <div style={{width:52,height:52,borderRadius:10,background:track.bg||"var(--purple)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0,overflow:'hidden'}}>
-            {track.cover_url?<img src={track.cover_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:(track.emoji||"🎵")}
+          <div style={{display:"flex",alignItems:"center",gap:12,background:"var(--card)",borderRadius:"var(--radius-sm)",padding:12,marginBottom:16}}>
+            <div style={{width:52,height:52,borderRadius:10,background:track.bg||"var(--purple)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0,overflow:'hidden'}}>
+              {track.cover_url?<img src={track.cover_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>:(track.emoji||"🎵")}
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:15}}>{track.title}</div>
+              <div style={{fontSize:12,color:"var(--text2)"}}>{track.artist} {lrcLines.length>0&&<span style={{color:'var(--gold)',fontSize:11}}>· 🎵 Lyrics dispo</span>}</div>
+            </div>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              {canEditLyrics&&phase==='ready'&&(
+                <button onClick={()=>setShowLyricsEditor(v=>!v)} style={{padding:'4px 10px',borderRadius:8,border:'1px solid '+(showLyricsEditor?'var(--gold)':'var(--border)'),background:showLyricsEditor?'rgba(245,166,35,.12)':'var(--card)',color:showLyricsEditor?'var(--gold)':'var(--text3)',fontSize:11,cursor:'pointer'}}>
+                  ✍️ Lyrics
+                </button>
+              )}
+              <div style={{fontFamily:"Space Mono,monospace",fontSize:11,padding:'4px 10px',borderRadius:20,background:phase==='recording'?'rgba(230,57,70,.2)':phase==='review'?'rgba(44,198,83,.2)':'var(--bg2)',color:phase==='recording'?'var(--red)':phase==='review'?'var(--green)':'var(--text3)'}}>
+                {phase==='recording'?'🔴 REC':phase==='review'?'✅ TERMINÉ':phase==='countdown'?'⏳':'🎵 PRÊT'}
+              </div>
+              {phase==='ready'&&<button onClick={()=>setShowPicker(true)} style={{padding:'4px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text3)',fontSize:11,cursor:'pointer'}}>Changer</button>}
+            </div>
           </div>
-          <div style={{flex:1}}>
-            <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:15}}>{track.title}</div>
-            <div style={{fontSize:12,color:"var(--text2)"}}>{track.artist}</div>
-          </div>
-          <div style={{fontFamily:"Space Mono,monospace",fontSize:11,padding:'4px 10px',borderRadius:20,background:phase==='recording'?'rgba(230,57,70,.2)':phase==='review'?'rgba(44,198,83,.2)':'var(--bg2)',color:phase==='recording'?'var(--red)':phase==='review'?'var(--green)':'var(--text3)'}}>
-            {phase==='recording'?'🔴 REC':phase==='review'?'✅ TERMINÉ':phase==='countdown'?'⏳':'🎵 PRÊT'}
-          </div>
-          {phase==='ready'&&<button onClick={()=>setShowPicker(true)} style={{padding:'4px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text3)',fontSize:11,cursor:'pointer'}}>Changer</button>}
-        </div>
         )}
 
         {track&&<>
-        {/* Mixing controls */}
-        <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:14,marginBottom:16}}>
-          <div style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--text2)'}}>🎚️ Mixage audio</div>
-          <div style={{display:'flex',gap:16}}>
-            <div style={{flex:1}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-                <span style={{fontSize:11,color:'var(--text3)'}}>🎵 Son original</span>
-                <span style={{fontSize:11,fontFamily:'Space Mono,monospace',color:'var(--gold)'}}>{instrVol}%</span>
+          {/* Éditeur lyrics (créateurs/admins, phase ready uniquement) */}
+          {showLyricsEditor&&phase==='ready'&&(
+            <LyricsEditor
+              track={track}
+              user={user}
+              onClose={()=>setShowLyricsEditor(false)}
+              onSaved={(newLrc)=>{
+                setLrcLines(parseLRC(newLrc))
+                setTrack(t=>({...t,lyrics_lrc:newLrc}))
+                setShowLyricsEditor(false)
+              }}
+            />
+          )}
+
+          {/* Lyrics synchronisées — visibles pendant l'enregistrement et la review */}
+          <LyricsDisplay
+            lrcLines={lrcLines}
+            currentTime={instrTime}
+            show={(phase==='recording'||phase==='review')&&lrcLines.length>0}
+          />
+
+          {/* Mixing controls */}
+          <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:14,marginBottom:16}}>
+            <div style={{fontSize:12,fontWeight:700,marginBottom:10,color:'var(--text2)'}}>🎚️ Mixage audio</div>
+            <div style={{display:'flex',gap:16}}>
+              <div style={{flex:1}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                  <span style={{fontSize:11,color:'var(--text3)'}}>🎵 Son original</span>
+                  <span style={{fontSize:11,fontFamily:'Space Mono,monospace',color:'var(--gold)'}}>{instrVol}%</span>
+                </div>
+                <input type="range" min="0" max="100" value={instrVol} onChange={e=>setInstrVol(parseInt(e.target.value))} style={{width:'100%',accentColor:'var(--gold)'}}/>
+                <label style={{display:'flex',alignItems:'center',gap:6,marginTop:6,cursor:'pointer',fontSize:11,color:'var(--text3)'}}>
+                  <input type="checkbox" checked={muteOriginalVoice} onChange={e=>setMuteOriginalVoice(e.target.checked)} style={{accentColor:'var(--gold)'}}/>
+                  Diminuer la voix de l'artiste (50%)
+                </label>
               </div>
-              <input type="range" min="0" max="100" value={instrVol} onChange={e=>setInstrVol(parseInt(e.target.value))} style={{width:'100%',accentColor:'var(--gold)'}}/>
-              <label style={{display:'flex',alignItems:'center',gap:6,marginTop:6,cursor:'pointer',fontSize:11,color:'var(--text3)'}}>
-                <input type="checkbox" checked={muteOriginalVoice} onChange={e=>setMuteOriginalVoice(e.target.checked)} style={{accentColor:'var(--gold)'}}/>
-                Diminuer la voix de l'artiste (50%)
-              </label>
-            </div>
-            <div style={{width:1,background:'var(--border)'}}/>
-            <div style={{flex:1}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-                <span style={{fontSize:11,color:'var(--text3)'}}>🎤 Ma voix</span>
-                <span style={{fontSize:11,fontFamily:'Space Mono,monospace',color:'var(--purple)'}}>{voiceVol}%</span>
+              <div style={{width:1,background:'var(--border)'}}/>
+              <div style={{flex:1}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                  <span style={{fontSize:11,color:'var(--text3)'}}>🎤 Ma voix</span>
+                  <span style={{fontSize:11,fontFamily:'Space Mono,monospace',color:'var(--purple)'}}>{voiceVol}%</span>
+                </div>
+                <input type="range" min="0" max="100" value={voiceVol} onChange={e=>setVoiceVol(parseInt(e.target.value))} style={{width:'100%',accentColor:'var(--purple)'}}/>
               </div>
-              <input type="range" min="0" max="100" value={voiceVol} onChange={e=>setVoiceVol(parseInt(e.target.value))} style={{width:'100%',accentColor:'var(--purple)'}}/>
             </div>
+            {phase==='ready'&&<div style={{marginTop:10,fontSize:11,color:'var(--text3)',background:'rgba(245,166,35,.08)',padding:'8px 12px',borderRadius:8}}>🎧 Utilisez des écouteurs pour que le micro ne capte pas l'instrumental !</div>}
           </div>
-          {phase==='ready'&&<div style={{marginTop:10,fontSize:11,color:'var(--text3)',background:'rgba(245,166,35,.08)',padding:'8px 12px',borderRadius:8}}>🎧 Utilisez des écouteurs pour que le micro ne capte pas l'instrumental !</div>}
-        </div>
 
-        {/* Waveform */}
-        <div style={{height:70,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',display:'flex',alignItems:'center',padding:'0 8px',gap:2,overflow:'hidden',marginBottom:16}}>
-          {waveData.map((h,i)=>(
-            <div key={i} style={{flex:1,minWidth:3,maxWidth:6,height:h+'%',background:phase==='recording'?'var(--red)':phase==='review'?'var(--gold)':'var(--purple)',borderRadius:2,transition:'height .08s',opacity:phase==='ready'?0.2:0.8}}/>
-          ))}
-        </div>
-
-        {/* Timer */}
-        <div style={{fontFamily:'Space Mono,monospace',fontSize:40,fontWeight:700,textAlign:'center',color:phase==='recording'?'var(--red)':phase==='countdown'?'var(--gold)':'var(--text)',marginBottom:20,letterSpacing:4}}>
-          {phase==='countdown'?countdown:fmtTime(time)}
-        </div>
-
-        {/* Controls */}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16,marginBottom:20,flexWrap:'wrap'}}>
-          {phase==='ready'&&<button onClick={startSession} style={{width:72,height:72,borderRadius:'50%',border:'none',background:'var(--red)',color:'#fff',fontSize:28,cursor:'pointer',boxShadow:'0 4px 24px rgba(230,57,70,.4)',display:'flex',alignItems:'center',justifyContent:'center',transition:'transform .15s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.1)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>🎤</button>}
-          {phase==='countdown'&&<div style={{width:72,height:72,borderRadius:'50%',background:'var(--card)',border:'3px solid var(--gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:800,color:'var(--gold)',animation:'pulse-glow 1s infinite'}}>{countdown}</div>}
-          {phase==='recording'&&<button onClick={stopRecording} style={{width:72,height:72,borderRadius:'50%',border:'none',background:'var(--red)',color:'#fff',fontSize:24,cursor:'pointer',boxShadow:'0 4px 24px rgba(230,57,70,.4)',display:'flex',alignItems:'center',justifyContent:'center',animation:'pulse-glow 1.2s infinite'}}>⏹</button>}
-          {phase==='review'&&<>
-            <button onClick={reset} title="Recommencer" style={{width:48,height:48,borderRadius:'50%',border:'1px solid var(--border)',background:'var(--card)',color:'var(--text2)',fontSize:20,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>🔄</button>
-            <button onClick={playReview} style={{width:64,height:64,borderRadius:'50%',border:isPlaying?'2px solid var(--border)':'none',background:isPlaying?'var(--card)':'var(--gold)',color:isPlaying?'var(--text)':'#000',fontSize:22,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isPlaying?'none':'0 4px 20px rgba(245,166,35,.3)'}}>{isPlaying?'⏸':'▶'}</button>
-          </>}
-        </div>
-
-        {/* Review save */}
-        {phase==='review'&&(
-          <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:16}}>
-            <div style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:10}}>🎵 Votre Duet</div>
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:11,color:'var(--text3)',display:'block',marginBottom:4}}>Nom du Duet</label>
-              <input value={duetTitle} onChange={e=>setDuetTitle(e.target.value)} style={{width:'100%',padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--bg2)',color:'var(--text)',fontSize:13,outline:'none',boxSizing:'border-box'}} placeholder="Ex: Duet_Moina_monpseudo"/>
-            </div>
-            <div style={{textAlign:'center',fontSize:12,color:'var(--text3)',marginBottom:12}}>Appuyez ▶ pour écouter le mix. Ajustez les volumes 🎚️ ci-dessus.</div>
-            <div style={{display:'flex',gap:10,justifyContent:'center'}}>
-              <button onClick={()=>mixAndSave(false)} disabled={saving} style={{padding:'10px 24px',borderRadius:50,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text)',fontSize:13,fontWeight:700,cursor:'pointer',opacity:saving?.5:1}}>
-                {mixing?'🔄 Mixage...':saving?'⏳ ...':'💾 Sauvegarder'}
-              </button>
-              <button onClick={()=>mixAndSave(true)} disabled={saving} style={{padding:'10px 24px',borderRadius:50,border:'none',background:'linear-gradient(135deg,var(--gold),#e8920a)',color:'#000',fontSize:13,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 16px rgba(245,166,35,.3)',opacity:saving?.5:1}}>
-                {mixing?'🔄 Mixage...':saving?'⏳ ...':'📢 Publier'}
-              </button>
-            </div>
+          {/* Waveform */}
+          <div style={{height:70,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',display:'flex',alignItems:'center',padding:'0 8px',gap:2,overflow:'hidden',marginBottom:16}}>
+            {waveData.map((h,i)=>(
+              <div key={i} style={{flex:1,minWidth:3,maxWidth:6,height:h+'%',background:phase==='recording'?'var(--red)':phase==='review'?'var(--gold)':'var(--purple)',borderRadius:2,transition:'height .08s',opacity:phase==='ready'?0.2:0.8}}/>
+            ))}
           </div>
-        )}
 
-        {phase==='ready'&&(
-          <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:14}}>
-            <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>🎤 Comment ça marche</div>
-            <div style={{fontSize:12,color:'var(--text2)',lineHeight:2}}>
-              1. Réglez le volume du son original et de votre voix<br/>
-              2. Mettez vos écouteurs 🎧<br/>
-              3. Appuyez sur 🎤 — compte à rebours 3...2...1<br/>
-              4. Le son joue, chantez par-dessus !<br/>
-              5. Appuyez ⏹ pour arrêter<br/>
-              6. Écoutez le mix ▶ → Nommez → Publiez 📢
-            </div>
+          {/* Timer */}
+          <div style={{fontFamily:'Space Mono,monospace',fontSize:40,fontWeight:700,textAlign:'center',color:phase==='recording'?'var(--red)':phase==='countdown'?'var(--gold)':'var(--text)',marginBottom:20,letterSpacing:4}}>
+            {phase==='countdown'?countdown:fmtTime(time)}
           </div>
-        )}
+
+          {/* Controls */}
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16,marginBottom:20,flexWrap:'wrap'}}>
+            {phase==='ready'&&<button onClick={startSession} style={{width:72,height:72,borderRadius:'50%',border:'none',background:'var(--red)',color:'#fff',fontSize:28,cursor:'pointer',boxShadow:'0 4px 24px rgba(230,57,70,.4)',display:'flex',alignItems:'center',justifyContent:'center',transition:'transform .15s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.1)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>🎤</button>}
+            {phase==='countdown'&&<div style={{width:72,height:72,borderRadius:'50%',background:'var(--card)',border:'3px solid var(--gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:800,color:'var(--gold)',animation:'pulse-glow 1s infinite'}}>{countdown}</div>}
+            {phase==='recording'&&<button onClick={stopRecording} style={{width:72,height:72,borderRadius:'50%',border:'none',background:'var(--red)',color:'#fff',fontSize:24,cursor:'pointer',boxShadow:'0 4px 24px rgba(230,57,70,.4)',display:'flex',alignItems:'center',justifyContent:'center',animation:'pulse-glow 1.2s infinite'}}>⏹</button>}
+            {phase==='review'&&<>
+              <button onClick={reset} title="Recommencer" style={{width:48,height:48,borderRadius:'50%',border:'1px solid var(--border)',background:'var(--card)',color:'var(--text2)',fontSize:20,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>🔄</button>
+              <button onClick={playReview} style={{width:64,height:64,borderRadius:'50%',border:isPlaying?'2px solid var(--border)':'none',background:isPlaying?'var(--card)':'var(--gold)',color:isPlaying?'var(--text)':'#000',fontSize:22,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isPlaying?'none':'0 4px 20px rgba(245,166,35,.3)'}}>{isPlaying?'⏸':'▶'}</button>
+            </>}
+          </div>
+
+          {/* Review save */}
+          {phase==='review'&&(
+            <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:16}}>
+              <div style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:10}}>🎵 Votre Duet</div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:11,color:'var(--text3)',display:'block',marginBottom:4}}>Nom du Duet</label>
+                <input value={duetTitle} onChange={e=>setDuetTitle(e.target.value)} style={{width:'100%',padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--bg2)',color:'var(--text)',fontSize:13,outline:'none',boxSizing:'border-box'}} placeholder="Ex: Duet_Moina_monpseudo"/>
+              </div>
+              <div style={{textAlign:'center',fontSize:12,color:'var(--text3)',marginBottom:12}}>Appuyez ▶ pour écouter le mix. Ajustez les volumes 🎚️ ci-dessus.</div>
+              <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+                <button onClick={()=>mixAndSave(false)} disabled={saving} style={{padding:'10px 24px',borderRadius:50,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text)',fontSize:13,fontWeight:700,cursor:'pointer',opacity:saving?.5:1}}>
+                  {mixing?'🔄 Mixage...':saving?'⏳ ...':'💾 Sauvegarder'}
+                </button>
+                <button onClick={()=>mixAndSave(true)} disabled={saving} style={{padding:'10px 24px',borderRadius:50,border:'none',background:'linear-gradient(135deg,var(--gold),#e8920a)',color:'#000',fontSize:13,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 16px rgba(245,166,35,.3)',opacity:saving?.5:1}}>
+                  {mixing?'🔄 Mixage...':saving?'⏳ ...':'📢 Publier'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {phase==='ready'&&(
+            <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:14}}>
+              <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>🎤 Comment ça marche</div>
+              <div style={{fontSize:12,color:'var(--text2)',lineHeight:2}}>
+                1. Réglez le volume du son original et de votre voix<br/>
+                2. Mettez vos écouteurs 🎧<br/>
+                3. Appuyez sur 🎤 — compte à rebours 3...2...1<br/>
+                4. Le son joue, chantez par-dessus !{lrcLines.length>0&&<span style={{color:'var(--gold)'}}> Les paroles s'affichent en temps réel 🎵</span>}<br/>
+                5. Appuyez ⏹ pour arrêter<br/>
+                6. Écoutez le mix ▶ → Nommez → Publiez 📢
+              </div>
+            </div>
+          )}
+          {phase==='ready'&&track&&(
+            <CommentSection targetType="karaoke" targetId={track.id} />
+          )}
         </>}
       </div>
     </div>

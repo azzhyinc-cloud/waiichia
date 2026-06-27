@@ -30,6 +30,8 @@ export default function MyEvents() {
 
   useEffect(() => { if (user) loadEvents() }, [user])
 
+  useEffect(()=>{if(events.length===0)return;try{const f=sessionStorage.getItem('focus_event_id');if(f){const ev=events.find(e=>e.id===f);if(ev){setSelected(ev);sessionStorage.removeItem('focus_event_id')}}}catch(e){}},[events])
+
   const loadEvents = async () => {
     setLoading(true)
     try {

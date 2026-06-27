@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waiichia Player</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',sans-serif; overflow:hidden; }
+
+  .player {
+    display:flex; align-items:center; gap:12px;
+    padding:12px 16px; height:100vh; min-height:80px;
+    transition: background .3s;
+  }
+  .player.dark  { background:#111; color:#fff; }
+  .player.light { background:#f9f9f9; color:#111; }
+
+  .cover {
+    width:52px; height:52px; border-radius:10px;
+    object-fit:cover; flex-shrink:0;
+    background:linear-gradient(135deg,#c8a84b,#e8920a);
+    display:flex; align-items:center; justify-content:center;
+    font-size:24px;
+  }
+  .cover img { width:100%; height:100%; border-radius:10px; object-fit:cover; }
+
+  .info { flex:1; min-width:0; }
+  .title { font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .artist { font-size:11px; margin-top:2px; opacity:.6; }
+
+  .controls { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .btn-play {
+    width:28px; height:28px; border-radius:50%; border:none; cursor:pointer; flex-shrink:0;
+    background:linear-gradient(135deg,#c8a84b,#e8920a);
+    display:flex; align-items:center; justify-content:center; font-size:11px;
+    transition: transform .1s;
+  }
+  .btn-play:hover { transform:scale(1.1); }
+
+  .progress-wrap {
+    flex:1; height:4px; border-radius:2px; cursor:pointer; position:relative;
+    background:rgba(128,128,128,.25);
+  }
+  .progress-bar {
+    height:100%; border-radius:2px; width:0%;
+    background:linear-gradient(90deg,#c8a84b,#e8920a);
+    pointer-events:none;
+  }
+
+  .time { font-size:10px; opacity:.5; flex-shrink:0; min-width:32px; text-align:right; }
+
+  .logo {
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    flex-shrink:0; text-decoration:none;
+  }
+  .logo-text { font-size:9px; font-weight:800; opacity:.4; letter-spacing:.5px; }
+
+  .error { padding:20px; text-align:center; font-size:12px; opacity:.5; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const API = 'https://api.waiichia.com'
+const params = new URLSearchParams(location.search)
+const TYPE  = location.pathname.split('/embed/')[1]?.split('/')[0] || params.get('type')
+const ID    = location.pathname.split('/embed/')[1]?.split('/')[1] || params.get('id')
+const THEME = params.get('theme') || 'dark'
+const AUTO  = params.get('autoplay') === '1'
+
+let audio = null
+let playing = false
+let item = null
+
+function fmt(s) {
+  if (!s || isNaN(s)) return '0:00'
+  const m = Math.floor(s/60), sec = Math.floor(s%60)
+  return m+':'+(sec<10?'0':'')+sec
+}
+
+async function load() {
+  const root = document.getElementById('root')
+  try {
+    let endpoint = ''
+    if (TYPE === 'track')    endpoint = `/tracks/${ID}`
+    else if (TYPE === 'album')    endpoint = `/albums/${ID}`
+    else if (TYPE === 'playlist') endpoint = `/albums/playlists/${ID}`
+    else if (TYPE === 'emission') endpoint = `/emissions/${ID}`
+
+    const res = await fetch(API + endpoint)
+    const data = await res.json()
+    item = data.track || data.album || data.playlist || data.emission || data
+
+    render(root)
+    if (AUTO && audio) audio.play().then(() => { playing=true; updateBtn() }).catch(()=>{})
+  } catch(e) {
+    root.innerHTML = `<div class="error">Impossible de charger le contenu</div>`
+  }
+}
+
+function render(root) {
+  const audioUrl = item.audio_url || item.preview_url || ''
+  const coverUrl = item.cover_url || item.image_url || ''
+  const title    = item.title || item.display_name || '—'
+  const artist   = item.profiles?.display_name || item.artist || ''
+
+  root.innerHTML = `
+    <div class="player ${THEME}" id="player">
+      <div class="cover" id="cover">
+        ${coverUrl ? `<img src="${coverUrl}" alt="">` : (TYPE==='track'?'🎵':TYPE==='album'?'💿':'🎵')}
+      </div>
+      <div class="info">
+        <div class="title">${title}</div>
+        ${artist ? `<div class="artist">${artist}</div>` : ''}
+        <div class="controls">
+          <button class="btn-play" id="btnPlay" ${!audioUrl?'disabled':''}>▶</button>
+          <div class="progress-wrap" id="progressWrap">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          <div class="time" id="time">0:00</div>
+        </div>
+      </div>
+      <a class="logo" href="https://waiichia.com" target="_blank" title="Écouter sur Waiichia">
+        <span style="font-size:16px">🎵</span>
+        <span class="logo-text">WAIICHIA</span>
+      </a>
+    </div>
+  `
+
+  if (!audioUrl) return
+
+  audio = new Audio(audioUrl)
+  audio.crossOrigin = 'anonymous'
+
+  audio.addEventListener('timeupdate', () => {
+    if (!audio.duration) return
+    const pct = (audio.currentTime / audio.duration) * 100
+    document.getElementById('progressBar').style.width = pct + '%'
+    document.getElementById('time').textContent = fmt(audio.currentTime)
+  })
+  audio.addEventListener('ended', () => { playing=false; updateBtn() })
+
+  document.getElementById('btnPlay').addEventListener('click', togglePlay)
+  document.getElementById('progressWrap').addEventListener('click', seek)
+}
+
+function togglePlay() {
+  if (!audio) return
+  if (playing) { audio.pause(); playing=false }
+  else { audio.play().catch(()=>{}); playing=true }
+  updateBtn()
+}
+
+function updateBtn() {
+  const btn = document.getElementById('btnPlay')
+  if (btn) btn.textContent = playing ? '⏸' : '▶'
+}
+
+function seek(e) {
+  if (!audio || !audio.duration) return
+  const rect = e.currentTarget.getBoundingClientRect()
+  const pct  = (e.clientX - rect.left) / rect.width
+  audio.currentTime = pct * audio.duration
+}
+
+load()
+</script>
+</body>
+</html>

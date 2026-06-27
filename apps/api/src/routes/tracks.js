@@ -7,7 +7,7 @@ export default async function tracksRoutes(app) {
     let query = supabase.from('tracks')
       .select('*, profiles:creator_id(id, username, display_name, avatar_url, is_verified)')
       .eq('is_published', true).eq('is_active', true)
-      .order('published_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .range((page - 1) * limit, page * limit - 1)
     if (genre)      query = query.eq('genre', genre)
     if (country)    query = query.eq('country', country)
@@ -70,6 +70,7 @@ export default async function tracksRoutes(app) {
       genre:            body.genre || null,
       country:          body.country || 'KM',
       language:         body.language || 'fr',
+      duration_sec:     parseInt(body.duration_sec) || 0,
       access_type:      body.access_type || 'free',
       sale_price:       body.sale_price || 0,
       sale_currency:    body.sale_currency || 'KMF',

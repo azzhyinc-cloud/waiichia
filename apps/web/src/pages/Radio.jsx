@@ -35,7 +35,7 @@ export default function Radio() {
 
   const handlePlay=s=>{
     if(currentTrack?.title===s.name){isPlaying?pause():resume()}
-    else play({id:s.id,title:s.name,artist:s.station,profiles:{display_name:s.station},audio_url_128:s.stream_url||""})
+    else play({id:s.id,title:s.name,artist:s.name,profiles:{display_name:s.name},audio_url_128:s.stream_url||""})
   }
 
   return(

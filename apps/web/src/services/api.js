@@ -57,16 +57,16 @@ const api = {
   },
   social: {
     react:         (d)        => api.post('/api/social/react', d),
-    reactions:     (type, id) => api.get('/api/social/reactions/' + type + '/' + id, false),
+    reactions:     (type, id) => api.get('/api/social/reactions/' + type + '/' + id),
     comment:       (d)        => api.post('/api/social/comment', d),
-    comments:      (type, id) => api.get('/api/social/comments/' + type + '/' + id, false),
+    comments:      (type, id) => api.get('/api/social/comments/' + type + '/' + id),
     feed:          ()         => api.get('/api/social/feed'),
     notifications: ()         => api.get('/api/social/notifications'),
     report:        (d)        => api.post('/api/social/reports', d),
     markRead:      ()         => api.patch('/api/social/notifications/read', {}),
   },
   payments: {
-    wallet:        () => api.get('/api/payments/wallet'),
+    wallet:        () => api.get('/api/payments/wallet/balance'),
     walletBalance: () => api.get('/api/payments/wallet/balance'),
     history:       (q='') => api.get('/api/payments/history' + q),
     rentals:       () => api.get('/api/payments/rentals'),
@@ -78,7 +78,7 @@ const api = {
     withdraw:      (d) => api.post('/api/payments/withdraw', d),
     transfer:      (d) => api.post('/api/payments/transfer', d),
     buyProduct:    (d) => api.post('/api/products/' + d.product_id + '/buy', {}),
-    buyTicket:     (d) => api.post('/api/events/tickets', d),
+    buyTicket:     (d) => api.post('/api/payments/ticket', d),
   },
   emissions: {
     list:     (q = '') => api.get('/api/emissions/' + q, false),
@@ -90,6 +90,9 @@ const api = {
     list: (q = '') => api.get('/api/radio/' + q, false),
     get:  (id)     => api.get('/api/radio/' + id, false),
     tip:  (id, d)  => api.post('/api/radio/' + id + '/tip', d),
+    create: (d)    => api.post('/api/radio', d),
+    update: (id, d) => api.patch('/api/radio/' + id, d), // radio.update v19
+    mine:   ()     => api.get('/api/radio/mine'),
   },
   karaoke: {
     tracks:     ()   => api.get('/api/karaoke/tracks', false),
@@ -125,6 +128,19 @@ const api = {
     send: (convId, content) => api.post('/api/messages/conversations/' + convId + '/messages', { content }),
     createConv: (otherId) => api.post('/api/messages/conversations', { other_user_id: otherId }),
     searchUsers: (q) => api.get('/api/messages/users/search?q=' + encodeURIComponent(q)),
+  },
+  albums: {
+    list:   (q = "")  => api.get("/api/albums/" + q, false),
+    get:    (id)      => api.get("/api/albums/" + id, false),
+    create: (d)       => api.post("/api/albums", d),
+    update: (id, d)   => api.patch("/api/albums/" + id, d),
+    delete: (id)      => api.delete("/api/albums/" + id),
+    playlists: {
+      list:   (q = "") => api.get("/api/albums/playlists/public" + q, false),
+      get:    (id)     => api.get("/api/albums/playlists/" + id, false),
+      create: (d)      => api.post("/api/albums/playlists", d),
+      delete: (id)     => api.delete("/api/albums/playlists/" + id),
+    },
   },
   currency: {
     rates:   (base) => api.get('/api/currency/rates' + (base ? '?base=' + base : ''), false),

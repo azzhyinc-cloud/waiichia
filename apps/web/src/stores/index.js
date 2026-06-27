@@ -127,9 +127,13 @@ export const usePlayerStore = create((set, get) => ({
 }))
 
 export const usePageStore = create((set) => ({
-  currentPage: 'home',
-  profileUsername: null,
-  setPage: (page, params={}) => set({ currentPage: page, ...params })
+  walletRefresh: 0,
+  bumpWalletRefresh: () => set(s => ({ walletRefresh: s.walletRefresh + 1 })),
+  msgTarget: null,
+  clearMsgTarget: () => set({ msgTarget: null }),
+  currentPage: (()=>{try{return sessionStorage.getItem('wai_page')}catch(e){return null}})() || 'home',
+  profileUsername: (()=>{try{return sessionStorage.getItem('wai_profileUsername')}catch(e){return null}})(),
+  setPage: (page, params={}) => { try { sessionStorage.setItem('wai_page', page); if (params.profileUsername !== undefined) { if (params.profileUsername) sessionStorage.setItem('wai_profileUsername', params.profileUsername); else sessionStorage.removeItem('wai_profileUsername') } } catch(e){} set({ currentPage: page, ...params }) }
 }))
 
 export const useDeviseStore = create((set) => ({

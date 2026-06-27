@@ -7,7 +7,7 @@ const TAGS = ['#twarab','#komori','#waiichia','#amapiano','#afrobeats','#moroni'
 const fmtK=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n||0)
 
 export default function RightPanel() {
-  const { setPage } = usePageStore()
+  const { setPage, walletRefresh } = usePageStore()
   const { user } = useAuthStore()
   const { devise } = useDeviseStore()
   const dc = devise?.code || 'KMF'
@@ -30,7 +30,7 @@ export default function RightPanel() {
     loadStats()
     // ── AJOUT : charger les taux à chaque changement de devise ──
     loadRates().then(r => { if (r && Object.keys(r).length > 0) setRates(r) }).catch(() => {})
-  }, [user, dc])
+  }, [user, dc, walletRefresh])
 
   // ── AJOUT : montant converti si devise différente de KMF ──
   const displayBalance = dc === 'KMF'

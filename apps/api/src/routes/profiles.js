@@ -95,7 +95,33 @@ export default async function profilesRoutes(app) {
 
   app.get('/:username', async (request, reply) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('username', request.params.username.toLowerCase()).single()
-    if (data && data.is_active === false) return reply.status(403).send({ error: "Utilisateur suspendu ou introuvable" })
+    if (!data) return reply.send({ profile: null })
+    if (data.is_active === false) return reply.status(403).send({ error: "Utilisateur suspendu ou introuvable" })
+
+    // ── Stats calculées à la volée (albums_count + total_earned) ──
+    try {
+      const [albumsRes, earnedRes] = await Promise.all([
+        supabase.from('albums')
+          .select('id', { count: 'exact', head: true })
+          .eq('creator_id', data.id)
+          .eq('is_active', true),
+        supabase.from('transactions')
+          .select('net_amount, currency')
+          .eq('recipient_id', data.id)
+          .eq('status', 'completed'),
+      ])
+      data.albums_count = albumsRes.count || 0
+      // Somme net_amount en KMF uniquement (pour l'affichage "X KMF gagnés")
+      const earned = (earnedRes.data || [])
+        .filter(t => (t.currency || 'KMF') === 'KMF')
+        .reduce((sum, t) => sum + (t.net_amount || 0), 0)
+      data.total_earned = earned
+    } catch (e) {
+      app.log?.error?.('profile stats error: ' + e.message)
+      data.albums_count = data.albums_count ?? 0
+      data.total_earned = 0
+    }
+
     return reply.send({ profile: data })
   })
 }

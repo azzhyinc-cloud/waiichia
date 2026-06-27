@@ -47,7 +47,7 @@ export default function AddToPlaylistModal({ isOpen, onClose, track }) {
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Erreur')
-      setDone(prev => [...prev, playlist.id])
+      setDone(prev => [...prev, playlist.id]); setPlaylists(prev => prev.map(p => p.id===playlist.id ? {...p, tracks_count:(p.tracks_count||0)+1} : p))
       setMsg({ type: 'success', text: `✅ Ajouté à "${playlist.title}"` })
     } catch (err) {
       setMsg({ type: 'error', text: '⚠️ ' + err.message })

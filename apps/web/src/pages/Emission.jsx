@@ -3,6 +3,7 @@ import { usePlayerStore, usePageStore } from "../stores/index.js"
 import api from "../services/api.js"
 // ── AJOUT ──
 import AddToPlaylistModal from "../components/AddToPlaylistModal.jsx"
+import CommentSection from "../components/CommentSection.jsx"
 
 const CATS=['Tout','🎭 Culture','🌱 Jeunesse','🗣️ Société','⚽ Sport','🎵 Musique','💼 Économie','🕌 Religion']
 const BGS=["linear-gradient(135deg,#0a1e2e,#1060a0)","linear-gradient(135deg,#1a0a2e,#4a1a7a)","linear-gradient(135deg,#002a10,#007040)","linear-gradient(135deg,#2e1a00,#7a4000)","linear-gradient(135deg,#1a0020,#5a0060)","linear-gradient(135deg,#001a2e,#005080)"]
@@ -23,6 +24,8 @@ export default function Emission(){
       .catch(()=>setEmissions([]))
       .finally(()=>setLoading(false))
   },[])
+
+  useEffect(()=>{if(emissions.length===0)return;try{const f=sessionStorage.getItem('focus_emission_id');if(f){const em=emissions.find(e=>e.id===f);if(em){setSelected(em);sessionStorage.removeItem('focus_emission_id')}}}catch(e){}},[emissions])
 
   const filtered=cat==='Tout'?emissions:emissions.filter(e=>e.category?.toLowerCase().includes(cat.replace(/^[^ ]+ /,'').toLowerCase()))
   const featured=filtered.filter(e=>e.featured)
@@ -207,6 +210,7 @@ function EmissionModal({emission:em,onClose,goProfile,toggle,currentTrack,isPlay
                   })}
                 </div>
             }
+          <CommentSection targetType="emission" targetId={em.id} />
           </div>
         </div>
       </div>

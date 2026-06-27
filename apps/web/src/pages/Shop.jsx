@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { usePrice } from '../hooks/usePrice.js'
 import { useAuthStore, usePageStore } from '../stores/index.js'
 import api from '../services/api.js'
 
@@ -15,6 +16,7 @@ export default function Shop() {
   const [cat, setCat] = useState('')
   const [sort, setSort] = useState('created_at')
   const [selected, setSelected] = useState(null)
+  const { format } = usePrice()
   const [buying, setBuying] = useState(false)
   const [buyMsg, setBuyMsg] = useState(null)
 
@@ -112,7 +114,7 @@ export default function Shop() {
                     🎵 {p.tracks.title}
                   </div>
                 )}
-                <div style={{fontSize:15,fontWeight:800,color:'#2cc653',fontFamily:'monospace',marginBottom:8}}>{(p.price||0).toLocaleString()} {p.currency||'KMF'}</div>
+                <div style={{fontSize:15,fontWeight:800,color:'#2cc653',fontFamily:'monospace',marginBottom:8}}>{format(p.price||0)}</div>
                 <button onClick={e=>{e.stopPropagation();handleBuy(p)}} disabled={buying}
                   style={{width:'100%',background:'var(--primary)',border:'none',color:'#fff',borderRadius:8,padding:'8px',cursor:buying?'not-allowed':'pointer',fontWeight:700,fontSize:13}}>
                   🛒 Acheter
@@ -155,7 +157,7 @@ export default function Shop() {
                     {selected.profiles?.is_verified ? ' ✓' : ''}
                   </div>
                 </div>
-                <div style={{fontSize:22,fontWeight:900,color:'#2cc653',fontFamily:'monospace'}}>{(selected.price||0).toLocaleString()} {selected.currency||'KMF'}</div>
+                <div style={{fontSize:22,fontWeight:900,color:'#2cc653',fontFamily:'monospace'}}>{format(selected.price||0)}</div>
               </div>
               {selected.description && <p style={{fontSize:14,color:'var(--text2)',marginBottom:16,lineHeight:1.6}}>{selected.description}</p>}
               <div style={{display:'flex',gap:12,fontSize:12,color:'var(--text3)',marginBottom:20}}>
@@ -170,7 +172,7 @@ export default function Shop() {
               )}
               <button onClick={()=>handleBuy(selected)} disabled={buying}
                 style={{width:'100%',background:'linear-gradient(135deg,#2cc653,#16a34a)',border:'none',color:'#fff',borderRadius:10,padding:'14px',cursor:buying?'not-allowed':'pointer',fontWeight:800,fontSize:16}}>
-                {buying ? '⏳ Traitement...' : `🛒 Acheter — ${(selected.price||0).toLocaleString()} ${selected.currency||'KMF'}`}
+                {buying ? '⏳ Traitement...' : `🛒 Acheter — ${format(selected.price||0)}`}
               </button>
               {!buyMsg?.ok && <button onClick={()=>setPage('wallet')} style={{width:'100%',marginTop:8,background:'transparent',border:'1px solid var(--border)',color:'var(--text2)',borderRadius:10,padding:'10px',cursor:'pointer',fontSize:13}}>💰 Voir mon portefeuille</button>}
             </div>

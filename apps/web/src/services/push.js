@@ -9,10 +9,12 @@ export function isPushSupported() {
 
 /**
  * Récupère la clé VAPID publique depuis l'API
+ * Note: api.js de Waiichia utilise fetch — la réponse est l'objet JSON directement
+ * (PAS res.data comme axios)
  */
-async function getVapidKey(token) {
-  const res = await api.get('/api/notifications/push/vapid-key')
-  return res.data?.publicKey
+async function getVapidKey() {
+  const res = await api.get('/api/notifications/push/vapid-key', false)
+  return res?.publicKey
 }
 
 /**
@@ -31,10 +33,10 @@ function urlBase64ToUint8Array(base64String) {
 
 /**
  * S'abonner aux notifications push
- * @param {string} token - JWT auth token
+ * Note: api.js récupère automatiquement le token depuis localStorage
  * @returns {boolean} success
  */
-export async function subscribeToPush(token) {
+export async function subscribeToPush() {
   try {
     if (!isPushSupported()) {
       console.warn('[Push] Non supporté par ce navigateur')
@@ -49,7 +51,7 @@ export async function subscribeToPush(token) {
     }
 
     // Récupérer la clé VAPID
-    const vapidKey = await getVapidKey(token)
+    const vapidKey = await getVapidKey()
     if (!vapidKey) {
       console.error('[Push] Clé VAPID non disponible')
       return false
@@ -69,11 +71,9 @@ export async function subscribeToPush(token) {
       })
     }
 
-    // Envoyer au serveur
+    // Envoyer au serveur (token ajouté automatiquement par api.js)
     await api.post('/api/notifications/push/subscribe', {
       subscription: subscription.toJSON()
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
     })
 
     console.log('[Push] Abonnement réussi')
@@ -86,10 +86,9 @@ export async function subscribeToPush(token) {
 
 /**
  * Se désabonner des notifications push
- * @param {string} token - JWT auth token
  * @returns {boolean} success
  */
-export async function unsubscribeFromPush(token) {
+export async function unsubscribeFromPush() {
   try {
     const registration = await navigator.serviceWorker.ready
     const subscription = await registration.pushManager.getSubscription()
@@ -98,11 +97,9 @@ export async function unsubscribeFromPush(token) {
       const endpoint = subscription.endpoint
       await subscription.unsubscribe()
 
-      // Notifier le serveur
+      // Notifier le serveur (token auto)
       await api.post('/api/notifications/push/unsubscribe', {
         endpoint
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       })
     }
 

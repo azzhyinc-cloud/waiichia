@@ -3,7 +3,7 @@ import { usePlayerStore } from "../stores/index.js"
 
 const ITEMS = [
   { id:"home",     icon:"🏠", label:"Accueil"   },
-  { id:"trending", icon:"🔥", label:"Tendances"  },
+  { id:"explore",  icon:"🔭", label:"Explorer"   },
   { id:"upload",   icon:"⬆️",  label:"",  center:true },
   { id:"karaoke",  icon:"🎤", label:"Karaoké"   },
   { id:"profile",  icon:"👤", label:"Profil"    },

@@ -20,6 +20,17 @@ export default async function emissionsRoutes(app) {
     if (error) return reply.status(500).send({ error: error.message })
     return reply.send({ episodes: data || [] })
   })
+  app.post('/:id/episodes', { preHandler: app.authenticate }, async (request, reply) => {
+    const { title, number, season, audio_url, duration_sec, guest, air_date, access_type } = request.body
+    const { data, error } = await supabase.from('episodes').insert({
+      emission_id: request.params.id, user_id: request.user.id,
+      title, number: number || 1, season: season || 1,
+      audio_url, duration_sec, guest, air_date,
+      access_type: access_type || 'free', status: 'published'
+    }).select().single()
+    if (error) return reply.status(500).send({ error: error.message })
+    return reply.status(201).send({ episode: data })
+  })
   app.post('/', { preHandler: app.authenticate }, async (request, reply) => {
     const { title, channel, host, category, format, language, country, cover_url, description, duration_avg } = request.body
     const { data, error } = await supabase.from('emissions').insert({

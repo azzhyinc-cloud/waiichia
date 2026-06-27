@@ -1,0 +1,21 @@
+# Backups
+**/*.bak
+**/*.bak-*
+
+# Node
+web/node_modules/
+api/node_modules/
+
+# Build outputs
+web/dist/
+web/www/
+
+# Env
+.env
+**/.env
+
+# Patches ponctuels
+*.py
+
+# Logs
+*.log

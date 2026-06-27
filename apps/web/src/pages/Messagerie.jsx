@@ -10,7 +10,7 @@ const getToken=()=>localStorage.getItem('waiichia_token')
 
 export default function Messagerie(){
   const {user}=useAuthStore()
-  const {setPage}=usePageStore()
+  const {setPage,msgTarget,clearMsgTarget}=usePageStore()
   const {play}=usePlayerStore()
   const [convs,setConvs]=useState([])
   const [activeConv,setActiveConv]=useState(null)
@@ -125,6 +125,13 @@ export default function Messagerie(){
     }catch(e){alert('Erreur: '+e.message)}
   }
 
+  // FIX v15 : ouverture auto de la conversation depuis le bouton Message d'un profil
+  useEffect(()=>{
+    if(!user||!msgTarget||!msgTarget.id)return
+    startConv(msgTarget.id, msgTarget.name||'Utilisateur')
+    clearMsgTarget()
+  },[user,msgTarget])
+
   const sendMessage=async(content,msgType='text',trackId=null)=>{
     const convId=activeConvRef.current?.id
     if(!convId||!content)return
@@ -140,7 +147,37 @@ export default function Messagerie(){
     }catch(e){console.error(e)}
   }
 
-  const sendText=()=>{if(!input.trim())return;const msg=replyTo?'> '+replyTo.content?.slice(0,40)+'...\n'+input:input;sendMessage(msg,'text');setInput('');setReplyTo(null)}
+  // Helper : génère un preview propre pour une citation (reply)
+  // - URL vocale → "🎤 Vocal"
+  // - URL image  → "📷 Photo"
+  // - URL autre  → "📎 Fichier"
+  // - Son partagé → garde le titre formaté
+  // - Texte → tronqué à 40 chars
+  const buildReplyPreview=(m)=>{
+    if(!m)return ''
+    const c=m.content||''
+    if(c.startsWith('http')){
+      if(m.message_type==='voice')return '🎤 Vocal'
+      if(m.message_type==='image')return '📷 Photo'
+      return '📎 Fichier'
+    }
+    if(m.message_type==='track'){
+      return c||'🎵 Son'
+    }
+    return c.length>40?c.slice(0,40)+'...':c
+  }
+
+  const sendText=()=>{
+    if(!input.trim())return
+    let msg=input
+    if(replyTo){
+      const preview=buildReplyPreview(replyTo)
+      msg='> '+preview+'\n'+input
+    }
+    sendMessage(msg,'text')
+    setInput('')
+    setReplyTo(null)
+  }
 
   const shareTrack=(track)=>{
     sendMessage('🎵 '+track.title+' — '+(track.profiles?.display_name||'Artiste'),'track',track.id)

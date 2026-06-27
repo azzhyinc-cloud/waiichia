@@ -170,6 +170,7 @@ export default function Dashboard(){
           <div style={{display:'flex',gap:2,background:'var(--card)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:3}}>
             {PERIODS.map(p=><button key={p.id} className={`tab-btn${period===p.id?' active':''}`} style={{padding:'5px 12px',fontSize:11}} onClick={()=>setPeriod(p.id)}>{p.l}</button>)}
           </div>
+          <button className="btn btn-secondary" style={{fontSize:12,padding:'5px 12px',whiteSpace:'nowrap'}} onClick={()=>setPage('reports')}>📈 Rapports</button>
         </div>
       </div>
 

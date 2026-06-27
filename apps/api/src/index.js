@@ -19,6 +19,7 @@ import emissionsRoutes from './routes/emissions.js'
 import radioRoutes     from './routes/radio.js'
 import karaokeRoutes   from './routes/karaoke.js'
 import adminRoutes     from './routes/admin.js'
+import { startCronTrash } from './services/cronTrash.js'
 import currencyRoutes  from './routes/currency.js'
 import albumRoutes     from './routes/albums.js'
 import notificationsRoutes from './routes/notifications.js'
@@ -39,7 +40,7 @@ await app.register(cors, {
   ],
   credentials: true
 })
-await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
+await app.register(rateLimit, { max: 300, timeWindow: '1 minute' })
 await app.register(multipart, { limits: { fileSize: (parseInt(process.env.MAX_UPLOAD_SIZE_MB) || 200) * 1024 * 1024 } })
 await app.register(jwt, { secret: config.jwtSecret })
 
@@ -50,6 +51,10 @@ app.decorate('config', config)
 app.decorate('authenticate', async function(request, reply) {
   try { await request.jwtVerify() }
   catch (err) { reply.status(401).send({ error: 'Non autorise', message: err.message }) }
+})
+app.decorate('authenticateOptional', async function(request, reply) {
+  try { await request.jwtVerify() }
+  catch (err) { /* pas de user, on continue sans erreur */ }
 })
 
 // ─── Routes originales ───
@@ -92,6 +97,7 @@ app.setErrorHandler((error, request, reply) => {
 try {
   await app.listen({ port: config.port, host: '0.0.0.0' })
   console.log('Waiichia API demarree sur le port ' + config.port)
+  startCronTrash(app.log)
 } catch (err) {
   app.log.error(err)
   process.exit(1)
